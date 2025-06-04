@@ -116,6 +116,24 @@
 				 (setq (bit a 0) 1)))))))
 
 
+(test test-setq-dependencies
+  "Test we can extract SETQ dependencies."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '((:type (unsigned-byte 8))))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))))
+    (vl::declare-variable 'd '((:type (unsigned-byte 8))))
+
+    (vl::dependencies '(setq a (+ b c 23)))
+     (is (set-equal (vl::variable-property 'a :dependencies)
+		   '(b c)))
+
+    ;; assigning a to d should traverse into a's dependencies
+    (vl::dependencies '(setq d (+ a b 1)))
+    (is (set-equal (vl::variable-property 'd :dependencies)
+		   '(a b c)))))
+
+
 ;; ---------- Generalised places (SETF) ----------
 
 (test test-setf-as-setq
@@ -135,8 +153,21 @@
 				      a
 				      (+ a 1)))))))
       (vl:typecheck p)
-      (vl:synthesise p))
+      (is (vl:synthesise p)))))
 
-    )
 
-  )
+(test test-setf-dependencies
+  "Test we can extract SETF dependencies."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '((:type (unsigned-byte 8))))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))))
+    (vl::declare-variable 'd '((:type (unsigned-byte 8))))
+
+    (vl::dependencies '(setq a (+ b (vl:bref c 1 :width 2) 23)))
+    (is (set-equal (vl::variable-property 'a :dependencies)
+		   '(b c)))
+
+    (vl::dependencies '(setq d (+ a b 1)))
+    (is (set-equal (vl::variable-property 'd :dependencies)
+		   '(a b c)))))

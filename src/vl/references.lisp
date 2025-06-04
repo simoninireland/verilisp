@@ -29,6 +29,14 @@
   (get-type form))
 
 
+(defmethod free-variables ((form symbol))
+  (list form))
+
+
+(defmethod dependencies ((form symbol))
+  t)
+
+
 (defmethod float-let-blocks ((form symbol))
   (list form '()))
 

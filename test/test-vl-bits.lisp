@@ -74,3 +74,35 @@
   (signals (vl:value-mismatch)
     (vl:typecheck '(let ((a #2r10110))
 		     (vl::bref a -2)))))
+
+
+(test test-bit-dependencies
+  "Test we can extract bref dependencies properly."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '((:type (unsigned-byte 8))
+			       (:initial-value 12)))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))
+			       (:initial-value 24)))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))
+			       (:initial-value 0)))
+    (vl::declare-variable 'd '((:type (unsigned-byte 8))
+			       (:initial-value 0)
+			       (:as :constant)))
+
+    (let ((p (copy-tree '(progn
+			  (setq a (+ (vl:bref b d :end 0) 19))
+			  (setq c a)))))
+
+      (vl:typecheck p)
+      (vl::dependencies p)
+
+      ;; not (a d) as d is a constant
+      (is (set-equal (vl::variable-property 'a :dependencies)
+		     '(b)))
+
+      (is (null (vl::variable-property 'b :dependencies)))
+
+      ;; not (a b d) as above
+      (is (set-equal (vl::variable-property 'c :dependencies)
+		     '(a b)))
+      (is (null (vl::variable-property 'd :dependencies))))))

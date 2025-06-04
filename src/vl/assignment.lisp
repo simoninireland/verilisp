@@ -63,6 +63,10 @@ isn't declared."
       tyval)))
 
 
+(defmethod dependencies-sexp ((fun (eql 'setq)) args)
+  (dependencies `(setf ,@args)))
+
+
 (defmethod synthesise-sexp ((fun (eql 'setq)) args)
   (synthesise `(setf ,@args)))
 
@@ -125,6 +129,20 @@ The default is for a form /not/ to be a generalised place.")
     (ensure-generalised-place place)
 
     tyvar))
+
+
+(defmethod dependencies-sexp ((fun (eql 'setf)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (n v &key &allow-other-keys)
+      args
+
+    (let* ((fvs (free-variables v))
+	   (all-fvs (traverse-dependencies fvs))
+	   (deps (variable-property n :dependencies :default nil)))
+      (set-variable-property n :dependencies (union deps all-fvs))
+
+      (list n))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'setf)) args)

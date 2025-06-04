@@ -131,8 +131,18 @@ Verilisp, but don't /require/ it."
     `(array ,element-type ,shape)))
 
 
+(defmethod free-variables-sexp ((fun (eql 'array)) args)
+  ;; can't have any free variables (I don't think)
+  nil)
+
+
+(defmethod dependencies-sexp ((fun (eql 'array)) args)
+  ;; can't have any dependencies (I don't think)
+  nil)
+
+
 (defun rebuild-options (ns vs)
-  "Build an options list from NS where the correspondiong value in VS is non-null."
+  "Build an options list from NS where the corresponding value in VS is non-null."
   (flet ((key-value (opts nv)
 	   (destructuring-bind (n v)
 	       nv
@@ -241,6 +251,16 @@ probably should, for those that are statically determined."
 
       ;; the type is the type of the elements
       (element-type-of-array ty))))
+
+
+(defmethod free-variables-sexp ((fun (eql 'make-array)) args)
+  ;; can't have any free variables (I don't think)
+  nil)
+
+
+(defmethod dependencies-sexp ((fun (eql 'make-array)) args)
+  ;; can't have any dependencies (I don't think)
+  nil)
 
 
 (defmethod generalised-place-sexp-p ((fun (eql 'aref)) args)

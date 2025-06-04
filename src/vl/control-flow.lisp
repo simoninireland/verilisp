@@ -41,6 +41,21 @@
     (typecheck-forms args)))
 
 
+(defmethod dependencies-sexp ((fun (eql 'progn)) args)
+  (flet ((cascade-changes (changed form)
+	   (let ((chs (dependencies form)))
+	     (mapc (lambda (n)
+		     (let ((fvs (variable-property n :dependencies :default nil)))
+		       (if (not (null (intersection chs fvs)))
+			   ;; a variable n depends on has changed dependencies
+			   (let ((deps (traverse-dependencies fvs)))
+			     (set-variable-property n :dependencies deps)))))
+		   changed)
+
+	     (union changed chs))))
+
+    (foldr #'cascade-changes args '())))
+
 (defun simplify-progn-body (body)
   "Simplify the body of a PROGN or implied PROGN block."
   (foldr (lambda (l arg)
@@ -104,7 +119,7 @@ block, and are represented by the symbol *."
 	(typecheck sensitivities))
 
     ;; check the body in the outer environment
-    (mapn #'typecheck body)))
+    (typecheck `(progn ,@body))))
 
 
 (defmethod simplify-progn-sexp ((fun (eql '@)) args)

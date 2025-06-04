@@ -64,6 +64,32 @@
       (vl:typecheck (copy-tree '(let ((a 12))))))))
 
 
+(test test-progn-dependencies
+  "Test we can extract dependencies from PROGN bodies, specifically circular updates."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '((:type (unsigned-byte 8))
+			       (:initial-value 12)))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))
+			       (:initial-value 1)))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))
+			       (:initial-value 45)))
+    (vl::declare-variable 'd '((:type (unsigned-byte 8))
+			       (:initial-value 0)))
+    (let ((p (copy-tree '(progn
+			  (setq a 8)
+			  (setq a b)
+			  (setq b (+ b c))))))
+      (vl::dependencies p)
+
+      ;; b depends on itself
+      (is (set-equal (vl::variable-property 'b :dependencies)
+		     '(b c)))
+
+      ;; a should also depend on c, after b's later update
+      (is (set-equal (vl::variable-property 'a :dependencies)
+		     '(b c))))))
+
+
 ;; ---------- @ ----------
 
 (test test-typecheck-at

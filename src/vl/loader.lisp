@@ -143,6 +143,27 @@ type-checked, macro-expanded, and possibly had other passes applied."
 
 ;; ---------- Module declaration ----------
 
+(defun elaborate-module (form)
+  "Elaborate FORM as a module.
+
+This runs all the relevant compiler nanopasses, returning a list
+consisting of the module interface type and the fully-elaborated
+module ready for synthesis."
+  ;; expand macrs
+  (let ((expanded (expand-macros form)))
+
+    ;; typecheck
+    (let ((intf (typecheck expanded)))
+      ;; add dependencies
+      (dependencies expanded)
+
+      ;; simplify
+      (let* ((floated (car (float-let-blocks expanded)))
+	     (simplified (simplify-progn floated)))
+
+	(list intf simplified)))))
+
+
 (defmacro defmodule (modname decls &body body)
   "Declare a module MODNAME with given DECLS and BODY.
 
@@ -157,22 +178,21 @@ synthesis. Its type is added to *MODULE-INTERFACES* for importing.
 Duplicate module names will cause a DUPLICATE-MODULE error.
 
 Return the name of the newly-defined module."
-  (with-gensyms (module intf annotated expanded floated simplified)
+  (with-gensyms (module rc intf elaborated)
     (let ((code `(module ,modname ,decls
 			 ,@body)))
       `(let* ((,module ',code)
-	      (,expanded (expand-macros ,module)))
+	      (,rc (elaborate-module ,module)))
 
-	 ;; typecheck and elaborate the expanded module
-	 (let* ((,intf  (typecheck ,expanded))
-		(,floated (car (float-let-blocks ,expanded)))
-		(,simplified (simplify-progn ,floated)))
+	 (destructuring-bind (,intf ,elaborated)
+	     ,rc
 
+	   ;; typecheck and elaborate the expanded module
 	   ;; add type to interfaces available for import
 	   (add-module-interface ',modname ,intf)
 
 	   ;; add expanded code to modules for synthesis
-	   (add-module-for-synthesis ',modname ,simplified)
+	   (add-module-for-synthesis ',modname ,elaborated)
 
 	   ',modname)))))
 
@@ -182,7 +202,7 @@ Return the name of the newly-defined module."
 (defun synthesise-module (m str)
   "Synthesise module M to STR.
 
-M can be a list of Verilisp code or a symbol identifying
+M can be a Verilisp form or a symbol identifying
 a loaded module."
   (with-synthesis-to-stream str
     (let ((vl (if (symbolp m)

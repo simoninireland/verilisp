@@ -104,6 +104,7 @@
 	       (:file "test-vl-eval")
 	       (:file "test-vl-macros")
 	       (:file "test-vl-float-let")
+	       (:file "test-vl-free-variables")
 	       (:file "test-vl-rewriting")
 	       (:file "test-vl-cond")
 	       (:file "test-vl-with-bitfields")

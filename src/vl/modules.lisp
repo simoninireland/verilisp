@@ -236,6 +236,16 @@ of other parameter values."
       (make-module-interface-type decls))))
 
 
+(defmethod dependencies-sexp ((fun (eql 'module)) args)
+  (destructuring-bind (modname decls &rest body)
+      args
+    (with-frame (get-cached-frame decls)
+
+      ;; no need to check decls or parameters as they're never dependent
+      ;; (or are they?...)
+      (dependencies `(progn body)))))
+
+
 (defmethod float-let-blocks-sexp ((fun (eql 'module)) args)
   (destructuring-bind (modname decls &rest body)
       args
@@ -414,6 +424,23 @@ and causes a NOT-IMPORTABLE error if not."
     (mapcar #'symbol-name (every-argument modargs))))
 
 
+(defun values-to-arguments (modname modargs)
+  "Extract the values from MODARGS when importing MODNAME."
+  (labels ((every-value (l)
+	     "Return a list containing every argument value of L."
+	     (cond ((null l)
+		    '())
+		   (t
+		    (cons (cadr l)
+			  (every-value (cddr l)))))))
+
+    (unless (evenp (length modargs))
+      (error 'not-importable :module modname
+			     :hint "Uneven number of module arguments"))
+
+    (every-value modargs)))
+
+
 (defun env-from-module-interface (intf)
   "Return an environment corresponding to INTF."
   (env-from-module-decls (module-interface-arguments intf)
@@ -452,6 +479,22 @@ and causes a NOT-IMPORTABLE error if not."
 		       (ensure-subtype tyval tyarg))))))
 
 	  intf)))))
+
+
+(defmethod dependencies-sexp ((fun (eql 'make-instance)) args)
+  ;; skip (because everything has to be an expression)
+  nil)
+
+
+(defmethod free-variables-sexp ((fun (eql 'make-instance)) args)
+  (destructuring-bind (modname &rest initargs)
+      args
+
+    ;; for compatability with Common Lisp usage
+    (unquote modname)
+
+    (let ((modargs (values-to-arguments modname initargs)))
+      (foldr #'union (mapcar #'free-variables modargs) '()))))
 
 
 (defmethod rewrite-variables-sexp ((fun (eql 'make-instance)) args rewrites)

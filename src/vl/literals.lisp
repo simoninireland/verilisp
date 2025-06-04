@@ -33,6 +33,14 @@
 	`(unsigned-byte ,w))))
 
 
+(defmethod free-variables ((form integer))
+  nil)
+
+
+(defmethod dependencies ((form integer))
+  t)
+
+
 (defmethod widthcheck ((form integer))
   form)
 

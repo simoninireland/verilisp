@@ -72,19 +72,39 @@ q
     (is (vl:synthesise p))))
 
 
+(test test-if-dependencies
+  "Test we can extract dependencies from IF."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '((:type (unsigned-byte 8))
+			       (:initial-value 12)))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))
+			       (:initial-value 1)))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))
+			       (:initial-value 45)))
+    (vl::declare-variable 'd '((:type (unsigned-byte 8))
+			       (:initial-value 0)))
+
+    (let ((p (copy-tree '(if (> a 1)
+			  (setq a b)
+			  (setq a c)))))
+      (vl::dependencies p)
+      (is (set-equal (vl::variable-property 'a :dependencies)
+		     '(b c))))))
+
+
 ;; ---------- Multi-armed value comparisons (CASE) ----------
 
 (test test-case-compatible
   "Test we can typecheck cases with compatible clauses."
   (is (subtypep (vl:typecheck '(let ((a 12)
-				      b)
-				 (case a
-				   (1
-				    (setf b 23))
-				   (2
-				    (setf b 34))
-				   (t
-				    (setf b 0)))))
+				     b)
+				(case a
+				  (1
+				   (setf b 23))
+				  (2
+				   (setf b 34))
+				  (t
+				   (setf b 0)))))
 		'(unsigned-byte 8))))
 
 
@@ -156,3 +176,30 @@ q
 			(setf a (+ a 2))))))
     (vl:typecheck p)
     (is (vl:synthesise p))))
+
+
+(test test-case-dependencies
+  "Test we can extract dependencies from CASE."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '((:type (unsigned-byte 8))
+			       (:initial-value 12)))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))
+			       (:initial-value 1)))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))
+			       (:initial-value 45)))
+    (vl::declare-variable 'd '((:type (unsigned-byte 8))
+			       (:initial-value 0)))
+    (let ((p (copy-tree '(case (+ a 1)
+			  (1
+			   (setq b c))
+			  (2
+			   (setq b a))
+			  (t
+			   (setq a d))))))
+      (vl::dependencies p)
+      (is (set-equal (vl::variable-property 'a :dependencies)
+		     '(d)))
+      (is (set-equal (vl::variable-property 'b :dependencies)
+		     '(c a)))
+      (is (null (vl::variable-property 'c :dependencies)))
+      (is (null (vl::variable-property 'd :dependencies))))))

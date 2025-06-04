@@ -173,6 +173,7 @@
 			  (setq c 1))))))
     (vl:typecheck p)
     (is (vl:synthesise p)))
+
   (let ((p (copy-tree '(let ((c 0 :as :wire :type (unsigned-byte 1))
 			     (d 0 :as :wire :type (unsigned-byte 1)))
 			(let ((a (make-instance 'clock :clk_in c :clk_out d :p 23)))
@@ -181,28 +182,53 @@
     (is (vl:synthesise p))))
 
 
+(test test-module-dependencies
+  "Test we can perform dependency checks over modules and instanciations."
+  (vl:clear-module-registry)
+
+  (vl:defmodule clock ((clk_in  :direction :in  :as :wire :type (unsigned-byte 1))
+		       (clk_out :direction :out :as :wire :type (unsigned-byte 1))
+		       &key (p 1) (q 2))
+    (setq clk_out clk_in))
+
+  (vl:with-new-frame
+    (vl::declare-variable 'c '((:type (unsigned-byte 1))
+			       (:initial-value 0)
+			       (:as :wire)))
+    (vl::declare-variable 'd '((:type (unsigned-byte 1))
+			       (:initial-value 0)
+			       (:as :wire)))
+
+    ;; this dives into the decl-level functions so that we still
+    ;; have access to the environment: if we used a LET block
+    ;; it'd get nested
+    (vl::typecheck-decl '(a (make-instance 'clock :clk_in c :clk_out d)))
+    (vl::dependencies-decl '(a (make-instance 'clock :clk_in c :clk_out d)))
+    (is (set-equal (vl::variable-property 'a :dependencies)
+		   '(c d)))))
+
+
 ;; ---------- Larger and more complicated/contrived examples ----------
 
 (test test-module-real
   "Test module synthesis on a real-ish example."
   (let ((p (copy-tree '(vl:module clockworks ((clk-in   :type (unsigned-byte 1) :direction :in)
-					       (reset-in :type (unsigned-byte 1) :direction :in)
-					       (clk      :type (unsigned-byte 1) :direction :out)
-					       (reset    :type (unsigned-byte 1) :direction :out)
-					       &key (slow 0))
+					      (reset-in :type (unsigned-byte 1) :direction :in)
+					      (clk      :type (unsigned-byte 1) :direction :out)
+					      (reset    :type (unsigned-byte 1) :direction :out)
+					      &key (slow 0))
 
 			;; clock divider
 			(let ((slow-clk 0 :type (unsigned-byte (1+ slow))))
 			  (vl:@ (vl:posedge clk-in)
-				 (incf slow-clk))
+				(incf slow-clk))
 			  (setf clk (vl:bref slow-clk slow)))
 
 			(setq reset reset-in)))))
 
     (vl:with-new-frame
-      (setq p (vl:expand-macros p))
-      (vl:typecheck p)
-      (is (vl:synthesise p)))))
+      (let ((m (vl:elaborate-module p)))
+	(is (vl:synthesise (cadr m)))))))
 
 
 (test test-module-real-instanciate
@@ -224,6 +250,7 @@
 	     (setq reset reset-in))
 
   (vl:defmodule soc ((clk-in   :type (unsigned-byte 1) :direction :in)
+		     (clk      :type (unsigned-byte 1) :direction :out)
 		     (reset    :type (unsigned-byte 1) :direction :out))
     (let ((c (make-instance 'clockworks :clk-in clk-in
 					:reset-in 0

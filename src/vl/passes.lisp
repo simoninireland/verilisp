@@ -29,12 +29,6 @@
 A variable is free in a form if it hasn't appeared in a binder
 that binds that variable. Use REWRITE-VARIABLES to re-write
 free instances to new names.")
-  (:method ((form integer))
-    '())
-  (:method ((form symbol))
-    (if (variable-declared-p form)
-	'()
-	(list form)))
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
@@ -42,7 +36,7 @@ free instances to new names.")
 
 
 (defgeneric free-variables-sexp (fun args)
-  (:documentation "Return all variables free in FU applied to ARGS.")
+  (:documentation "Return all variables free in FUN applied to ARGS.")
   (:method (fun args)
     (foldr #'union (mapcar #'free-variables args) '())))
 
@@ -61,8 +55,7 @@ names to their new form. No checks are performed.")
 		       :key #'symbol-name
 		       :test #'string-equal)))
       ;; reference to rewriteable variable, re-write it
-      (let ((w (cadr a)))
-	w)
+      (cadr a)
 
       ;; leave alone
       form))
@@ -128,6 +121,41 @@ calculations that can be done early.")
 
 This matches a form (SETF (SELECTOR SELECTORARGS) VAL) and allows
 different selectors to be used as generalised places."))
+
+
+;; ---------- Dependencies ----------
+
+(defgeneric dependencies (form)
+  (:documentation "Find all the depenencies in FORM.
+
+Return a list of variables whose dependencies have been changed.")
+  (:method ((form list))
+    (destructuring-bind (fun &rest args)
+	form
+      (dependencies-sexp fun args))))
+
+
+(defgeneric dependencies-sexp (fun args)
+  (:documentation "Find the dependencies of FUN applied to ARGS.
+
+Return a list of variables whose dependencies have been changed.")
+  (:method (fun args)
+    (foldr #'union (mapcar #'dependencies args) '())))
+
+
+(defun traverse-dependencies (ns)
+  "Traverse the dependencies for the variables NS.
+
+This returns the dependencies of the NS, and all the dependencies of those
+dependencies, and so on recursively. Constants do not count as dependencies
+as they can't be updated."
+  (foldr #'union (mapcar (lambda (n)
+			   (if (static-constant-p n)
+			       nil
+			       (union (list n)
+				      (variable-property n :dependencies :default nil))))
+			 ns)
+	 '()))
 
 
 ;; ---------- Let block coalescence ----------

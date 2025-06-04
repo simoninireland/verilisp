@@ -168,3 +168,27 @@
 	   (env (cadr q-env)))
       (is (equal (vl::get-frame-names env)
 		 '(a b c d e f g))))))
+
+
+(test test-let-dependencies
+  "Test we can extract dependencies properly."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '((:type (unsigned-byte 8))
+			       (:initial-value 12)))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))
+			       (:initial-value 24)))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))
+			       (:initial-value 0)))
+
+    (let ((p (copy-tree '(progn
+			  (setq a (+ b 19))
+			  (setq c a)))))
+
+      (vl:typecheck p)
+      (vl::dependencies p)
+
+      (is (set-equal (vl::variable-property 'a :dependencies)
+		     '(b)))
+      (is (null (vl::variable-property 'b :dependencies)))
+      (is (set-equal (vl::variable-property 'c :dependencies)
+		     '(a b))))))

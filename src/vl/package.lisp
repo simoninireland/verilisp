@@ -103,6 +103,7 @@
    #:get-module-interface
    #:get-modules-for-synthesis
    #:defmodule
+   #:elaborate-module
    #:synthesise-module
 
    ;; conditions

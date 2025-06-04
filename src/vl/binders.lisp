@@ -239,6 +239,38 @@ This updates the current environment with the new properties."
 	      (list (list 'frame (detach-frame *global-environment*))))))))
 
 
+;; ---------- Dependencies ----------
+
+(defun dependencies-decl (decl)
+  "Calculate the dependencies for DECL.
+
+The dependencies are all the other variables that appear on the
+right-hand side of an assignment."
+  (if (listp decl)
+      (destructuring-bind (n v &key &allow-other-keys)
+	  decl
+	(let* ((fvs (free-variables v))
+	       (all-fvs (traverse-dependencies fvs))
+	       (deps (variable-property n :dependencies :default nil)))
+	  (set-variable-property n :dependencies (union deps all-fvs))))
+
+      ;; naked declaration has no dependencies, by definition
+      nil))
+
+
+(defmethod dependencies-sexp ((fun (eql 'let)) args)
+  (destructuring-bind (decls &rest body)
+      args
+
+    (with-frame (get-cached-frame decls)
+      ;; add dependencies for declaraed variables
+      (mapc #'dependencies-decl (decls-without-cached-frame decls))
+
+      ;; process the body in this frame, with these dependencies
+      (dependencies `(progn ,@body)))))
+
+
+
 ;; ---------- Variable re-writing ----------
 
 (defmethod free-variables-sexp ((fun (eql 'let)) args)
