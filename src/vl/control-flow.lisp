@@ -122,6 +122,18 @@ block, and are represented by the symbol *."
     (typecheck `(progn ,@body))))
 
 
+(defmethod free-variables-sexp ((fun (eql '@)) args)
+  (destructuring-bind (sensitivities &rest body)
+      args
+    (union (free-variables sensitivies) (free-variables `(progn ,@body)))))
+
+
+(defmethod dependencies-sexp ((fun (eql '@)) args)
+  (destructuring-bind (sensitivities &rest body)
+      args
+    (dependencies `(progn ,@body))))
+
+
 (defmethod simplify-progn-sexp ((fun (eql '@)) args)
   (destructuring-bind ((&rest sensitivities) &rest body)
       args

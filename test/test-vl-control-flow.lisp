@@ -168,3 +168,32 @@
     (vl:with-new-frame
       (vl:typecheck p)
       (is (vl:synthesise p)))))
+
+
+(test test-at-dependencies
+  "Test we can extract dependencies from @ bodies."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '((:type (unsigned-byte 8))
+			       (:initial-value 12)))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))
+			       (:initial-value 1)))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))
+			       (:initial-value 45)))
+    (vl::declare-variable 'd '((:type (unsigned-byte 8))
+			       (:initial-value 0)))
+    (vl::declare-variable 'clk '((:type (unsigned-byte 1))
+				 (:initial-value 0)))
+
+    (let ((p (copy-tree '(vl:@ (vl:posedge clk)
+			  (setq a 8)
+			  (setq a (+ b clk))
+			  (setq b (+ b c))))))
+      (vl::dependencies p)
+
+      ;; b depends on itself
+      (is (set-equal (vl::variable-property 'b :dependencies)
+		     '(b c)))
+
+      ;; a should also depend on c and clk, after b's later update
+      (is (set-equal (vl::variable-property 'a :dependencies)
+		     '(b c clk))))))
