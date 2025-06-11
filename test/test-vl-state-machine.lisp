@@ -24,7 +24,7 @@
 (test test-sm-linear
   "Test we can create a simple linear machine."
   (let ((p (copy-tree '(let ((a 1))
-			(vl:state-machine (posedge clk)
+			(vl:state-machine (vl:posedge clk)
 			 (0
 			  (incf a)
 			  (next-state 1))
