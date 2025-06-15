@@ -34,7 +34,7 @@
 
 
 (defmethod dependencies ((form symbol))
-  t)
+  nil)
 
 
 (defmethod float-let-blocks ((form symbol))

@@ -218,6 +218,15 @@ well as PROGNs nested inside other PROGNs.")
 
 ;; ---------- Macro expansion ----------
 
+(defun expand-macros-in-environment (form &optional (f *macro-environment*))
+  "Recursively expand all macros in FORM in the global macro environment.
+
+This attaches the frame F before calling EXPAND-MACROS. If F is omitted
+(as is usual) then the macros are taken from *MACRO-ENVIRONMENT*."
+  (with-frame f
+    (expand-macros form)))
+
+
 (defgeneric expand-macros (form)
   (:documentation "Expand macros in FORM.")
   (:method (form)
@@ -237,14 +246,16 @@ well as PROGNs nested inside other PROGNs.")
 
 
 (defgeneric expand-macros-sexp (fun args)
-  (:documentation "Expand macros in FUN applied to ARGS.")
+  (:documentation "Expand macros in FUN applied to ARGS.
+
+The macros available are taken from the global environment. Usually
+this will have *MACRO-ENVIRONMENT* attached to it prior to macro expansion.")
   (:method (fun args)
     (declare (optimize debug))
     (with-vl-errors-not-synthesisable
-      (if-let ((m (assoc fun *macros*)))
+      (if (macro-declared-p fun)
 	;; macro is expandable, replace with real name if there is one
-	(let ((realfun (or (safe-cadr m)
-			   fun)))
+	(let ((realfun (variable-property fun :real-name)))
 	  (multiple-value-bind (expansion expanded)
 	      (macroexpand-1 (cons realfun args))
 	    (if expanded

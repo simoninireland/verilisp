@@ -132,7 +132,7 @@
 		       (clk_out :direction :out :as :wire :type (unsigned-byte 1)))
     (setq clk_out clk_in))
 
-  (is (subtypep (type-of (vl:typecheck (vl::expand-macros
+  (is (subtypep (type-of (vl:typecheck (vl::expand-macros-in-environment
 					(copy-tree '(vl:module moduleinstanciatebitfields
 						     ((clk_in :type (unsigned-byte 1) :direction :in :as :wire))
 						     (let ((ctrl 0 :type (unsigned-byte 4) :as :wire))
@@ -151,7 +151,7 @@
 			    (let ((clock (make-instance 'clock :clk_in clk_in
 							       :clk_out clk)))
 			      (setf ctrl 1))))))))
-    (setq p (vl:expand-macros p))
+    (setq p (vl::expand-macros-in-environment p))
     (vl:typecheck p)
     (setq p (car (vl:float-let-blocks p)))
     (setq p (vl:simplify-progn p))

@@ -93,7 +93,7 @@
    #:rewrite-variables
    #:float-let-blocks
    #:simplify-progn
-   #:expand-macros
+   #:expand-macros-in-environment
    #:synthesise
    #:lispify
 

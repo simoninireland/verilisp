@@ -63,14 +63,14 @@
 	     (vl::with-bitfields (a a a b b b c)
 		 a
 	       (setf a (+ b c))))))
-    (is (subtypep (vl:typecheck (vl:expand-macros p))
+    (is (subtypep (vl:typecheck (vl:expand-macros-in-environment p))
 		  '(unsigned-byte 10)))))
 
 
 (test test-with-bitfields-typo
   "Test we catch the typo of forgetting the matching value."
   (signals (vl:not-synthesisable)
-    (vl:expand-macros '(vl:with-bitfields (a b c)
+    (vl:expand-macros-in-environment '(vl:with-bitfields (a b c)
 			 ;; no argument to match against,
 			 ;; just a one-form body
 			 (setq a b)))))
@@ -85,5 +85,5 @@
 						 d e f)
 			      ctrl
 			    (setf a d))))))
-    (is (subtypep (vl:typecheck (vl:expand-macros p))
+    (is (subtypep (vl:typecheck (vl:expand-macros-in-environment p))
 		  'vl::module-interface))))

@@ -38,7 +38,7 @@
 
 
 (defmethod dependencies ((form integer))
-  t)
+  nil)
 
 
 (defmethod widthcheck ((form integer))

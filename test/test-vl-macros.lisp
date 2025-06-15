@@ -31,7 +31,7 @@
 	       (+ a 67))
 	      (t
 	       0)))
-	 (g (vl::expand-macros f)))
+	 (g (vl::expand-macros-in-environment f)))
     (is (equal g '(if (= a 12)
 		   (+ a 1)
 		   (if (> a 34)
@@ -41,7 +41,7 @@
 
 (test test-no-expand-and
   "Test we don't expand AND, which is a macro in Common Lisp."
-  (is (equal (vl::expand-macros '(and a b))
+  (is (equal (vl::expand-macros-in-environment '(and a b))
 	     '(and a b))))
 
 
@@ -49,7 +49,7 @@
 
 (test test-expand-when
   "Test we can expand WHEN conditionals."
-  (is (equal (vl::expand-macros '(when (= a b)
+  (is (equal (vl::expand-macros-in-environment '(when (= a b)
 				   (+ a 1)
 				   (- b 1)))
 	     '(if (= a b)
@@ -60,7 +60,7 @@
 
 (test test-expand-unless
   "Test we can expand UNLESS conditionals."
-  (is (equal (vl::expand-macros '(unless (= a b)
+  (is (equal (vl::expand-macros-in-environment '(unless (= a b)
 				   (+ a 1)
 				   (- b 1)))
 	     '(if (not (= a b))
@@ -71,13 +71,13 @@
 
 (test test-expand-incf
   "Test we canm expand INCF macros."
-  (is (equal (vl::expand-macros '(let ((a 1))
+  (is (equal (vl::expand-macros-in-environment '(let ((a 1))
 				   (incf a)))
 	     '(let ((a 1))
 	       (progn
 		 (setf a (+ a 1))))))
 
-  (is (equal (vl::expand-macros '(let ((a 1))
+  (is (equal (vl::expand-macros-in-environment '(let ((a 1))
 				   (incf (bit a 5))))
 	     '(let ((a 1))
 	       (progn
@@ -86,13 +86,13 @@
 
 (test test-expand-decf
   "Test we canm expand DECF macros."
-  (is (equal (vl::expand-macros '(let ((a 1))
+  (is (equal (vl::expand-macros-in-environment '(let ((a 1))
 				   (decf a)))
 	     '(let ((a 1))
 	       (progn
 		 (setf a (+ a 1))))))
 
-  (is (equal (vl::expand-macros '(let ((a 1))
+  (is (equal (vl::expand-macros-in-environment '(let ((a 1))
 				   (decf (bit a 5))))
 	     '(let ((a 1))
 	       (progn
@@ -101,35 +101,35 @@
 
 (test test-expand-maths
   "Test we can expand the maths operators."
-  (is (equal (vl::expand-macros '(1+ 45))
+  (is (equal (vl::expand-macros-in-environment '(1+ 45))
 	     '(+ 45 1)))
-  (is (equal (vl::expand-macros '(1- 45))
+  (is (equal (vl::expand-macros-in-environment '(1- 45))
 	     '(- 45 1)))
-  (is (equal (vl::expand-macros '(vl::2* 45))
+  (is (equal (vl::expand-macros-in-environment '(vl::2* 45))
 	     '(vl::<< 45 1))))
 
 
 (test test-expand-tests
   "Test we can expand the maths tests."
-  (is (equal (vl::expand-macros '(vl:0= 45))
+  (is (equal (vl::expand-macros-in-environment '(vl:0= 45))
 	     '(= 45 0)))
-  (is (equal (vl::expand-macros '(vl:0/= 45))
+  (is (equal (vl::expand-macros-in-environment '(vl:0/= 45))
 	     '(/= 45 0))))
 
 
 (test test-expand-let-representations
   "Test we can expand the representation-specific LET variants."
-  (is (equal (vl::expand-macros '(vl:let-wires ((a 0 :width 10))
+  (is (equal (vl::expand-macros-in-environment '(vl:let-wires ((a 0 :width 10))
 				   (setq a 12)))
 	     '(let ((a 0 :as :wire :width 10))
 	       (progn
 		 (setq a 12)))))
-  (is (equal (vl::expand-macros '(vl:let-registers ((a 0 :width 10))
+  (is (equal (vl::expand-macros-in-environment '(vl:let-registers ((a 0 :width 10))
 				   (setq a 12)))
 	     '(let ((a 0 :as :register :width 10))
 	       (progn
 		 (setq a 12)))))
-  (is (equal (vl::expand-macros '(vl:let-constants ((a 0 :width 10))
+  (is (equal (vl::expand-macros-in-environment '(vl:let-constants ((a 0 :width 10))
 				   (setq a 12)))
 	     '(let ((a 0 :as :constant :width 10))
 	       (progn
@@ -137,5 +137,20 @@
 
   ;; test failure
   (signals (vl:representation-mismatch)
-     (vl::expand-macros '(vl:let-wires ((a 10 :as :constant))
+     (vl::expand-macros-in-environment '(vl:let-wires ((a 10 :as :constant))
 				   (setq a 12)))))
+
+
+(test test-no-macro-synthesis
+  "Test we can't synthesise if there are macros left enexpanded."
+
+  ;; should catch an unknown form if we typecheck without expanding
+  (let ((p (copy-tree '(let ((a 1))
+			(incf a)))))
+    (signals (vl:unknown-form)
+      (vl:typecheck p)))
+
+  ;; should fail if we try to synthesise
+  (let ((p (copy-tree '(when 1 (+ 1 2)))))
+    (signals (vl:not-synthesisable)
+      (vl:synthesise p))))

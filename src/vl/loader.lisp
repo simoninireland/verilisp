@@ -23,47 +23,44 @@
 
 ;; ---------- Macros we allow in Verilisp ----------
 
-(defvar *macros* nil
-  "List of macros expanded within Verilisp forms.")
+(defvar *macro-environment* (empty-environment)
+  "The frame containing all the macros available in Verilisp.
+
+The frame is initially detatched. It should be attached to the global
+environment before calling EXPAND-MACROS-IN-ENVIRONMENT (and can be
+detached again afterwards).")
 
 
-(defun add-macro (name &optional real-name)
-  "Add NAME as a macro in Verilisp.
+;; declare all macros available by default
+(with-frame *macro-environment*
+  ;; conditionals
+  (declare-macro 'cond)
+  (declare-macro 'when 'when/vl)
+  (declare-macro 'unless 'unless/vl)
 
-The macros will be expanded during the expansion pass (if enabled).
-If REAL-NAME is given, then NAME acts as a pseudonym for it. Otherwise
-NAME is assuemd to be the \"real\" name of the macro."
-  (appendf *macros* (list (list name (or real-name nil)))))
+  ;; representation-specific lets
+  (declare-macro 'let-wires)
+  (declare-macro 'let-registers)
+  (declare-macro 'let-constants)
 
+  ;; places
+  (declare-macro 'incf 'incf/vl)
+  (declare-macro 'decf 'decf/vl)
 
-;; conditionals
-(add-macro 'cond)
-(add-macro 'when 'when/vl)
-(add-macro 'unless 'unless/vl)
+  ;; tests and maths
+  (declare-macro '0=)
+  (declare-macro '0/=)
+  (declare-macro '1+ '1+/vl)
+  (declare-macro '1- '1-/vl)
+  (declare-macro '2* '2*)
 
-;; representation-specific lets
-(add-macro 'let-wires)
-(add-macro 'let-registers)
-(add-macro 'let-constants)
+  ;; variable introduction and aliasing
+  (declare-macro 'with-bitfields)
 
-;; places
-(add-macro 'incf 'incf/vl)
-(add-macro 'decf 'decf/vl)
-
-;; tests and maths
-(add-macro '0=)
-(add-macro '0/=)
-(add-macro '1+ '1+/vl)
-(add-macro '1- '1-/vl)
-(add-macro '2* '2*)
-
-;; variable introduction and aliasing
-(add-macro 'with-bitfields)
-
-;; state machines
-(add-macro 'state-machine)
-(add-macro 'next 'next/vl)
-(add-macro 'exit 'exit/vl)
+  ;; state machines
+  (declare-macro 'state-machine)
+  (declare-macro 'next 'next/vl)
+  (declare-macro 'exit 'exit/vl))
 
 
 ;; ---------- Module registry ----------
@@ -150,7 +147,7 @@ This runs all the relevant compiler nanopasses, returning a list
 consisting of the module interface type and the fully-elaborated
 module ready for synthesis."
   ;; expand macrs
-  (let ((expanded (expand-macros form)))
+  (let ((expanded (expand-macros-in-environment form *macro-environment*)))
 
     ;; typecheck
     (let ((intf (typecheck expanded)))

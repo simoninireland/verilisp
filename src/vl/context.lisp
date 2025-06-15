@@ -22,7 +22,7 @@
 
 ;; ---------- Environment ----------
 
-(defvar *global-environment* (empty-environment)
+(defparameter *global-environment* (empty-environment)
   "The global environment for the compiler.")
 
 
@@ -91,6 +91,21 @@ should be handled correctly using WITH-NEW-FRAME. However...."
 (defun set-variable-property (n p v)
   "Set the value of property P of variable N in the global environment to V."
   (set-environment-property n p v *global-environment*))
+
+
+(defun declare-macro (m &optional underlying-name)
+  "Declare M as a macro in the global environment.
+
+If UNDERLYING-NAME is provided then M is used as a synonym for it."
+  (declare-variable m `((:name ,m)
+			(:real-name ,(or underlying-name m))
+			(:as :macro))))
+
+
+(defun macro-declared-p (m)
+  "Test whether M is declared as a macro in the global environment."
+  (and (variable-declared-p m)
+       (eql (get-representation m) :macro)))
 
 
 ;;---------- Common properties ----------

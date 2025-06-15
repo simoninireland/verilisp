@@ -31,7 +31,7 @@
 		    (setf b 2))
 		   (t
 		    (setf b 3))))))
-    (setq p (vl:expand-macros p))
+    (setq p (vl:expand-macros-in-environment p))
     (vl:typecheck p)
     (is (vl:synthesise p))))
 
@@ -47,6 +47,6 @@
 			    (t 6))))
 	       (setq c (+ c 2))))))
 
-    (setq p (vl:expand-macros p))
+    (setq p (vl:expand-macros-in-environment p))
     (vl:typecheck p)
     (is (vl:synthesise p))))
