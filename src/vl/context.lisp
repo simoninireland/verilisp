@@ -236,6 +236,11 @@ that is that form."
   (eql (caar formq) '@))
 
 
+(defun tagbody-form-p (&optional (formq *current-form-queue*))
+  "Test whether the head of FORMQ is a TAGBODY."
+  (eql (caar formq) 'tagbody))
+
+
 (defun decl-form-p (&optional (formq *current-form-queue*))
   "Test whether the head of FORMQ is a declaration of a LET block.
 
@@ -281,3 +286,8 @@ occurs immediately within a LET form."
 		       (or (assignment-form-p formq)
 			   (decl-form-p formq)))
 		     (cdr *current-form-queue*))))
+
+
+(defun in-state-machine-context-p ()
+  "Test whether the current context is within a TAGBODY form."
+  (find-if-list #'tagbody-form-p (cdr *current-form-queue*)))
