@@ -171,6 +171,25 @@ Return a list consisting of the new form and any declarations floated.")
 	(float-let-blocks-sexp fun args)))))
 
 
+(defun float-merge (forms)
+  "Float LET blocks in FORMS left to right.
+
+Return the re-written FORMS and a merged environment."
+  (flet ((pairwise-append (old form)
+	   (destructuring-bind (oldbody oldenv)
+	       old
+	     (destructuring-bind (newbody newenv)
+		 (float-let-blocks form)
+	       (list (if (null oldbody)
+			 (list newbody)
+			 (append oldbody (list newbody)))
+		     (if (null newenv)
+			 oldenv
+			 (add-frame-to-environment newenv oldenv)))))))
+
+    (foldr #'pairwise-append forms (list '() (make-frame)))))
+
+
 (defgeneric float-let-blocks-sexp (fun args)
   (:documentation "Float nested LET blocks in FUN applied to ARGS.
 
@@ -179,21 +198,9 @@ the form with re-written versions of ARGS.
 
 Return a list consisting of the new form and any declarations floated.")
   (:method (fun args)
-    (flet ((pairwise-append (old form)
-	     (destructuring-bind (oldbody oldenv)
-		 old
-	       (destructuring-bind (newbody newenv)
-		   (float-let-blocks form)
-		 (list (if (null oldbody)
-			   (list newbody)
-			   (append oldbody (list newbody)))
-		       (if (null newenv)
-			   oldenv
-			   (add-frame-to-environment newenv oldenv)))))))
-
-      (destructuring-bind (fargs fenv)
-	  (foldr #'pairwise-append args (list '() (make-frame)))
-	`((,fun ,@fargs) ,fenv)))))
+    (destructuring-bind (fargs fenv)
+	  (float-merge args)
+	`((,fun ,@fargs) ,fenv))))
 
 
 ;; ---------- PROGN coalescence ----------
@@ -267,6 +274,30 @@ this will have *MACRO-ENVIRONMENT* attached to it prior to macro expansion.")
 
 	;; macro is not expandable, descend into the form
 	(expand-descend fun args)))))
+
+
+;; ---------- Simplification ----------
+
+(defgeneric simplify (form)
+  (:documentation "Simplify FORM to something simpler.
+
+This is used to translate forms into simpler forms for synthesis.")
+  (:method (form)
+    form)
+  (:method ((form list))
+    (let ((fun (car form))
+	  (args (cdr form)))
+      (with-vl-errors-not-synthesisable
+	(with-current-form form
+	  (simplify-sexp fun args))))))
+
+
+(defgeneric simplify-sexp (fun args)
+  (:documentation "Simplify FUN applied to ARGS.
+
+The default recursively simplifies all the ARG forms.")
+  (:method (fun args)
+    `(,fun ,@(mapcar #'simplify args))))
 
 
 ;; ---------- Synthesis ----------

@@ -155,7 +155,8 @@ module ready for synthesis."
       (dependencies expanded)
 
       ;; simplify
-      (let* ((floated (car (float-let-blocks expanded)))
+      (let* ((simplified1 (simplify expanded))
+	     (floated (car (float-let-blocks simplified1)))
 	     (simplified (simplify-progn floated)))
 
 	(list intf simplified)))))

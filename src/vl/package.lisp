@@ -94,6 +94,7 @@
    #:float-let-blocks
    #:simplify-progn
    #:expand-macros-in-environment
+   #:simplify
    #:synthesise
    #:lispify
 

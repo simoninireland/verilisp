@@ -68,3 +68,25 @@
 
     (vl:typecheck q)
     (is (vl:synthesise q))))
+
+
+(test test-tagbody-float
+  "Test we float let blocks successfully when synthesising."
+  (let* ((p (copy-tree '(vl:module test/456 ((clk :direction :in))
+			 (let ((a 0)
+			       (b 0))
+			   (setq a 1)
+			   (setq b 34)
+
+			   (vl:@ (vl:posedge a)
+				 (let ((c 0))
+				   (tagbody
+				    one
+				      (setq a 1)
+				      (setq b 2)
+				      (go two)
+				    two
+				      (setq b 0)
+				      (go one)))))))))
+
+    (vl::elaborate-module p)))

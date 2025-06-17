@@ -113,11 +113,11 @@ An UNKNOWN-STATE error is signalled for an unrecognised state."
 The current state is stored in STATE-VARIABLE, whcih should be a
 unique variable name."
   (let ((decls (let ((i 0))
-		       (mapcar (lambda (label)
-				 (prog1
-				     `(,label ,i :as :constant :role :state-label)
-				   (incf i)))
-			       (state-labels states)))))
+		 (mapcar (lambda (label)
+			   (prog1
+			       `(,label ,i :as :constant :role :state-label)
+			     (incf i)))
+			 (state-labels states)))))
 
     ;; This compiled form works because we know we're going to float
     ;; the let blocks later, meaning that the state variable won't be
@@ -129,23 +129,24 @@ unique variable name."
 	   ,@states)))))
 
 
-(defmethod synthesise-sexp ((fun (eql 'tagbody)) args)
+(defmethod simplify-sexp ((fun (eql 'tagbody)) args)
   (let ((states (extract-tagbody-states args)))
 
     (with-new-frame
       (with-gensyms (state-variable)
 	;; declare the state variable
-	(declare-variable 'state-variable `((:type symbol)
-					    (:initial-value ,state-variable)
-					    (:role :state-variable-name)))
+	(declare-variable 'state-variable-name `((:type symbol)
+						 (:initial-value ,state-variable)
+						 (:role :state-variable-name)))
 
-	;; synthesise the compiled formin an environment
+	;; synthesise the compiled form in an environment
 	;; that contains an entry for the name of the
-	;; state variable, which isthen pisked up by any GO
+	;; state variable, which is then picked up by any GO
 	;; forms
 	(let ((code (compile-state-machine state-variable states)))
 	  (typecheck code)
-	  (synthesise code))))))
+	  (break)
+	  (simplify code))))))
 
 
 ;; ---------- GO ----------
@@ -165,9 +166,9 @@ unique variable name."
     t))
 
 
-(defmethod synthesise-sexp ((fun (eql 'go)) args)
+(defmethod simplify-sexp ((fun (eql 'go)) args)
   (destructuring-bind (label)
       args
 
-    (let ((state-variable (get-initial-value 'state-variable)))
-      (synthesise `(setq ,state-variable ,label)))))
+    (let ((state-variable (get-initial-value 'state-variable-name)))
+      `(setq ,state-variable ,label))))

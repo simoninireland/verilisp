@@ -273,6 +273,15 @@ of other parameter values."
        (make-frame)))))
 
 
+
+(defmethod simplify-sexp ((fun (eql 'module)) args)
+  (destructuring-bind (modname decls &rest body)
+      args
+    (with-frame (get-cached-frame decls)
+      (let ((newbody (mapcar #'simplify body)))
+	`(module ,modname ,decls ,@newbody)))))
+
+
 (defmethod simplify-progn-sexp ((fun (eql 'module)) args)
   (destructuring-bind (modname decls &rest body)
       args
