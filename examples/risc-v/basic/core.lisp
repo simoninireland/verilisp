@@ -46,152 +46,133 @@
     (setq leds-out leds)
 
     ;; instruction decoding
-    (let-wires ((isALUreg (= (bref instr 6 :end 0) #2r0110011) :type (unsigned-byte 1))
-		(isALUimm (= (bref instr 6 :end 0) #2r0010011) :type (unsigned-byte 1))
-		(isBranch (= (bref instr 6 :end 0) #2r1100011) :type (unsigned-byte 1))
-		(isJALR   (= (bref instr 6 :end 0) #2r1100111) :type (unsigned-byte 1))
-		(isJAL    (= (bref instr 6 :end 0) #2r1101111) :type (unsigned-byte 1))
-		(isAIUPC  (= (bref instr 6 :end 0) #2r0010111) :type (unsigned-byte 1))
-		(isLUT    (= (bref instr 6 :end 0) #2r0110111) :type (unsigned-byte 1))
-		(isLoad   (= (bref instr 6 :end 0) #2r0000011) :type (unsigned-byte 1))
-		(isStore  (= (bref instr 6 :end 0) #2r0100011) :type (unsigned-byte 1))
-		(isSystem (= (bref instr 6 :end 0) #2r1110011) :type (unsigned-byte 1))
+    (let-wires ((isALUreg (= (bref instr 6 :end 0) #2r0110011))
+		(isALUimm (= (bref instr 6 :end 0) #2r0010011))
+		(isBranch (= (bref instr 6 :end 0) #2r1100011))
+		(isJALR   (= (bref instr 6 :end 0) #2r1100111))
+		(isJAL    (= (bref instr 6 :end 0) #2r1101111))
+		(isAIUPC  (= (bref instr 6 :end 0) #2r0010111))
+		(isLUT    (= (bref instr 6 :end 0) #2r0110111))
+		(isLoad   (= (bref instr 6 :end 0) #2r0000011))
+		(isStore  (= (bref instr 6 :end 0) #2r0100011))
+		(isSystem (= (bref instr 6 :end 0) #2r1110011))
 
 		;; intermediate formats
 		(Uimm (make-bitfields (bref instr 31)
 				      (bref instr 30 :end 12)
-				      (extend-bits 0 12))
-		      :type (unsigned-byte 32))
+				      (extend-bits 0 12)))
 		(Iimm (make-bitfields (extend-bits (bref instr 31) 21)
-				      (bref instr 30 :end 20))
-		      :type (signed-byte 32))
+				      (bref instr 30 :end 20)))
 		(Simm (make-bitfields (extend-bits (bref instr 31) 21)
 				      (bref instr 30 :end 25)
-				      (bref instr 11 :end 7))
-		      :type (unsigned-byte 32))
+				      (bref instr 11 :end 7)))
 		(Bimm (make-bitfields (extend-bits (bref instr 31) 20)
 				      (bref instr 7)
 				      (bref instr 30 :end 25)
 				      (bref instr 11 :end 8)
-				      (extend-bits 0 1))
-		      :type (signed-byte 32))
+				      (extend-bits 0 1)))
 		(Jimm (make-bitfields (extend-bits (bref instr 31) 12)
 				      (bref instr 19 :end 12)
 				      (bref instr 20)
 				      (bref instr 30 :end 21)
-				      (extend-bits 0 1))
-		      :type (signed-byte 32))
+				      (extend-bits 0 1)))
 
 		;; source and destination registers
-		(rs1Id (bref instr 19 :end 15) :type (unsigned-byte 5))
-		(rs2Id (bref instr 24 :end 20) :type (unsigned-byte 5))
-		(rdId  (bref instr 11 :end 7)  :type (unsigned-byte 5))
+		(rs1Id (bref instr 19 :end 15))
+		(rs2Id (bref instr 24 :end 20))
+		(rdId  (bref instr 11 :end 7))
 
 		;; function codes
-		(funct3 (bref instr 14 :end 12) :type (unsigned-byte 3))
-		(funct7 (bref instr 31 :end 25) :type (unsigned-byte 7)))
+		(funct3 (bref instr 14 :end 12))
+		(funct7 (bref instr 31 :end 25)))
 
-	       ;; register bank
-	       (let ((RegisterBank  (make-array '(32) :element-type (unsigned-byte 32)))
-		     (rs1           0 :type (unsigned-byte 32))
-		     (rs2           0 :type (unsigned-byte 32))
-		     (writeBackData 0 :type (unsigned-byte 32) :as :wire)
-		     (writeBackEn   0 :type (unsigned-byte 1) :as :wire))
+      ;; register bank
+      (let ((RegisterBank  (make-array '(32) :element-type (unsigned-byte 32)))
+	    (rs1           0)
+	    (rs2           0))
 
-		 ;; the ALU
-		 (let-wires ((aluIn1 rs1 :type (unsigned-byte 32))
-			     (aluIn2 (if isALUreg
-					 rs2
-					 Iimm)
-				     :type (unsigned-byte 32))
-			     (shamt (if isALUreg
-					(bref rs2 4 :end 0)
-					(bref instr 24 :end 20))
-				    :type (unsigned-byte 5)))
+	;; the ALU
+	(let-wires ((aluIn1 rs1 :type (unsigned-byte 32)) ;; CHECK THIS
+		    (aluIn2 (if isALUreg
+				rs2
+				Iimm))
+		    (shamt (if isALUreg
+			       (bref rs2 4 :end 0)
+			       (bref instr 24 :end 20))))
 
-			    (let-registers ((aluOut 0 :type (unsigned-byte 32)))
+	  (let ((aluOut 0 :type (unsigned-byte 32)))
 
-					   (@ (*)
-					      (case funct3
-						(#2r000
-						 (if (logand (bref funct7 5)
-							     (bref instr 5))
-						     (setq aluOut (- aluIn1 aluIn2) :sync t)
-						     (setq aluOut (+ aluIn1 aluIn2) :sync t)))
+	    (@ (*)
+	       (case funct3
+		 (#2r000
+		  (if (logand (bref funct7 5)
+			      (bref instr 5))
+		      (setq aluOut (- aluIn1 aluIn2) :sync t)
+		      (setq aluOut (+ aluIn1 aluIn2) :sync t)))
 
-						(#2r001
-						 (setq aluOut (<< aluIn1 shamt) :sync t))
+		 (#2r001
+		  (setq aluOut (<< aluIn1 shamt) :sync t))
 
-						(#2r010
-						 (setq aluOut (< aluIn1 aluIn2) :sync t)) ;; signed
+		 (#2r010
+		  (setq aluOut (< aluIn1 aluIn2) :sync t)) ;; signed
 
-						(#2r011
-						 (setq aluOut (< aluIn1 aluIn2) :sync t)) ;; unsigned
+		 (#2r011
+		  (setq aluOut (< aluIn1 aluIn2) :sync t)) ;; unsigned
 
-						(#2r100
-						 (setq aluOut (logxor aluIn1 aluIn2) :sync t))
+		 (#2r100
+		  (setq aluOut (logxor aluIn1 aluIn2) :sync t))
 
-						(#2r101
-						 (if (bref funct7 5)
-						     (setq aluOut (>> aluIn1 shamt) :sync t) ;; sign-extended
-						     (setq aluOut (>> aluIn1 shamt) :sync t))) ;; unsigned
+		 (#2r101
+		  (if (bref funct7 5)
+		      (setq aluOut (>> aluIn1 shamt) :sync t) ;; sign-extended
+		      (setq aluOut (>> aluIn1 shamt) :sync t))) ;; unsigned
 
-						(#2r110
-						 (setq aluOut (logior aluIn1 aluIn2) :sync t))
+		 (#2r110
+		  (setq aluOut (logior aluIn1 aluIn2) :sync t))
 
-						(#2r111
-						 (setq aluOut (logand aluIn1 aluIn2) :sync t))))
+		 (#2r111
+		  (setq aluOut (logand aluIn1 aluIn2) :sync t))))
 
-					   ;; the state machine
-					   (let ((FETCH-INSTR 0 :as :constant)
-						 (FETCH-REGS  1 :as :constant)
-						 (EXECUTE     2 :as :constant)
-						 (state       0 :type (unsigned-byte 3)))
+	    ;; the state machine
+	    (@ (posedge clk)
+	       (tagbody
+		  ;; State 0: fetch the next instruction
+		fetch-instruction
+		  (if reset
+		      (setq pc 0))
 
-					     (let ((nextpc (cond (isJAL
-								  (+ pc Jimm))
-								 (isJALR
-								  (+ rs1 Iimm))
-								 (t
-								  (+ pc 4)))
-							   :type (unsigned-byte 32)
-							   :as :wire))
+		  (setq instr (aref mem (bref pc 31 :end 2)))
+		  (go fetch-registers)
 
-					       (setq writeBackData (if (or isJAL isJALR)
-								       (+ pc 4)
-								       aluOut))
-					       (setq writeBackEn (and (= state EXECUTE)
-								      (or isALUReg
-									  isALUImm
-									  isJAL
-									  isJALR)))
+		  ;; State 1: load from registers
+		fetch-registers
+		  (setq rs1 (aref RegisterBank rs1Id))
+		  (setq rs2 (aref RegisterBank rs2Id))
+		  (go execute-writeback)
 
-					       (@ (posedge clk)
-						  (if reset
-						      (progn
-							(setq pc 0)
-							(setq state FETCH-INSTR))
+		  ;; State 3: execute the instruction and write back results
+		execute-writeback
+		  ;; writeback data to registers
+		  (when (and (or isALUReg
+				 isALUImm
+				 isJAL
+				 isJALR)
+			     (/= rdId 0))
+		    (setf (aref RegisterBank rdId) (if (or isJAL isJALR)
+						       (+ pc 4)
+						       aluOut))
 
-						      (if (and writeBackEn
-							       (/= rdId 0))
-							  (progn
-							    (setf (aref RegisterBank rdId) writeBackData)
+		    ;; update the LEDS if writing to R1
+		    (when (= rdId 1)
+		      (setq leds aluOut)))
 
-							    ;; update the LEDS if writing to R1
-							    (if (= rdId 1)
-								(setq leds writeBackData)))))
+		  ;; update PC
+		  (when (not isSystem)
+		    (setq pc (cond (isJAL
+				    (+ pc Jimm))
+				   (isJALR
+				    (+ rs1 Iimm))
+				   (t
+				    (+ pc 4)))))
 
-						  (case state
-						    (FETCH-INSTR
-						     (setq instr (aref mem (bref pc 31 :end 2)))
-						     (setq state FETCH-REGS))
-
-						    (FETCH-REGS
-						     (setq rs1 (aref RegisterBank rs1Id))
-						     (setq rs2 (aref RegisterBank rs2Id))
-						     (setq state EXECUTE))
-
-						    (EXECUTE
-						     (if (not isSystem)
-							 (setq pc nextpc))
-						     (setq state FETCH-INSTR))))))))))))
+		  (go fetch-instruction)))))))))
