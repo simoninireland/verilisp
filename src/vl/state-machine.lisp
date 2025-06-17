@@ -28,6 +28,11 @@
   (mapcar #'car states))
 
 
+(defun state-bodies (states)
+  "Extract the bodies of STATES."
+  (mapcar #'cdr states))
+
+
 (defun initial-state-label (states)
   "Return the label of the first state in STATES."
   (caar states))
@@ -40,8 +45,12 @@ A DUPLICATE-STATE error is signalled if there are duplicates."
   (let ((state-labels (state-labels states)))
     (unless (set-p state-labels)
       (error 'duplicate-state :states state-labels
-			      :hint "Enmsure the labels are unique within a TAGBODY"))))
+			      :hint "Ensure the labels are unique within a TAGBODY"))))
 
+
+;; This representation of states has the advantage that it
+;; exactly matches the clauses of CASE, which is how we
+;; implement the state machines, so they can be used directly.
 
 (defun extract-tagbody-states (forms)
   "Turn a list of state labels and executable FORMS into a list of states.
@@ -97,10 +106,9 @@ An UNKNOWN-STATE error is signalled for an unrecognised state."
 			      (:role :state-label))))
 
       ;; typecheck each of the state bodies
-      (let ((bodies (mapcar (lambda (state)
-			      (let ((body (cdr state)))
-				`(progn ,@body)))
-			    states)))
+      (let ((bodies (mapcar (lambda (body)
+			      `(progn ,@body))
+			    (state-bodies states))))
 	(mapc #'typecheck bodies)
 
 	;; return the top type (for now)
@@ -110,14 +118,19 @@ An UNKNOWN-STATE error is signalled for an unrecognised state."
 (defun compile-state-machine (state-variable states)
   "Return the compiled for of the machine for STATES.
 
-The current state is stored in STATE-VARIABLE, whcih should be a
+The current state is stored in STATE-VARIABLE, which should be a
 unique variable name."
   (let ((decls (let ((i 0))
 		 (mapcar (lambda (label)
 			   (prog1
 			       `(,label ,i :as :constant :role :state-label)
 			     (incf i)))
-			 (state-labels states)))))
+			 (state-labels states))))
+	(new-states (mapcar (lambda (state)
+			      (let ((label (car state))
+				(body (cdr state)))
+				(cons label (mapcar #'simplify body))))
+			    states)))
 
     ;; This compiled form works because we know we're going to float
     ;; the let blocks later, meaning that the state variable won't be
@@ -126,7 +139,7 @@ unique variable name."
     `(let ,decls
        (let ((,state-variable ,(initial-state-label states) :role :state-variable))
 	 (case ,state-variable
-	   ,@states)))))
+	   ,@new-states)))))
 
 
 (defmethod simplify-sexp ((fun (eql 'tagbody)) args)
@@ -145,7 +158,6 @@ unique variable name."
 	;; forms
 	(let ((code (compile-state-machine state-variable states)))
 	  (typecheck code)
-	  (break)
 	  (simplify code))))))
 
 
