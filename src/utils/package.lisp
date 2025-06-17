@@ -32,6 +32,7 @@
    #:zip
    #:zip-without-null
    #:remove-nulls
+   #:set-p
    #:foldl
    #:foldr
    #:foldr-over-null

@@ -115,6 +115,20 @@ If either element is null, the pair is omitted."
   (remove-if #'null l))
 
 
+;; ---------- Set testing ----------
+
+(defun set-p (s &key (test #'eql) (key #'identity))
+  "Test whether S is a set, composed of elaments unequal to any other.
+
+If TEST is set, it should designate a function of two variables that
+test those values for equality, The default is EQL. If KEY is
+set, it is applied to each element before applying TEST. The default
+is IDENTITY, testing the values themselves."
+  (every (lambda (e)
+	   (= (count (funcall key e) s :test test :key key) 1))
+	 s))
+
+
 ;; ---------- Repetition ----------
 
 (defun n-copies (l n)
@@ -129,7 +143,7 @@ L may be an atom or a list, including NIL."
 	  (iota n)))
 
 
-;; ---------- Filtering on multiplepredicates ----------
+;; ---------- Filtering on multiple predicates ----------
 
 (defun filter-by-predicates (l &rest predicates)
   "Return sub-lists of L matching PREDICATES.

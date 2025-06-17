@@ -21,24 +21,28 @@
 (in-suite verilisp/vl)
 
 
-(test test-sm-linear
-  "Test we can create a simple linear machine."
-  (let ((p (copy-tree '(let ((a 1))
-			(vl:state-machine (vl:posedge clk)
-			 (0
-			  (incf a)
-			  (next-state 1))
-			 (1
-			  (if (> a 5)
-			      (next-state 2)
-			      (next-state 1)))
-			 (2
-			  t))))))
+(test test-tagbody
+  "Test we can typecheck a tagbody."
+  (vl::with-new-frame
+    (vl::declare-variable 'a '((:type (unsigned-byte 8))))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))))
 
-    (vl:typecheck p)
+    (let ((p (copy-tree '(tagbody
+			  start
+			  (setq a 1)
+			  (setq b 2)
+			  (go second)
+
+			  second
+			  (setq b 2)
+			  (setq c (+ a b))
+			  (go start)))))
+
+      (vl:typecheck p)
+
+      )
 
     )
-
-
 
   )
