@@ -65,7 +65,7 @@ Any unknown forms are reported as UNKNOWN-FORM exceptions. The
 actual way these forms are captured is unfortunately implementation-specific."
   `(handler-bind ((error #'(lambda (condition)
 			     (declare (optimize debug))
-			     (break)
+
 			     (if-let ((form (failed-form condition)))
 			       ;; we encountered an unknown form, signal it as such
 			       (error 'unknown-form :form form)

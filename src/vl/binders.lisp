@@ -389,48 +389,7 @@ right-hand side of an assignment."
 	(list newbody newenv)))))
 
 
-;; ---------- Simplification ----------
-
-;; These should be turned into a higher-order pattern, because
-;; expand-macros is the same -- just recursing into the decls
-
-(defun simplify-key (l kv)
-  "Simplify the value part of a key-value pair KV to build L."
-  (destructuring-bind (k v)
-      kv
-    (let ((nv (simplify v)))
-      (append l (list k nv)))))
-
-
-(defun simplify-decl (decl)
-  "Simplify the value of DECL."
-  (if (listp decl)
-      ;; full declaration, expand the value and keys
-      (destructuring-bind (n v &rest keys)
-	  decl
-	(let ((newkeys (foldr #'simplify-key
-			      (adjacent-pairs keys)
-			      '())))
-	  `(,n ,(simplify v) ,@newkeys)))
-
-      ;; naked name, leave it alone
-      decl))
-
-
-(defmethod simplify-sexp ((fun (eql 'let)) args)
-  (destructuring-bind (decls &rest body)
-      args
-
-    (with-frame (get-cached-frame decls)
-      (let ((newdecls (mapcar #'simplify-decl decls))  ;; need to avoid simplifying cached env?
-	    (newbody (simplify (cons 'progn body))))
-	`(let ,newdecls
-	   ,newbody)))))
-
-
 ;; ---------- PROGN simplification ----------
-
-;; These can be subsumed into simplify
 
 (defun simplify-implied-progn (body)
   "Simplify an implied PROGN represented by BODY.

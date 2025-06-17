@@ -276,30 +276,6 @@ this will have *MACRO-ENVIRONMENT* attached to it prior to macro expansion.")
 	(expand-descend fun args)))))
 
 
-;; ---------- Simplification ----------
-
-(defgeneric simplify (form)
-  (:documentation "Simplify FORM to something simpler.
-
-This is used to translate forms into simpler forms for synthesis.")
-  (:method (form)
-    form)
-  (:method ((form list))
-    (let ((fun (car form))
-	  (args (cdr form)))
-      (with-vl-errors-not-synthesisable
-	(with-current-form form
-	  (simplify-sexp fun args))))))
-
-
-(defgeneric simplify-sexp (fun args)
-  (:documentation "Simplify FUN applied to ARGS.
-
-The default recursively simplifies all the ARG forms.")
-  (:method (fun args)
-    `(,fun ,@(mapcar #'simplify args))))
-
-
 ;; ---------- Synthesis ----------
 
 (defgeneric synthesise (form)

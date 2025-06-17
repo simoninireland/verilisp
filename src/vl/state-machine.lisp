@@ -21,6 +21,54 @@
 (declaim (optimize debug))
 
 
+;; ---------- Compiler state ----------
+
+(defparameter *state-machines* nil
+  "Stack of state machines.")
+
+
+(defmacro with-state-machine ((state-variable states) &body body)
+  "Enter a machine with the given STATES."
+  `(unwind-protect
+	(progn
+	  (push (list ,state-variable
+		      (initial-state-label ,states)
+		      (state-labels ,states))
+		*state-machines*)
+	  ,@body)
+
+     (pop *state-machines*)))
+
+
+(defun state-machine-context-p ()
+  "Test whether we're in a state machine."
+  (> (length *state-machines*) 0))
+
+
+(defun ensure-state-machine-context (fun)
+  "Test whether FUN appears within a state machine.
+
+A SYNTAX-ERROR error is signalled if not."
+  (unless (state-machine-context-p)
+    (error 'syntax-error :form fun
+			 :hint "Make sure GO appears inside a TAGBODY")))
+
+
+(defun current-state-machine-state-variable ()
+  "Return the current state variable."
+  (car (car *state-machines*)))
+
+
+(defun current-state-machine-initial-state ()
+  "Return the initial state of the current state machine."
+  (cadr (car *state-machines*)))
+
+
+(defun current-state-machine-state-labels ()
+  "Return the state labels of the current state machine."
+  (caddr (car *state-machines*)))
+
+
 ;; ---------- TAGBODY ----------
 
 (defun state-labels (states)
@@ -94,29 +142,8 @@ An UNKNOWN-STATE error is signalled for an unrecognised state."
 			  :hint "Make sure the label is valid in the current state machine.")))
 
 
-(defmethod typecheck-sexp ((fun (eql 'tagbody)) args)
-  (let ((states (extract-tagbody-states args)))
-    (ensure-unique-state-labels states)
-
-    (with-new-frame
-      ;; add the states as constants
-      (dolist (l (state-labels states))
-	(declare-variable l `((:type unsigned-byte)
-			      (:as :constant)
-			      (:role :state-label))))
-
-      ;; typecheck each of the state bodies
-      (let ((bodies (mapcar (lambda (body)
-			      `(progn ,@body))
-			    (state-bodies states))))
-	(mapc #'typecheck bodies)
-
-	;; return the top type (for now)
-	t))))
-
-
 (defun compile-state-machine (state-variable states)
-  "Return the compiled for of the machine for STATES.
+  "Return the compiled form of the machine for STATES.
 
 The current state is stored in STATE-VARIABLE, which should be a
 unique variable name."
@@ -126,61 +153,46 @@ unique variable name."
 			       `(,label ,i :as :constant :role :state-label)
 			     (incf i)))
 			 (state-labels states))))
+
 	(new-states (mapcar (lambda (state)
 			      (let ((label (car state))
-				(body (cdr state)))
-				(cons label (mapcar #'simplify body))))
+				    (body (cdr state)))
+				(cons label (mapcar #'expand-macros body))))
 			    states)))
 
     ;; This compiled form works because we know we're going to float
     ;; the let blocks later, meaning that the state variable won't be
     ;; reset at each turn of the machine. If we stopped doing that for
-    ;; any reason we'd needsomething different.
+    ;; any reason we'd need something different.
     `(let ,decls
        (let ((,state-variable ,(initial-state-label states) :role :state-variable))
 	 (case ,state-variable
 	   ,@new-states)))))
 
 
-(defmethod simplify-sexp ((fun (eql 'tagbody)) args)
-  (let ((states (extract-tagbody-states args)))
+(defmacro tagbody/vl (&body body)
+  "Compile a state machine consisting of STATES."
+  (let ((states (extract-tagbody-states body)))
+    (ensure-unique-state-labels states)
 
-    (with-new-frame
-      (with-gensyms (state-variable)
-	;; declare the state variable
-	(declare-variable 'state-variable-name `((:type symbol)
-						 (:initial-value ,state-variable)
-						 (:role :state-variable-name)))
-
-	;; synthesise the compiled form in an environment
-	;; that contains an entry for the name of the
-	;; state variable, which is then picked up by any GO
-	;; forms
-	(let ((code (compile-state-machine state-variable states)))
-	  (typecheck code)
-	  (simplify code))))))
+    (with-gensyms (state-variable)
+      (with-state-machine (state-variable states)
+	(compile-state-machine state-variable states)))))
 
 
 ;; ---------- GO ----------
 
-(defmethod typecheck-sexp ((fun (eql 'go)) args)
-  (destructuring-bind (label)
-      args
+(defmacro go/vl (label)
+  "Change state to LABEL."
 
-    ;; can only see GO inside a lexically-containing TAGBODY
-    (unless (in-state-machine-context-p)
-      (error 'syntax-error :form fun
-			   :hint "Make sure GO appears inside a TAGBODY"))
+  ;; can only see GO inside a lexically-containing TAGBODY
+  (ensure-state-machine-context 'go)
 
-    ;; make sure the target is valid
-    (ensure-state-label label)
+  ;; must be a legal state of the curent machine
+  ;; (this will change when we handle nested machines)
+  (unless (member label (current-state-machine-state-labels))
+    (error 'unknown-state :state label
+			  :hint "Label must be declared in the current TAGBODY"))
 
-    t))
-
-
-(defmethod simplify-sexp ((fun (eql 'go)) args)
-  (destructuring-bind (label)
-      args
-
-    (let ((state-variable (get-initial-value 'state-variable-name)))
-      `(setq ,state-variable ,label))))
+  (let ((state-variable (current-state-machine-state-variable)))
+    `(setf ,state-variable ,label)))

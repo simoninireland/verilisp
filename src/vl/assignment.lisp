@@ -59,7 +59,6 @@ isn't declared."
       (ensure-subtype tyval tyvar)
       (ensure-writeable n)
       (add-type-constraint n tyval)
-
       tyval)))
 
 

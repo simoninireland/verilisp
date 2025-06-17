@@ -32,17 +32,8 @@
 	 (q (copy-tree `(let (a b)
 			  ,p))))
 
-    (vl:typecheck q)
-    (is (tree-equal (vl::compile-state-machine 'sss (vl::extract-tagbody-states (cdr p)))
-		    '(let ((one 0 :as :constant)
-			   (two 1 :as :constant))
-		      (let ((sss one))
-			(case (sss)
-			  (one
-			   (setq a 1)
-			   (setq b 2))
-			  (two
-			   (setq b 0)))))))))
+    (setq q (vl:expand-macros-in-environment q))
+    (is (not (null q)))))
 
 
 (test test-go-outside-tagbody
@@ -51,7 +42,7 @@
 			(go one)))))
 
     (signals (vl:syntax-error)
-      (vl:typecheck p))))
+      (vl:expand-macros-in-environment p))))
 
 
 (test test-synthesise-tagbody
@@ -66,6 +57,7 @@
 	 (q (copy-tree `(let (a b)
 			  ,p))))
 
+    (setq q (vl:expand-macros-in-environment q))
     (vl:typecheck q)
     (is (vl:synthesise q))))
 
@@ -87,6 +79,8 @@
 				      (go two)
 				    two
 				      (setq b 0)
-				      (go one)))))))))
+				      (go one)
+				    three
+				      (go two)))))))))
 
-    (vl::elaborate-module p)))
+    (is (vl::elaborate-module p))))

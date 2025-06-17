@@ -58,9 +58,8 @@ detached again afterwards).")
   (declare-macro 'with-bitfields)
 
   ;; state machines
-  (declare-macro 'state-machine)
-  (declare-macro 'next 'next/vl)
-  (declare-macro 'exit 'exit/vl))
+  (declare-macro 'tagbody 'tagbody/vl)
+  (declare-macro 'go 'go/vl))
 
 
 ;; ---------- Module registry ----------
@@ -155,8 +154,7 @@ module ready for synthesis."
       (dependencies expanded)
 
       ;; simplify
-      (let* ((simplified1 (simplify expanded))
-	     (floated (car (float-let-blocks simplified1)))
+      (let* ((floated (car (float-let-blocks expanded)))
 	     (simplified (simplify-progn floated)))
 
 	(list intf simplified)))))
