@@ -107,31 +107,31 @@
 		 (#2r000
 		  (if (logand (bref funct7 5)
 			      (bref instr 5))
-		      (setq aluOut (- aluIn1 aluIn2) :sync t)
-		      (setq aluOut (+ aluIn1 aluIn2) :sync t)))
+		      (setq aluOut (- aluIn1 aluIn2))
+		      (setq aluOut (+ aluIn1 aluIn2))))
 
 		 (#2r001
-		  (setq aluOut (<< aluIn1 shamt) :sync t))
+		  (setq aluOut (<< aluIn1 shamt)))
 
 		 (#2r010
-		  (setq aluOut (< aluIn1 aluIn2) :sync t)) ;; signed
+		  (setq aluOut (< aluIn1 aluIn2))) ;; signed
 
 		 (#2r011
-		  (setq aluOut (< aluIn1 aluIn2) :sync t)) ;; unsigned
+		  (setq aluOut (< aluIn1 aluIn2))) ;; unsigned
 
 		 (#2r100
-		  (setq aluOut (logxor aluIn1 aluIn2) :sync t))
+		  (setq aluOut (logxor aluIn1 aluIn2)))
 
 		 (#2r101
 		  (if (bref funct7 5)
-		      (setq aluOut (>> aluIn1 shamt) :sync t) ;; sign-extended
-		      (setq aluOut (>> aluIn1 shamt) :sync t))) ;; unsigned
+		      (setq aluOut (>> aluIn1 shamt)) ;; sign-extended
+		      (setq aluOut (>> aluIn1 shamt)))) ;; unsigned
 
 		 (#2r110
-		  (setq aluOut (logior aluIn1 aluIn2) :sync t))
+		  (setq aluOut (logior aluIn1 aluIn2)))
 
 		 (#2r111
-		  (setq aluOut (logand aluIn1 aluIn2) :sync t))))
+		  (setq aluOut (logand aluIn1 aluIn2)))))
 
 	    ;; the state machine
 	    (@ (posedge clk)
