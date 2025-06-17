@@ -141,7 +141,23 @@ that should be declared in the architectural environment, such as a register."))
   (:documentation "Condition signalled when an unknown form is encountered.
 
 This is usually caused by using a Lisp function that is not supported
-by RTLip, or an undefined macro."))
+by Verilisp, or an undefined macro."))
+
+
+(define-condition syntax-error (vl-error)
+  ((form
+    :documentation "The form."
+    :initarg :form
+    :reader form))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Syntax error in ~a"
+					       (form c))
+				       c str)))
+  (:documentation "Condition signalled when a syntax error is encountered.
+
+Syntax errors in Verilisp are forms that are known, but that appear in
+a context than can't be synthesised -- for example a GO outside a
+TAGBODY."))
 
 
 (define-condition unknown-module (vl-error)
@@ -153,10 +169,25 @@ by RTLip, or an undefined macro."))
 	     (format-condition-context (format nil "Unknown module ~a"
 					       (module c))
 				       c str)))
-  (:documentation "Condition signalled when an unnown module is imported.
+  (:documentation "Condition signalled when an unknown module is imported.
 
 This means that the required module isn't available, either having not yet
 been defined or not having been imported."))
+
+
+(define-condition unknown-state (vl-error)
+  ((state
+    :documentation "The state label."
+    :initarg :state
+    :reader state))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Unknown state label ~a"
+					       (state c))
+				       c str)))
+  (:documentation "Condition signalled when an unknown state label is used as a GO target.
+
+Only state labels that have been explicitly set up in a TAGBODY can be
+used as targets for GO forms."))
 
 
 (define-condition duplicate-variable (vl-error)
@@ -182,6 +213,21 @@ been defined or not having been imported."))
 					       (module c))
 				       c str)))
   (:documentation "Condition signalled when a module is re-defined."))
+
+
+(define-condition duplicate-state (vl-error)
+  ((states
+    :documentation "The state labels."
+    :initarg :states
+    :reader states))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Duplicate state label in ~a"
+					       (states c))
+				       c str)))
+  (:documentation "Condition signalled when state labels are not unique.
+
+State labels need to be unique within a single state machine (TAGBODY form).
+They do not need to be globally unique."))
 
 
 (define-condition not-importable (vl-error)
