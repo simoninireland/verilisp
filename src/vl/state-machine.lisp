@@ -21,107 +21,153 @@
 (declaim (optimize debug))
 
 
-(defun typecheck-sm-state (state)
-  "Typecheck a single machine STATE description."
-  (destructuring-bind (name &rest body)
-      state
+;; ---------- TAGBODY ----------
 
-    ;; states must be integers -- should generalise to symbols too
-    (ensure-subtype name 'unsigned-byte)
-
-    ;; the type of the state is the type of the last form
-    (typecheck `(progn ,@body))))
+(defun state-labels (states)
+  "Extract the labels of STATES."
+  (mapcar #'car states))
 
 
-(defmethod typecheck-sexp ((fun (eql 'state-machine) args))
-  (let ((tys (mapcar #'typecheck-sm-state args)))
-    (last tys)))
+(defun initial-state-label (states)
+  "Return the label of the first state in STATES."
+  (caar states))
 
 
-(defmethod synthesise-sexp ((fun (eql 'state-machine)) args)
-  (with-gensyms (state)
-    (let ((sm `(@ (posedge clk)
-		  (case ,state
-		    ,@args)
-		  )))
+(defun ensure-unique-state-labels (states)
+  "Ensure that the labels on STATES are unique.
 
-      (synthesise sm))))
-
-
-(defmethod synthesise-sexp ((fun (eql 'next-state)) args)
-
-  )
+A DUPLICATE-STATE error is signalled if there are duplicates."
+  (let ((state-labels (state-labels states)))
+    (unless (set-p state-labels)
+      (error 'duplicate-state :states state-labels
+			      :hint "Enmsure the labels are unique within a TAGBODY"))))
 
 
+(defun extract-tagbody-states (forms)
+  "Turn a list of state labels and executable FORMS into a list of states.
+
+Each state has is a list headed with the state tag and followed by
+the body of that state. It is legal for the first state in the TAGBODY
+to be unlabelled, in which case a label is synthesised for it. The
+states are returned in lexical order."
+  (flet ((extract-states (states form)
+	   (if (symbolp form)
+	       ;; form is a state label, create a new state
+	       (cons (list form) states)
+
+	       ;; form is a part of the body of a state, append to the current state
+	       (let ((state (car states)))
+		 (cons (append state (list form)) (cdr states))))))
+
+    (let ((states (reverse (remove-nulls (foldr #'extract-states forms '(()))))))
+      ;; it is possible that the first state is unlabelled
+      (if (symbolp (caar states))
+	  states
+
+	  ;; first state is unlabelled, add a label
+	  (let ((first-state-label (gensym)))
+	    (cons (cons first-state-label (car states))
+		  (cdr states)))))))
 
 
-(defgeneric construct-state-machine (form)
-  (:documentation "Construct a state machine from FORM.")
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (construct-state-machine-sexp fun args))))
+(defun state-label-p (label)
+  "Test that LABEL is a valid state label."
+  (and (variable-declared-p label)
+       (eql (variable-property label :role :default nil) :state-label)))
 
 
-(defmethod construct-state-machine ((form integer))
-  form)
+(defun ensure-state-label (label)
+  "Ensure that LABEL is a valid state label.
+
+An UNKNOWN-STATE error is signalled for an unrecognised state."
+  (unless (state-label-p label)
+    (error 'unknown-state :state label
+			  :hint "Make sure the label is valid in the current state machine.")))
 
 
-(defmethod construct-state-machine ((form symbol))
-  form)
+(defmethod typecheck-sexp ((fun (eql 'tagbody)) args)
+  (let ((states (extract-tagbody-states args)))
+    (ensure-unique-state-labels states)
+
+    (with-new-frame
+      ;; add the states as constants
+      (dolist (l (state-labels states))
+	(declare-variable l `((:type unsigned-byte)
+			      (:as :constant)
+			      (:role :state-label))))
+
+      ;; typecheck each of the state bodies
+      (let ((bodies (mapcar (lambda (state)
+			      (let ((body (cdr state)))
+				`(progn ,@body)))
+			    states)))
+	(mapc #'typecheck bodies)
+
+	;; return the top type (for now)
+	t))))
 
 
-(defgeneric construct-state-machine-sexp (fun args)
-  (:documentation "Construct a state machine for FUN applied to ARGS.
+(defun compile-state-machine (state-variable states)
+  "Return the compiled for of the machine for STATES.
 
-The default leaves the form unchanged.")
-  (:method (fun args)
-    `(,fun ,@args)))
+The current state is stored in STATE-VARIABLE, whcih should be a
+unique variable name."
+  (let ((decls (let ((i 0))
+		       (mapcar (lambda (label)
+				 (prog1
+				     `(,label ,i :as :constant :role :state-label)
+				   (incf i)))
+			       (state-labels states)))))
 
-
-(defmethod construct-state-machine-sexp ((fun (eql 'progn)) args)
-  (let ((i 0)
-	(states '())
-	(current-state '())
-	(updated-in-current-state '()))
-
-    (flet ((split-into-states (form)
-	     (let* ((updated (dependencies form))
-		    (all-dependencies (foldr #'union
-					     (mapcar (rcurry #'variable-property :dependencies)
-						     updated)
-					     '())))
-	       (when (not (null (intersection all-dependencies updated-in-current-state)))
-		 ;; we're doing updates that depend on previous updated values,
-		 ;; construct a new state
-		 (appendf current-state (list `(next-state ,(1+ i))))
-		 (appendf states (list (cons i current-state)))
-		 (incf i)
-		 (setq current-state '())
-		 (setq updated-in-current-state '()))
-
-	       ;; we're doing an independent update, append to this state
-	       (appendf current-state (list form))
-	       (appendf updated-in-current-state updated))))
-
-      (mapc #'split-into-states args)
-
-      (appendf states (list (cons i current-state)))
-      states
-
-      )
+    ;; This compiled form works because we know we're going to float
+    ;; the let blocks later, meaning that the state variable won't be
+    ;; reset at each turn of the machine. If we stopped doing that for
+    ;; any reason we'd needsomething different.
+    `(let ,decls
+       (let ((,state-variable ,(initial-state-label states) :role :state-variable))
+	 (case ,state-variable
+	   ,@states)))))
 
 
-    )
+(defmethod synthesise-sexp ((fun (eql 'tagbody)) args)
+  (let ((states (extract-tagbody-states args)))
 
-  )
+    (with-new-frame
+      (with-gensyms (state-variable)
+	;; declare the state variable
+	(declare-variable 'state-variable `((:type symbol)
+					    (:initial-value ,state-variable)
+					    (:role :state-variable-name)))
+
+	;; synthesise the compiled formin an environment
+	;; that contains an entry for the name of the
+	;; state variable, which isthen pisked up by any GO
+	;; forms
+	(let ((code (compile-state-machine state-variable states)))
+	  (typecheck code)
+	  (synthesise code))))))
 
 
-(with-new-frame
-  (declare-variable 'a '((:type (unsigned-byte 8))
-			 (:initial-value 1)))
-  (declare-variable 'b '((:type (unsigned-byte 8))
-			 (:initial-value 21)))
+;; ---------- GO ----------
 
-  (dependencies '(progn (setq a 10) (setq b (+ a 12)) (setq a 12)))
-  (construct-state-machine '(progn (setq a 10) (setq b (+ a 12)) (setq a 12))))
+(defmethod typecheck-sexp ((fun (eql 'go)) args)
+  (destructuring-bind (label)
+      args
+
+    ;; can only see GO inside a lexically-containing TAGBODY
+    (unless (in-state-machine-context-p)
+      (error 'syntax-error :form fun
+			   :hint "Make sure GO appears inside a TAGBODY"))
+
+    ;; make sure the target is valid
+    (ensure-state-label label)
+
+    t))
+
+
+(defmethod synthesise-sexp ((fun (eql 'go)) args)
+  (destructuring-bind (label)
+      args
+
+    (let ((state-variable (get-initial-value 'state-variable)))
+      (synthesise `(setq ,state-variable ,label)))))

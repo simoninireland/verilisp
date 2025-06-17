@@ -21,28 +21,50 @@
 (in-suite verilisp/vl)
 
 
-(test test-tagbody
-  "Test we can typecheck a tagbody."
-  (vl::with-new-frame
-    (vl::declare-variable 'a '((:type (unsigned-byte 8))))
-    (vl::declare-variable 'b '((:type (unsigned-byte 8))))
-    (vl::declare-variable 'c '((:type (unsigned-byte 8))))
+(test test-tagbody-compled-form
+  "Test we can construct a compiled form of TAGBODY."
+  (let* ((p (copy-tree '(tagbody
+			 one
+			 (setq a 1)
+			 (setq b 2)
+			 two
+			 (setq b 0))))
+	 (q (copy-tree `(let (a b)
+			  ,p))))
 
-    (let ((p (copy-tree '(tagbody
-			  start
-			  (setq a 1)
-			  (setq b 2)
-			  (go second)
+    (vl:typecheck q)
+    (is (tree-equal (vl::compile-state-machine 'sss (vl::extract-tagbody-states (cdr p)))
+		    '(let ((one 0 :as :constant)
+			   (two 1 :as :constant))
+		      (let ((sss one))
+			(case (sss)
+			  (one
+			   (setq a 1)
+			   (setq b 2))
+			  (two
+			   (setq b 0)))))))))
 
-			  second
-			  (setq b 2)
-			  (setq c (+ a b))
-			  (go start)))))
 
-      (vl:typecheck p)
+(test test-go-outside-tagbody
+  "Test we can catch a GO out of context."
+  (let ((p (copy-tree '(let ((one 1))
+			(go one)))))
 
-      )
+    (signals (vl:syntax-error)
+      (vl:typecheck p))))
 
-    )
 
-  )
+(test test-synthesise-tagbody
+  "Teat we can synthesise a TAGBODY."
+  (let* ((p (copy-tree '(tagbody
+			 one
+			 (setq a 1)
+			 (setq b 2)
+			 two
+			 (setq b 0)
+			 (go one))))
+	 (q (copy-tree `(let (a b)
+			  ,p))))
+
+    (vl:typecheck q)
+    (is (vl:synthesise q))))

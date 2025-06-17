@@ -112,11 +112,14 @@
    #:vl-warning
    #:recover
    #:not-synthesisable
+   #:syntax-error
    #:unknown-variable
    #:unknown-module
+   #:unknown-state
    #:unknown-form
    #:duplicate-variable
    #:duplicate-module
+   #:duplicate-state
    #:not-importable
    #:not-static
    #:value-mismatch
