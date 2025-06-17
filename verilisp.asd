@@ -109,6 +109,7 @@
 	       (:file "test-vl-cond")
 	       (:file "test-vl-with-bitfields")
 	       (:file "test-vl-helpers")
+	       (:file "test-vl-state-machine")
 	       (:file "test-def-components")
 	       ;;(:file "test-def-isa")
 	       )
