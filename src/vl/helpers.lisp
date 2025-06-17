@@ -75,19 +75,26 @@ actual way these forms are captured is unfortunately implementation-specific."
 
 ;; ---------- Continuing compilation after an error ----------
 
+(defun recover-on-error-report (str)
+  "Report the recovery action to STR."
+  (format str "Recover from ~a" (current-form)))
+
+
 (defmacro with-recover-on-error (recovery &body body)
   "Run the BODY forms, offering a restart that runs the RECOVERY form on error.
 
-The restart is called RECOVER and takes no arguments. The recovery
-form should do whatever is necessary to best continue compilation. The
-handler may decide not to synthesise code after such an error has been
-signalled; alternatively it may treat some such errors as warnings and
-still synthesise code."
+The recovery action is triggered by calling RECOVER, which invokes
+the RECOVER restart installed by this macro.
+
+The recovery form should do whatever is necessary to best continue
+compilation. The handler may decide not to synthesise code after such
+an error has been signalled; alternatively it may treat some such
+errors as warnings and still synthesise code."
   `(restart-case
        (progn
 	 ,@body)
      (recover ()
-       :report "Perform recovery action and continue"
+       :report recover-on-error-report
        ,recovery)))
 
 
