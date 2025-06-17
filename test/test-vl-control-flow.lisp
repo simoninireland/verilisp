@@ -59,7 +59,7 @@
 
 (test test-progn-empty-body
   "Test we can detect an empty-bodied PROGN."
-  (signals (not-synthesisable)
+  (signals (vl:not-synthesisable)
     (vl:with-new-frame
       (vl:typecheck (copy-tree '(let ((a 12))))))))
 
