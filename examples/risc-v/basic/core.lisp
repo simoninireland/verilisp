@@ -136,22 +136,23 @@
 	    ;; the state machine
 	    (@ (posedge clk)
 	       (tagbody
-		  ;; State 0: fetch the next instruction
 		fetch-instruction
+		  ;; State 0: fetch the next instruction
 		  (if reset
 		      (setq pc 0))
 
 		  (setq instr (aref mem (bref pc 31 :end 2)))
-		  (go fetch-registers)
+		  (go fetch-registers) ; needed because of no automatic fall-through
 
-		  ;; State 1: load from registers
 		fetch-registers
+		  ;; State 1: load from registers
 		  (setq rs1 (aref RegisterBank rs1Id))
 		  (setq rs2 (aref RegisterBank rs2Id))
-		  (go execute-writeback)
+		  (go execute-writeback) ; needed because of no automatic fall-through
 
-		  ;; State 3: execute the instruction and write back results
 		execute-writeback
+		  ;; State 3: execute the instruction and write back results
+
 		  ;; writeback data to registers
 		  (when (and (or isALUReg
 				 isALUImm
