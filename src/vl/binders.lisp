@@ -110,6 +110,7 @@ The name is the first element, whether or not DECL is a list."
 	;; allow us to continue
 	(declare-variable (safe-car decl) `((:type (unsigned-byte *default-register-width*))
 					    (:as :register)
+					    (:role :variable)
 					    (:initial-value 0)
 					    (:type-constraints (unsigned-byte *default-register-width*))))
 
@@ -118,6 +119,7 @@ The name is the first element, whether or not DECL is a list."
 	  (destructuring-bind (n v &key
 				     width
 				     type
+				     (role :variable)
 				     (as :register))
 	      decl
 
@@ -151,6 +153,7 @@ The name is the first element, whether or not DECL is a list."
 	      (declare-variable n `((:type ,type)
 				    (:inferred-type ,ity)
 				    (:as ,as)
+				    (:role ,role)
 				    (:initial-value ,v)
 				    (:type-constraints (,ity))))))
 
@@ -160,6 +163,7 @@ The name is the first element, whether or not DECL is a list."
 	  (declare-variable decl `((:inferred-type (unsigned-byte 1))
 				   (:type-constraints ((unsigned-byte 1)))
 				   (:as :register)
+				   (:role :variable)
 				   (:initial-value 0)))))))
 
 
