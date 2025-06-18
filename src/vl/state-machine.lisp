@@ -51,7 +51,7 @@
 A SYNTAX-ERROR error is signalled if not."
   (unless (state-machine-context-p)
     (error 'syntax-error :form fun
-			 :hint "Make sure GO appears inside a TAGBODY")))
+			 :hint (format nil "Make sure ~a appears inside a TAGBODY" fun))))
 
 
 (defun current-state-machine-state-variable ()
@@ -147,25 +147,33 @@ An UNKNOWN-STATE error is signalled for an unrecognised state."
 
 The current state is stored in STATE-VARIABLE, which should be a
 unique variable name."
-  (let ((decls (let ((i 0))
-		 (mapcar (lambda (label)
-			   (prog1
-			       `(,label ,i :as :constant :role :state-label)
-			     (incf i)))
-			 (state-labels states))))
+  (let* ((decls (let ((i 0))
+		  (mapcar (lambda (label)
+			    (prog1
+				`(,label ,i :as :constant)
+			      (incf i)))
+			  (state-labels states))))
 
-	(new-states (mapcar (lambda (state)
-			      (let ((label (car state))
-				    (body (cdr state)))
-				(cons label (mapcar #'expand-macros body))))
-			    states)))
+	 ;; prepend a state change to the following state
+	 (states-with-follow (mapcar (lambda (state next)
+				       (cons (car state)
+					     (cons `(go ,next)
+						   (cdr state))))
+				     states
+				     (rotate (state-labels states) -1)))
+
+	 (new-states (mapcar (lambda (state)
+			       (let ((label (car state))
+				     (body (cdr state)))
+				 (cons label (mapcar #'expand-macros body))))
+			     states-with-follow)))
 
     ;; This compiled form works because we know we're going to float
     ;; the let blocks later, meaning that the state variable won't be
     ;; reset at each turn of the machine. If we stopped doing that for
     ;; any reason we'd need something different.
     `(let ,decls
-       (let ((,state-variable ,(initial-state-label states) :role :state-variable))
+       (let ((,state-variable ,(initial-state-label states)))
 	 (case ,state-variable
 	   ,@new-states)))))
 
@@ -184,8 +192,6 @@ unique variable name."
 
 (defmacro go/vl (label)
   "Change state to LABEL."
-
-  ;; can only see GO inside a lexically-containing TAGBODY
   (ensure-state-machine-context 'go)
 
   ;; must be a legal state of the curent machine
@@ -196,3 +202,30 @@ unique variable name."
 
   (let ((state-variable (current-state-machine-state-variable)))
     `(setf ,state-variable ,label)))
+
+
+;; ---------- State machine constructors ----------
+
+(defmacro while (condition &body body)
+  "Compile a state machine that runs BODY for as long as CONDITION holds.
+
+BODY will be placed into a single state."
+  (ensure-state-machine-context 'while)
+
+  (with-gensyms (test-state run-state exit-state)
+    `(tagbody
+	,test-state
+	(if ,condition
+	    (go ,run-state)
+	    (go ,exit-state))
+
+	,run-state
+	,@body
+	(go ,test-state)
+
+	,exit-state
+
+
+	))
+
+  )

@@ -142,13 +142,11 @@
 		      (setq pc 0))
 
 		  (setq instr (aref mem (bref pc 31 :end 2)))
-		  (go fetch-registers) ; needed because of no automatic fall-through
 
 		fetch-registers
 		  ;; State 1: load from registers
 		  (setq rs1 (aref RegisterBank rs1Id))
 		  (setq rs2 (aref RegisterBank rs2Id))
-		  (go execute-writeback) ; needed because of no automatic fall-through
 
 		execute-writeback
 		  ;; State 3: execute the instruction and write back results
@@ -174,6 +172,4 @@
 				   (isJALR
 				    (+ rs1 Iimm))
 				   (t
-				    (+ pc 4)))))
-
-		  (go fetch-instruction)))))))))
+				    (+ pc 4)))))))))))))
