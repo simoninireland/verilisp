@@ -20,6 +20,14 @@ defines a ``let`` block that bring a variable ``a`` into scope in its
 body. ``a`` is defined to have a type ``(unsigned-byte 8)`` (8-bit
 unsigned), and will be represented as a register.
 
+.. warning::
+
+   In Verilisp the initial value of any variable is set when it is
+   declared *and not again*. This sometimes means that you need to
+   reset the value of a variable explicitly, rather than allowing the
+   ``let`` form to be re-evaluated and expecting the variable to be
+   reset.
+
 
 Keyword arguments
 -----------------

@@ -1,6 +1,6 @@
 .. _index:
 
-Verilisp: a very Lisp approach to hardware synthesis
+Verilisp: A very Lisp approach to hardware synthesis
 ====================================================
 
 Modern chips are usually constructed using high-level synthesis, where
@@ -26,3 +26,4 @@ to both interpretations, from the same description.
 
    install
    verilisp
+   implementation
