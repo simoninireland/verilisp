@@ -21,6 +21,8 @@
 (in-suite verilisp/vl)
 
 
+;; ---------- Basic machines  ----------
+
 (test test-tagbody-compled-form
   "Test we can construct a compiled form of TAGBODY."
   (let* ((p (copy-tree '(tagbody
@@ -84,3 +86,33 @@
 				      (go two)))))))))
 
     (is (vl::elaborate-module p))))
+
+
+;; ---------- Nested machines ----------
+
+(test test-tagbody-simple-nested
+  "Test we can escape from a nested machine."
+  (let* ((p (copy-tree '(let (a b c)
+			 (tagbody
+			  one
+			    (setq a 1)
+			    (setq b 2)
+			  two
+			    (let (d)
+			      (tagbody
+			       inner-one
+				 (setq d 10)
+
+			       inner-two
+				 (decf d)
+				 (if (= d 0)
+				     (go three)
+				     (go inner-two))))
+
+			  three
+			    (setq b 0)
+			    (go one))))))
+
+    (setq p (vl:expand-macros-in-environment p))
+    (vl:typecheck p)
+    (is (vl:synthesise p))))

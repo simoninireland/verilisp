@@ -45,6 +45,11 @@
   (> (length *state-machines*) 0))
 
 
+(defun nested-state-machine-context-p ()
+  "Test whether we're in a nested state machine."
+  (> (length *state-machines*) 1))
+
+
 (defun ensure-state-machine-context (fun)
   "Test whether FUN appears within a state machine.
 
@@ -54,19 +59,35 @@ A SYNTAX-ERROR error is signalled if not."
 			 :hint (format nil "Make sure ~a appears inside a TAGBODY" fun))))
 
 
-(defun current-state-machine-state-variable ()
-  "Return the current state variable."
-  (car (car *state-machines*)))
+(defun current-state-machine ()
+  "Return the current state machine's data structure."
+  (car *state-machines*))
 
 
-(defun current-state-machine-initial-state ()
-  "Return the initial state of the current state machine."
-  (cadr (car *state-machines*)))
+(defun state-machine-state-variable (&optional (machine (current-state-machine)))
+  "Return the state variable of MACHINE.
+
+Defaults to the current state machine."
+  (car machine))
 
 
-(defun current-state-machine-state-labels ()
-  "Return the state labels of the current state machine."
-  (caddr (car *state-machines*)))
+(defun state-machine-initial-state (&optional (machine (current-state-machine)))
+  "Return the initial state of MACHINE.
+
+Defaults to the current state machine."
+  (cadr machine))
+
+
+(defun state-machine-state-labels (&optional (machine (current-state-machine)))
+  "Return the state labels of MACHINE.
+
+Defaults to the current state machine."
+  (caddr machine))
+
+
+(defun state-machine-all-state-labels ()
+  "Return the state labels in this and any surrounding state machines."
+  (foldr #'union (mapcar #'caddr *state-machines*) '()))
 
 
 ;; ---------- TAGBODY ----------
@@ -89,11 +110,20 @@ A SYNTAX-ERROR error is signalled if not."
 (defun ensure-unique-state-labels (states)
   "Ensure that the labels on STATES are unique.
 
-A DUPLICATE-STATE error is signalled if there are duplicates."
-  (let ((state-labels (state-labels states)))
-    (unless (set-p state-labels)
-      (error 'duplicate-state :states state-labels
-			      :hint "Ensure the labels are unique within a TAGBODY"))))
+A DUPLICATE-STATE error is signalled if there are duplicates, either
+in STATES or with the states of surrounding machines."
+  (let ((sls (state-labels states)))
+    ;; check all labels in the crrent machine are unique
+    (unless (set-p sls)
+      (error 'duplicate-state :states sls
+			      :hint "Ensure the labels are unique within a TAGBODY"))
+
+    ;; check for uniqueness against containing machines
+    (when (some (lambda (labels)
+		  (not (null (intersection sls labels))))
+		(mapcar #'state-labels (cdr *state-machines*)))
+      (error 'duplicate-state :states sls
+			      :hint "Ensure the labels don't clash with those in a surrounding TAGBODY"))))
 
 
 ;; This representation of states has the advantage that it
@@ -127,14 +157,22 @@ states are returned in lexical order."
 		  (cdr states)))))))
 
 
-(defun state-label-p (label)
-  "Test that LABEL is a valid state label."
-  (and (variable-declared-p label)
-       (eql (variable-property label :role :default nil) :state-label)))
+(defun state-label-p (label &optional machine)
+  "Test that LABEL is a valid state label.
+
+If MACHINE is supplied, the label is tested against that
+machine's labels; otherwise the label may be in the current machine, or
+in any surrounding machine."
+  (if machine
+      ;; test against specific machine
+      (not (null (member label (state-machine-state-labels machine))))
+
+      ;; test against current and all surrounding machines
+      (not (null (member label (state-machine-all-state-labels))))))
 
 
 (defun ensure-state-label (label)
-  "Ensure that LABEL is a valid state label.
+  "Ensure that LABEL is a valid state label in the current context.
 
 An UNKNOWN-STATE error is signalled for an unrecognised state."
   (unless (state-label-p label)
@@ -154,19 +192,20 @@ unique variable name."
 			      (incf i)))
 			  (state-labels states))))
 
-	 ;; prepend a state change to the following state
-	 (states-with-follow (mapcar (lambda (state next)
-				       (cons (car state)
-					     (cons `(go ,next)
-						   (cdr state))))
-				     states
-				     (rotate (state-labels states) -1)))
+	 ;; prepend a state change to fall-through to the following state,
+	 ;; rotating to the initial state if we fall out of the bottom
+	 (states-with-fall-through (mapcar (lambda (state next)
+					     (cons (car state)
+						   (cons `(go ,next)
+							 (cdr state))))
+					   states
+					   (rotate (state-labels states) -1)))
 
 	 (new-states (mapcar (lambda (state)
 			       (let ((label (car state))
 				     (body (cdr state)))
 				 (cons label (mapcar #'expand-macros body))))
-			     states-with-follow)))
+			     states-with-fall-through)))
 
     ;; This compiled form works because we know we're going to float
     ;; the let blocks later, meaning that the state variable won't be
@@ -193,39 +232,25 @@ unique variable name."
 (defmacro go/vl (label)
   "Change state to LABEL."
   (ensure-state-machine-context 'go)
+  (ensure-state-label label)
 
-  ;; must be a legal state of the curent machine
-  ;; (this will change when we handle nested machines)
-  (unless (member label (current-state-machine-state-labels))
-    (error 'unknown-state :state label
-			  :hint "Label must be declared in the current TAGBODY"))
+  (let ((code '()))
+    (dolist (machine *state-machines*)
+      (if (state-label-p label machine)
+	  ;; jump to a local state, do the jump and return
+	  (let ((state-variable (state-machine-state-variable machine)))
+	    (if (null code)
+		(setq code (list `(setf ,state-variable ,label)))
+		(appendf code (list `(setf ,state-variable ,label))))
 
-  (let ((state-variable (current-state-machine-state-variable)))
-    `(setf ,state-variable ,label)))
+	    ;; wrap multiple jumps in a PROGN
+	    (return (if (= (length code) 1)
+			(car code)
+			`(progn ,@code))))
 
-
-;; ---------- State machine constructors ----------
-
-(defmacro while (condition &body body)
-  "Compile a state machine that runs BODY for as long as CONDITION holds.
-
-BODY will be placed into a single state."
-  (ensure-state-machine-context 'while)
-
-  (with-gensyms (test-state run-state exit-state)
-    `(tagbody
-	,test-state
-	(if ,condition
-	    (go ,run-state)
-	    (go ,exit-state))
-
-	,run-state
-	,@body
-	(go ,test-state)
-
-	,exit-state
-
-
-	))
-
-  )
+	  ;; jump to a surrounding state, reset this state and continue
+	  (let ((state-variable (state-machine-state-variable machine))
+		(initial-state (state-machine-initial-state machine)))
+	    (if (null code)
+		(setq code (list `(setf ,state-variable ,initial-state)))
+		(appendf code (list `(setf ,state-variable ,initial-state)))))))))
