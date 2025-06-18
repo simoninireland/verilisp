@@ -42,10 +42,11 @@ on the types passed to operators.
 
    core/binders
    core/rep-spec-binders
-   core/assignment
-   core/control-flow
    core/operators
    core/conditionals
+   core/assignment
+   core/control-flow
+   core/tagbody
    core/arrays
 
 

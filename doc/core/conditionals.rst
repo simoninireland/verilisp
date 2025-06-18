@@ -34,7 +34,7 @@ programmers prefer to treat both arms the same.
 	       1)))
       ...)
 
-.. note::
+.. warning::
 
    When used as an expression like this the arms of the ``if`` can
    only be simple expressions, not arbitrary code as can be done in
