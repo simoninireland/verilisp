@@ -101,7 +101,7 @@ REPRESENTATION-MISMATCH error is signalled."
 
 (defmacro decf/vl (place &optional (value 1))
   "Decrement PLACE by VALUE, which defaults to 1."
-  `(setf ,place (+ ,place ,value)))
+  `(setf ,place (- ,place ,value)))
 
 
 ;; ---------- Quick common tests ----------
