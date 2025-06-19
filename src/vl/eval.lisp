@@ -181,6 +181,8 @@ EVAL-LISP-IN-STATIC-ENVIRONMENT."
 
 A NOT-STATIC error condition is signalled if FORM does not
 evaluate to a constant."
+  (declare (optimize debug))
+
   (with-current-form form
     (handler-bind
 	((error (lambda (c)

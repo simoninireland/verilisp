@@ -423,3 +423,19 @@ This can happen when a representation is provided for a variable that's
 incompatible with how its used. It also happens when using the LET-WIRES,
 LET-REGISTERS, and LET-CONSTANTS macros and providing a representation
 explicitly that conflicts with the one implied by the macro."))
+
+
+;; ---------- Internal errors ----------
+
+;; These are errors arising from the incorrect functioning of the
+;; Verilisp DSL itself, rather than from user code.
+
+(define-condition no-local-frame (vl-error)
+  ()
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "No local frame")
+				       c str)))
+  (:documentation "Condition signalled when there is no local frame.
+
+This indicates a coding error within Verilisp, whcih attempted to retrieve
+a locally-applied frame from a construct that didn;t have one."))

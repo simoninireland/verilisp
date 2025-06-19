@@ -66,29 +66,16 @@ Signal REPRESENTATION-MISMATCH as an error if not."
     (error 'representation-mismatch :expected (list :register :wire :constant) :got rep)))
 
 
-;; ---------- Frame caching ----------
+;; ---------- Local frames ----------
 
-(defun ensure-let ()
-  "Ensure that we only call annotation operations from a LET form."
-  (unless (eql (car (current-form)) 'let)
-    (error "Anotating outside a LET form")))
+(defmethod add-frames-sexp ((fun (eql 'let)) args)
+  (destructuring-bind (decls &rest body)
+      args
+    (add-local-frame-to-decls decls)
 
-
-(defun cached-frame-decl-p (decl)
-  "Test wteher DECL holds a cached frame."
-  (and (listp decl)
-       (eql (car decl) 'frame)))
-
-
-(defun get-cached-frame (decls)
-  "Return the cached frame from DECLS."
-  (if-let ((a (find-if #'cached-frame-decl-p decls)))
-    (cadr a)))
-
-
-(defun decls-without-cached-frame (decls)
-  "Return all the DECLS tha are \"real\" and not a cached frame."
-  (remove-if #'cached-frame-decl-p decls))
+    ;; return the form
+    `(let ,decls
+       ,@(mapcar #'add-frames body))))
 
 
 ;; ---------- Typechecking ----------
@@ -169,7 +156,7 @@ The name is the first element, whether or not DECL is a list."
 
 (defun typecheck-env (decls)
   "Type-check the declarations DECLS to extend the current environment."
-  (mapc #'typecheck-decl (decls-without-cached-frame decls)))
+  (mapc #'typecheck-decl decls))
 
 
 (defun typecheck-constraints (constraints)
@@ -215,7 +202,7 @@ one."
   "Infer types on all DECLS.
 
 This updates the current environment with the new properties."
-  (let ((newdecls (mapcar #'typecheck-infer-decl (decls-without-cached-frame decls))))
+  (let ((newdecls (mapcar #'typecheck-infer-decl decls)))
     (mapc (lambda (vp)
 	    (destructuring-bind (n props)
 		vp
@@ -228,7 +215,7 @@ This updates the current environment with the new properties."
   (let ((decls (car args))
 	(body (cdr args)))
 
-    (with-new-frame
+    (with-local-frame decls
       (typecheck-env decls)
 
       ;; typecheck the body
@@ -236,11 +223,7 @@ This updates the current environment with the new properties."
 	  (typecheck `(progn ,@body))
 
 	;; infer any types based on constraints
-	(typecheck-infer-decls decls)
-
-	;; cache the shallowest frame for use in later passes
-	(setf (cdr (last decls))
-	      (list (list 'frame (detach-frame *global-environment*))))))))
+	(typecheck-infer-decls decls)))))
 
 
 ;; ---------- Dependencies ----------
@@ -266,9 +249,9 @@ right-hand side of an assignment."
   (destructuring-bind (decls &rest body)
       args
 
-    (with-frame (get-cached-frame decls)
+    (with-local-frame decls
       ;; add dependencies for declaraed variables
-      (mapc #'dependencies-decl (decls-without-cached-frame decls))
+      (mapc #'dependencies-decl decls)
 
       ;; process the body in this frame, with these dependencies
       (dependencies `(progn ,@body)))))
@@ -282,9 +265,7 @@ right-hand side of an assignment."
 
   (destructuring-bind (decls &rest body)
       args
-    (with-new-frame
-      (typecheck-env decls)
-
+    (with-local-frame decls
       (let ((lns (variables-declared-in-current-frame))
 	    (fvs (foldr #'union (mapcar #'free-variables body) '())))
 	(set-difference fvs lns)))))
@@ -381,12 +362,13 @@ right-hand side of an assignment."
       ;; add our declarations to the environment
       (when (null newenv)
 	(setq newenv (make-frame)))
-      (let ((f (get-cached-frame decls)))
-	;; add the new declaratiosn to the front of NEWENV
-	(add-frame-to-environment f newenv t)
+      (with-local-frame decls
+	(let ((f *global-environment*))
+	  ;; add the new declarations to the front of NEWENV
+	  (add-frame-to-environment f newenv t)
 
-	;; return the re-written body and the new environment
-	(list newbody newenv)))))
+	  ;; return the re-written body and the new environment
+	  (list newbody newenv))))))
 
 
 ;; ---------- PROGN simplification ----------
@@ -569,13 +551,13 @@ Constants turn into local parameters."
   (let ((decls (car args))
 	(body (cdr args)))
 
-    (with-frame (get-cached-frame decls)
-      (let ((real-decls (decls-without-cached-frame decls)))
-	;; synthesise the constants and registers
-	(as-block-forms real-decls :process #'synthesise-decl)
+    (with-local-frame decls
 
-	(if (> (length real-decls) 0)
-	    (as-blank-line))
+      ;; synthesise the constants and registers
+      (as-block-forms decls :process #'synthesise-decl)
 
-	;; synthesise the body
-	(as-block-forms body)))))
+      (if (> (length decls) 0)
+	  (as-blank-line))
+
+      ;; synthesise the body
+      (as-block-forms body))))

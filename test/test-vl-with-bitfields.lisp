@@ -59,11 +59,11 @@
 
 (test test-with-bitfields-simple
   "Test we can extract bitfields."
-  (let ((p '(let ((a #2r1001011010))
-	     (vl::with-bitfields (a a a b b b c)
-		 a
-	       (setf a (+ b c))))))
-    (is (subtypep (vl:typecheck (vl:expand-macros-in-environment p))
+  (let ((p (vl:expand/vl '(let ((a #2r1001011010))
+			   (vl::with-bitfields (a a a b b b c)
+			       a
+			     (setf a (+ b c)))))))
+    (is (subtypep (vl:typecheck p)
 		  '(unsigned-byte 10)))))
 
 
@@ -71,19 +71,19 @@
   "Test we catch the typo of forgetting the matching value."
   (signals (vl:not-synthesisable)
     (vl:expand-macros-in-environment '(vl:with-bitfields (a b c)
-			 ;; no argument to match against,
-			 ;; just a one-form body
-			 (setq a b)))))
+				       ;; no argument to match against,
+				       ;; just a one-form body
+				       (setq a b)))))
 
 
 (test test-with-bitfields-extensive
   "Test a more extensive example of with-bitfields."
-  (let ((p `(vl:module test ((clk :type (unsigned-byte 1) :direction :in))
-			(let ((ctrl 0 :type (unsigned-byte 6))
-			      (a 0 :type (unsigned-byte 1)))
-			  (vl:with-bitfields (a b c
-						 d e f)
-			      ctrl
-			    (setf a d))))))
+  (let ((p (vl:expand/vl `(vl:module test ((clk :type (unsigned-byte 1) :direction :in))
+				     (let ((ctrl 0 :type (unsigned-byte 6))
+					   (a 0 :type (unsigned-byte 1)))
+				       (vl:with-bitfields (a b c
+							     d e f)
+					   ctrl
+					 (setf a d)))))))
     (is (subtypep (vl:typecheck (vl:expand-macros-in-environment p))
 		  'vl::module-interface))))

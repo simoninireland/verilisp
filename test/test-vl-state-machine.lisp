@@ -25,14 +25,14 @@
 
 (test test-tagbody-compled-form
   "Test we can construct a compiled form of TAGBODY."
-  (let* ((p (copy-tree '(tagbody
-			 one
-			 (setq a 1)
-			 (setq b 2)
-			 two
-			 (setq b 0))))
-	 (q (copy-tree `(let (a b)
-			  ,p))))
+  (let* ((p (vl:expand/vl '(tagbody
+			    one
+			    (setq a 1)
+			    (setq b 2)
+			    two
+			    (setq b 0))))
+	 (q (vl:expand/vl `(let (a b)
+			     ,p))))
 
     (setq q (vl:expand-macros-in-environment q))
     (is (not (null q)))))
@@ -40,78 +40,75 @@
 
 (test test-go-outside-tagbody
   "Test we can catch a GO out of context."
-  (let ((p (copy-tree '(let ((one 1))
-			(go one)))))
-
-    (signals (vl:syntax-error)
-      (vl:expand-macros-in-environment p))))
+  (signals (vl:syntax-error)
+    (vl:expand/vl '(let ((one 1))
+		    (go one)))))
 
 
 (test test-synthesise-tagbody
   "Teat we can synthesise a TAGBODY."
-  (let* ((p (copy-tree '(tagbody
-			 one
-			 (setq a 1)
-			 (setq b 2)
-			 two
-			 (setq b 0)
-			 (go one))))
-	 (q (copy-tree `(let (a b)
-			  ,p))))
+  (let* ((p (vl:expand/vl '(tagbody
+			    one
+			    (setq a 1)
+			    (setq b 2)
+			    two
+			    (setq b 0)
+			    (go one))))
+	 (q (vl:expand/vl `(let (a b)
+			     ,p))))
 
-    (setq q (vl:expand-macros-in-environment q))
     (vl:typecheck q)
     (is (vl:synthesise q))))
 
 
 (test test-tagbody-float
   "Test we float let blocks successfully when synthesising."
-  (let* ((p (copy-tree '(vl:module test/456 ((clk :direction :in))
-			 (let ((a 0)
-			       (b 0))
-			   (setq a 1)
-			   (setq b 34)
+  (let* ((p (vl:expand/vl '(vl:module test/456 ((clk :direction :in))
+			    (let ((a 0)
+				  (b 0))
+			      (setq a 1)
+			      (setq b 34)
 
-			   (vl:@ (vl:posedge a)
-				 (let ((c 0))
-				   (tagbody
-				    one
-				      (setq a 1)
-				      (setq b 2)
-				      (go two)
-				    two
-				      (setq b 0)
-				      (go one)
-				    three
-				      (go two)))))))))
+			      (vl:@ (vl:posedge a)
+				    (let ((c 0))
+				      (tagbody
+				       one
+					 (setq a 1)
+					 (setq b 2)
+					 (go two)
+				       two
+					 (setq b 0)
+					 (go one)
+				       three
+					 (go two)))))))))
 
-    (is (vl::elaborate-module p))))
+    (is (vl::elaborate/vl p))))
 
 
 ;; ---------- Nested machines ----------
 
 (test test-tagbody-simple-nested
   "Test we can escape from a nested machine."
-  (let* ((p (copy-tree '(let (a b c)
-			 (tagbody
-			  one
-			    (setq a 1)
-			    (setq b 2)
-			  two
-			    (let (d)
-			      (tagbody
-			       inner-one
-				 (setq d 10)
+  (let* ((p (vl:expand/vl '(let (a b c)
+			    (tagbody
+			     one
+			       (setq a 1)
+			       (setq b 2)
+			     two
+			       (let (d)
+				 (tagbody
+				  inner-one
+				    (setq d 10)
 
-			       inner-two
-				 (decf d)
-				 (if (= d 0)
-				     (go three)
-				     (go inner-two))))
+				  inner-two
+				    (decf d)
+				    (if (= d 0)
+					(go three)
+					(go inner-two))))
 
-			  three
-			    (setq b 0)
-			    (go one))))))
+			     three
+			       (setq b 0)
+			       (go one))))))
 
     (setq p (vl:expand-macros-in-environment p))
     (vl:typecheck p)

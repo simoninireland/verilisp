@@ -25,11 +25,11 @@
 
 (test test-typecheck-the
   "Test we can typecheck THE."
-  (is (subtypep (vl:typecheck '(the (unsigned-byte 8) 12))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(the (unsigned-byte 8) 12)))
 		'(unsigned-byte 8)))
 
   (signals (vl:type-mismatch)
-    (vl:typecheck '(the (unsigned-byte 8) 1230))))
+    (vl:typecheck (vl:expand/vl '(the (unsigned-byte 8) 1230)))))
 
 
 (test test-synthesise-the
@@ -46,20 +46,20 @@
 		'(unsigned-byte 8)))
 
   ;; type is the type coerced to, not of the value (unlike for the)
-  (is (not (subtypep (vl:typecheck '(coerce 12 (unsigned-byte 8)))
+  (is (not (subtypep (vl:typecheck (vl:expand/vl '(coerce 12 (unsigned-byte 8))))
 		     '(unsigned-byte 4))))
 
-  (is (subtypep (vl:typecheck '(coerce 12 (signed-byte 5)))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(coerce 12 (signed-byte 5))))
 		'(signed-byte 5)))
 
   ;; can't coerce anything not fixed-width
   (signals (vl:coercion-mismatch)
-    (vl:typecheck '(coerce (make-array '(10) :element-type (unsigned-byte 8))
-		     (signed-byte 58))))
+    (vl:typecheck (vl:expand/vl '(coerce (make-array '(10) :element-type (unsigned-byte 8))
+				  (signed-byte 58)))))
 
   ;; can coerce elements though
-  (is (subtypep (vl:typecheck '(let ((a (make-array '(10) :element-type (unsigned-byte 8))))
-				 (coerce (aref a 3) (signed-byte 16))))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a (make-array '(10) :element-type (unsigned-byte 8))))
+					      (coerce (aref a 3) (signed-byte 16)))))
 		'(signed-byte 16))))
 
 
@@ -113,11 +113,12 @@
 
 (test test-synthesise-coerce-real
   "Test coercions against a real expression."
-  (let ((p (copy-tree '(let ((instr 0 :width 32)
-			     a)
-			(let ((bs (vl:bref instr 31 :end 20)))
-			  (let ((Iimm (coerce bs
-					      (signed-byte 32))))
-			    (setq a Iimm)))))))
+  (let ((p (vl:expand/vl '(let ((instr 0 :width 32)
+				a)
+			   (let ((bs (vl:bref instr 31 :end 20)))
+			     (let ((Iimm (coerce bs
+						 (signed-byte 32))))
+			       (setq a Iimm)))))))
+
     (vl:typecheck p)
     (is (vl:synthesise p))))

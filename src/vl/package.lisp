@@ -46,8 +46,9 @@
    ;; environments
    #:*global-environment*
    #:empty-environment
-   #:add-frame
+   #:add-frames
    #:with-new-frame
+   #:with-local-frame
    #:declare-variable
    #:variable-declared-p
    #:get-frame-names
@@ -87,7 +88,7 @@
    #:exit
 
    ;; DSL functions
-   #:annotate
+   #:add-frames
    #:typecheck
    #:free-variables
    #:rewrite-variables
@@ -103,9 +104,10 @@
    #:get-module
    #:get-module-interface
    #:get-modules-for-synthesis
-   #:defmodule
-   #:elaborate-module
-   #:synthesise-module
+   #:defmodule/vl
+   #:expand/vl
+   #:elaborate/vl
+   #:synthesise/vl
 
    ;; conditions
    #:vl-condition
@@ -132,4 +134,5 @@
    #:state-machine-mismatch
    #:type-inferred
    #:representation-mismatch
+   #:no-local-frame
    ))

@@ -99,6 +99,88 @@ calculations that can be done early.")
     (cons fun (mapcar #'fold-constant-expressions args))))
 
 
+;; ---------- Applying and removing frames ----------
+
+(defgeneric add-frames (form)
+  (:documentation "Add frames to forms that need to maintain an environment.")
+  (:method (form)
+    form)
+  (:method ((form list))
+    (let ((fun (car form))
+	  (args (cdr form)))
+      (with-vl-errors-not-synthesisable
+	(with-unknown-forms
+	  (with-current-form form
+	    (add-frames-sexp fun args)))))))
+
+
+(defgeneric add-frames-sexp (fun args)
+  (:documentation "Add frames to FUN applied to ARGS.
+
+The method is responsible for how the local frame is stored within
+the program.")
+  (:method (fun args)
+    `(,fun ,@(mapcar #'add-frames args))))
+
+
+(defun add-local-frame-to-decls (decls &optional (f (make-frame)))
+  "Add a local frame F to DECLS.
+
+A new, empty, frame is added if F is omitted.
+
+Each decl in DECLS should either be a symbol or a list whose head is
+a symbol.
+
+The frame is stored as a new decl with name LOCAL-FRAME.
+
+Return the new decls. if DECLS was originally NULL, this will be
+a new list containing the frame; if not, then the frame will have
+been added to the end destructively."
+  (if (null decls)
+      (list (list 'local-frame f))
+      (setf (cdr (last decls)) (list (list 'local-frame f)))))
+
+
+(defun get-local-frame-and-decls (decls)
+  "Return a list consisting of the local frame and the remaining real decls from DECLS."
+  (declare (optimize debug))
+
+  (labels ((local-frame-p (decl)
+	     (and (listp decl)
+		  (eql (car decl) 'local-frame)))
+
+	   (decl-p (decl)
+	     (not (local-frame-p decl))))
+
+    (let ((f-decls (filter-by-predicates decls #'local-frame-p #'decl-p)))
+      (when (null (car f-decls))
+	(error 'no-local-frame))
+
+      ;; return local frame as a singleton, followed by the "real" decls
+      (let ((f (cadr (caar f-decls))))
+	(cons f (list (cadr f-decls)))))))
+
+
+(defmacro with-local-frame (decls &body body)
+  "Run BODY in a global environment including the locally-applied frame from DECLS.
+
+DECLS should be a variable holding the declarations, which is re-bound
+within BODY to hold only the 'real' declarations with the local frame
+removed."
+
+  ;; ensure we get passed a variable name, not an expression
+  (unless (symbolp decls)
+    (error "Non-symbol ~a passed to WITH-LOCAL-FRAME" decls))
+
+  ;; extract frame and decls, and run BODY in a suitable environment
+  (with-gensyms (f-decls cached-frame)
+    `(let* ((,f-decls (get-local-frame-and-decls ,decls))
+	    (,cached-frame (car ,f-decls)))
+       (with-frame ,cached-frame
+	 (let ((,decls (cadr ,f-decls)))
+	   ,@body)))))
+
+
 ;; ---------- Type and width checking and inference ----------
 
 (defgeneric typecheck (form)

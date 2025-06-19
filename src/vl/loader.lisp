@@ -139,28 +139,47 @@ type-checked, macro-expanded, and possibly had other passes applied."
 
 ;; ---------- Module declaration ----------
 
-(defun elaborate-module (form)
+(defun expand/vl (form)
+  "Compiler pass to expand FORM into core Verilisp.
+
+This performs macro expansion and frame application, returning
+the expanded, framed, form.
+
+This function is not usually called directly, but is called as part
+of a larger compilation process."
+  (let* ((expanded (expand-macros-in-environment form *macro-environment*))
+	 (framed (add-frames expanded)))
+
+    framed))
+
+
+(defun elaborate/vl (form)
   "Elaborate FORM as a module.
 
 This runs all the relevant compiler nanopasses, returning a list
 consisting of the module interface type and the fully-elaborated
-module ready for synthesis."
-  ;; expand macrs
-  (let ((expanded (expand-macros-in-environment form *macro-environment*)))
+module ready for synthesis.
+
+This function is not usually called directly, but is called as part
+of a larger compilation process."
+  ;; expand extensions into core language
+  (let ((core (expand/vl form)))
 
     ;; typecheck
-    (let ((intf (typecheck expanded)))
+    (let* ((intf (typecheck core)))
+
       ;; add dependencies
-      (dependencies expanded)
+      ;; Should this be part of expansion, and appear before typechecking?
+      (dependencies core)
 
       ;; simplify
-      (let* ((floated (car (float-let-blocks expanded)))
+      (let* ((floated (car (float-let-blocks core)))
 	     (simplified (simplify-progn floated)))
 
 	(list intf simplified)))))
 
 
-(defmacro defmodule (modname decls &body body)
+(defmacro defmodule/vl (modname decls &body body)
   "Declare a module MODNAME with given DECLS and BODY.
 
 The module is loaded, annotated, macro-expanded, type-checked
@@ -178,7 +197,7 @@ Return the name of the newly-defined module."
     (let ((code `(module ,modname ,decls
 			 ,@body)))
       `(let* ((,module ',code)
-	      (,rc (elaborate-module ,module)))
+	      (,rc (elaborate/vl ,module)))
 
 	 (destructuring-bind (,intf ,elaborated)
 	     ,rc
@@ -195,10 +214,10 @@ Return the name of the newly-defined module."
 
 ;; ---------- Module synthesis ----------
 
-(defun synthesise-module (m str)
+(defun synthesise/vl (m str)
   "Synthesise module M to STR.
 
-M can be a Verilisp form or a symbol identifying
+M can be an elaborated Verilisp form or a symbol identifying
 a loaded module."
   (with-synthesis-to-stream str
     (let ((vl (if (symbolp m)

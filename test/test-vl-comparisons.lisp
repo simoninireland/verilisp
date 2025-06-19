@@ -25,5 +25,5 @@
 
 (test test-typecheck-equality
   "Test we can type-check equality."
-  (is (subtypep (vl:typecheck '(= 1 2))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(= 1 2)))
 		'(unsigned-byte 1))))

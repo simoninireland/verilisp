@@ -23,23 +23,23 @@
 
 (test test-variable-scope
   "Test we can see variables in scope."
-  (is (subtypep (vl:typecheck '(let ((a 12))
-				 a))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 12))
+					      a)))
 		'(unsigned-byte 8))))
 
 
 (test test-variable-not-scope
   "Test we can see variables not in scope."
   (signals (vl:unknown-variable)
-    (vl:typecheck '(let ((a 12))
-		     b))))
+    (vl:typecheck (vl:expand/vl '(let ((a 12))
+				  b)))))
 
 
 (test test-legalise
   "Test we legalise variable names at synthesis."
-  (let ((p (copy-tree '(let ((a 1)
-			     (b-c-d 2))
-			(setq a (+ b-c-d 1))))))
+  (let ((p (vl:expand/vl '(let ((a 1)
+				(b-c-d 2))
+			   (setq a (+ b-c-d 1))))))
     (vl:typecheck p)
 
     (let ((s (make-array '(0) :element-type 'base-char
@@ -57,9 +57,9 @@
   "Test that we synthesise module elements correctly."
   (vl:clear-module-registry)
 
-  (vl:defmodule clock/123 ((clk-in  :direction :in  :as :wire :type (unsigned-byte 1))
-			   (clk-out :direction :out :as :wire :type (unsigned-byte 1))
-			   &key (p 1) (q-r 2))
+  (vl:defmodule/vl clock/123 ((clk-in  :direction :in  :as :wire :type (unsigned-byte 1))
+			      (clk-out :direction :out :as :wire :type (unsigned-byte 1))
+			      &key (p 1) (q-r 2))
     (let ((a-b-c 12)
 	  (d 19))
       (setq a-b-c (+ 3 a-b-c d q-r)))
@@ -83,9 +83,9 @@
   "Test that we synthesise module instanciation correctly."
   (vl:clear-module-registry)
 
-  (vl:defmodule clock/123 ((clk-in  :direction :in  :as :wire :type (unsigned-byte 1))
-			   (clk-out :direction :out :as :wire :type (unsigned-byte 1))
-			   &key (p 1) (q-r 2))
+  (vl:defmodule/vl clock/123 ((clk-in  :direction :in  :as :wire :type (unsigned-byte 1))
+			      (clk-out :direction :out :as :wire :type (unsigned-byte 1))
+			      &key (p 1) (q-r 2))
     (let ((a-b-c 12)
 	  (d 19))
       (setq a-b-c (+ 3 a-b-c d q-r)))
@@ -93,10 +93,10 @@
 
   (let ((s (make-array '(0) :element-type 'base-char
 			    :fill-pointer 0 :adjustable t))
-	(p (copy-tree '(let ((iclk 0 :as :wire :width 1)
-			     (oclk 0 :as :wire :width 1))
-			(let ((clock (make-instance 'clock/123 :clk-in iclk :clk-out oclk)))
-			  (setq iclk 1))))))
+	(p (vl:expand/vl '(let ((iclk 0 :as :wire :width 1)
+				(oclk 0 :as :wire :width 1))
+			   (let ((clock (make-instance 'clock/123 :clk-in iclk :clk-out oclk)))
+			     (setq iclk 1))))))
 
     (vl:typecheck p)
     (with-output-to-string (str s)

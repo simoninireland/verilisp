@@ -23,107 +23,113 @@
 
 (test test-let-single
   "Test we can typecheck an expression."
-  (is (subtypep (vl:typecheck (copy-tree '(let ((a 1 :width 5))
-					   (+ 1 a))))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 1 :width 5))
+				 (+ 1 a))))
 		'(unsigned-byte 6))))
 
 
 (test test-let-at-least-one
   "Test that a variable gets at least a width of one bit."
   (is (equal '(unsigned-byte 1)
-	     (vl:typecheck (copy-tree '(let ((a 0))
-					a))))))
+	     (vl:typecheck (vl:expand/vl '(let ((a 0))
+					   a))))))
 
 
 (test test-let-single-infer-width
   "Test we can infer a width."
-  (is (subtypep (vl:typecheck (copy-tree '(let ((a 1))
-					   (+ 1 a))))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 1))
+					      (+ 1 a))))
 		'(unsigned-byte 2))))
 
 
 (test test-let-double
   "Test we can typecheck an expression with two variables."
-  (is (subtypep (vl:typecheck (copy-tree '(let ((a 1 :width 8)
-						(b 6 :width 16))
-					   (+ a b))))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 1 :width 8)
+						   (b 6 :width 16))
+					      (+ a b))))
 		'(unsigned-byte 24))))
 
 
 (test test-let-too-narrow
   "Test we pick up too-wide initial values."
   (signals (vl:type-mismatch)
-    (vl:typecheck (copy-tree '(let ((a 100 :type (unsigned-byte 5)))
-			       (+ 1 a))))))
+    (vl:typecheck (vl:expand/vl '(let ((a 100 :type (unsigned-byte 5)))
+				  (+ 1 a))))))
 
 
 (test test-let-widen
   "Test we can take the width from a given type."
-  (is (subtypep (vl:typecheck (copy-tree '(let ((a 5 :type (unsigned-byte 8)))
-					   (setf a (+ 1 a)))))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 5 :type (unsigned-byte 8)))
+					      (setf a (+ 1 a)))))
 		'(unsigned-byte 9))))
 
 
 (test test-let-missing-width-type-conflicts
   "Test we pick up an inferred width conflicting with a set type"
   (signals (vl:type-mismatch)
-    (vl:typecheck (copy-tree '(let ((a 5))
-			       (setq a 16))))))
+    (vl:typecheck (vl:expand/vl '(let ((a 5))
+				  (setq a 16))))))
 
 
 (test test-let-scope
   "Test we catch variables not declared."
   (signals (vl:unknown-variable)
-    (vl:typecheck (copy-tree '(let ((a 1))
-			       (+ 1 b))))))
+    (vl:typecheck (vl:expand/vl '(let ((a 1))
+				  (+ 1 b))))))
 
 
 (test test-let-result
   "Test we pick up the right result type."
-  (is (subtypep (vl:typecheck (copy-tree '(let ((a 99)
-						(b 100 :width 8))
-					   (+ b 1)
-					   (+ b a b))))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 99)
+						   (b 100 :width 8))
+					      (+ b 1)
+					      (+ b a b))))
 		'(unsigned-byte 10))))
 
 
 (test test-let-constant
   "Test we admit constant bindings."
-  (is (subtypep (vl:typecheck (copy-tree '(let ((a 15 :as :constant))
-					   a)))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 15 :as :constant))
+					      a)))
 		'(unsigned-byte 4))))
 
 
 (test test-let-naked
   "Test that we accept "naked" declarations."
-  (is (subtypep (vl:typecheck (copy-tree '(let ((a 10)
-						b)
-					   (+ a b))))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 10)
+						   b)
+					      (+ a b))))
 		`(unsigned-byte 5))))
 
 
 (test test-binders-conditional
   "Test we can assign to a conditional."
-  (is (subtypep (vl:typecheck (copy-tree '(let ((a 1)
-						(b 23))
-					   (let ((c (if (= a 0)
-							23
-							1)
-						    :as :wire
-						    :type (unsigned-byte 32)))
-					     (setq a c)))))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 1)
+						   (b 23))
+					      (let ((c (if (= a 0)
+							   23
+							   1)
+						       :as :wire
+						       :type (unsigned-byte 32)))
+						(setq a c)))))
 		'(unsigned-byte 32))))
 
 
 (test test-binders-free-variables
   "Test we can extract free variables correctly"
-  (is (set-equal (vl:free-variables '(let ((a 10))
-				      (+ a b)))
-		 '(b)))
-  (is (set-equal (vl:free-variables '(let ((a 10)
-					   b)
-				      (+ a b)))
-		 '())))
+  (let ((p (vl:expand/vl '(let (b)
+			   (let ((a 10))
+			     (+ a b))))))
+    (vl:typecheck p)
+    (is (set-equal (vl:free-variables (caddr p)) ; body of the outer LET
+		   '(b))))
+
+  (let ((p (vl:expand/vl '(let ((a 10)
+				b)
+			   (+ a b)))))
+    (vl:typecheck p)
+    (is (set-equal (vl:free-variables p)
+		   '()))))
 
 
 (test test-synthesise-binders
@@ -139,29 +145,31 @@
 		     (b 0 :width 16 :as :wire)
 		     c)
 		 (setf c (+ a b 1)))))
-    (let ((p (copy-tree x)))
+
+    (let ((p (vl:expand/vl (copy-tree x))))
       (vl:typecheck p)
       (vl:synthesise p))))
 
 
 (test test-let-width
   "Test the :width shortcuts works."
-  (is (subtypep (vl:typecheck (copy-tree '(let ((a 0 :width 12))
-					   a)))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 0 :width 12))
+					      a)))
 		'(unsigned-byte 12))))
 
 
 (test test-let-float-order
   "Test we maintain the order of declarations when we float LET blocks."
-  (let ((p (copy-tree '(let ((a 1)
-			     (b 2)
-			     c)
-			(setf c (+ a b))
-			(let ((d 4)
-			      e
-			      (f 6)
-			      g)
-			  (setf e 5))))))
+  (let ((p (vl:expand/vl '(let ((a 1)
+				(b 2)
+				c)
+			   (setf c (+ a b))
+			   (let ((d 4)
+				 e
+				 (f 6)
+				 g)
+			     (setf e 5))))))
+
     (vl:typecheck p)
     (let* ((q-env (vl:float-let-blocks p))
 	   (q (car q-env))
@@ -180,9 +188,9 @@
     (vl::declare-variable 'c '((:type (unsigned-byte 8))
 			       (:initial-value 0)))
 
-    (let ((p (copy-tree '(progn
-			  (setq a (+ b 19))
-			  (setq c a)))))
+    (let ((p (vl:expand/vl  '(progn
+			      (setq a (+ b 19))
+			      (setq c a)))))
 
       (vl:typecheck p)
       (vl::dependencies p)

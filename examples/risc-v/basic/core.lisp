@@ -17,11 +17,11 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(defmodule SOC ((clk-in   :as :wire :type (unsigned-byte 1) :direction :in)
-		;; (reset-in :as :wire :type (unsigned-byte 1) :direction :in)
-		(leds-out :as :wire :type (unsigned-byte 5) :direction :out)
-		(rxd      :as :wire :type (unsigned-byte 1) :direction :in)
-		(txd      :as :wire :type (unsigned-byte 1) :direction :out))
+(defmodule/vl SOC ((clk-in   :as :wire :type (unsigned-byte 1) :direction :in)
+		   ;; (reset-in :as :wire :type (unsigned-byte 1) :direction :in)
+		   (leds-out :as :wire :type (unsigned-byte 5) :direction :out)
+		   (rxd      :as :wire :type (unsigned-byte 1) :direction :in)
+		   (txd      :as :wire :type (unsigned-byte 1) :direction :out))
 
   (let ((clk   0 :as :wire :type (unsigned-byte 1))
 	(reset 0 :as :wire :type (unsigned-byte 1))

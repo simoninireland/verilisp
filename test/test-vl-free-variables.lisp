@@ -23,10 +23,11 @@
 
 (test test-free-let
   "Test we can extract free variables from a LET binding."
-  (let ((p (copy-tree '(let ((a 12))
-			(setq a (+ a 1))))))
+  (let ((p (vl:expand/vl '(let ((a 12))
+			   (setq a (+ a 1))))))
+
     (vl:typecheck p)
-    (is (null (vl:free-variables p)))))
+    (null (vl:free-variables p))))
 
 
 (test test-free-expression
@@ -60,11 +61,17 @@
   (is (set-equal (vl:free-variables '(setf (aref b 2) 33))
 		 '(b))))
 
+
 (test test-free-binders
   "Test we get all the free variables regardless of binders."
   (is (set-equal (vl:free-variables '(setq a (+ b c 1)))
 		 '(a b c)))
 
-  (is (set-equal (vl:free-variables '(let ((a 12))
-				      (setq a (+ b c 1))))
-		 '(b c))))
+  (let* ((p '(let ((a 12))
+		(setq a (+ b c 1))))
+	 (q (vl:expand/vl `(let (b c)
+			     ,p))))
+
+    (vl:typecheck q)
+    (is (set-equal (vl:free-variables (caddr q))  ; expanded body of outer LET
+		   '(b c)))))

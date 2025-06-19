@@ -59,13 +59,13 @@ q
 		       (setf a (+ 1 2))
 		       (setf a (+ 1 3)))
 		     (setf a 12)))))
-    (let ((p (copy-tree x)))
+    (let ((p (vl:expand/vl x)))
       (vl:with-new-frame
 	(vl:typecheck p)
 	(is (vl:synthesise p)))))
 
   ;; no else branch
-  (let ((p (copy-tree '(let ((a 0 :width 4))
+  (let ((p (vl:expand/vl '(let ((a 0 :width 4))
 			(if (logand 1 1)
 			    (setf a (+ 1 2)))))))
     (vl:typecheck p)
@@ -84,9 +84,9 @@ q
     (vl::declare-variable 'd '((:type (unsigned-byte 8))
 			       (:initial-value 0)))
 
-    (let ((p (copy-tree '(if (> a 1)
-			  (setq a b)
-			  (setq a c)))))
+    (let ((p (vl:expand/vl  '(if (> a 1)
+			      (setq a b)
+			      (setq a c)))))
       (vl::dependencies p)
       (is (set-equal (vl::variable-property 'a :dependencies)
 		     '(b c))))))
@@ -96,43 +96,43 @@ q
 
 (test test-case-compatible
   "Test we can typecheck cases with compatible clauses."
-  (is (subtypep (vl:typecheck '(let ((a 12)
-				     b)
-				(case a
-				  (1
-				   (setf b 23))
-				  (2
-				   (setf b 34))
-				  (t
-				   (setf b 0)))))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 12)
+						   b)
+					      (case a
+						(1
+						 (setf b 23))
+						(2
+						 (setf b 34))
+						(t
+						 (setf b 0))))))
 		'(unsigned-byte 8))))
 
 
 (test test-case-incompatible
   "Test we catch cases with incompatible clauses."
   (signals (vl:type-mismatch)
-    (is (vl:typecheck '(let ((a 12)
-			      b)
-			 (case a
-			   (1
-			    (setf b 23))
-			   (2456
-			    (setf b 34)))))
+    (is (vl:typecheck (vl:expand/vl '(let ((a 12)
+					   b)
+				      (case a
+					(1
+					 (setf b 23))
+					(2456
+					 (setf b 34))))))
 	'(unsigned-byte 8))))
 
 
 (test test-synthesise-case
   "Test we can synthesise a CASE."
-  (let ((p '(let ((a 12)
-		  (b 0))
-	     (case a
-	       (1
-		(setf b 23))
-	       (2
-		(setf b 34 :sync t)
-		(setf a 0))
-	       (t
-		(setf b 0))))))
+  (let ((p (vl:expand/vl '(let ((a 12)
+				(b 0))
+			   (case a
+			     (1
+			      (setf b 23))
+			     (2
+			      (setf b 34 :sync t)
+			      (setf a 0))
+			     (t
+			      (setf b 0)))))))
     (vl:with-new-frame
       (vl:typecheck p)
       (is (vl:synthesise p)))))
@@ -140,13 +140,14 @@ q
 
 (test test-synthesise-case-assignment
   "Test we can assign to the results of a CASE block."
-  (let ((p '(let ((a 1)
-		  (b 2))
-	     (setq a
-	      (case b
-		(1 12)
-		(2 (+ a 1))
-		(t 0))))))
+  (let ((p (vl:expand/vl '(let ((a 1)
+				(b 2))
+			   (setq a
+			    (case b
+			      (1 12)
+			      (2 (+ a 1))
+			      (t 0)))))))
+
     (vl:with-new-frame
       (vl:typecheck p)
       (is (vl:synthesise p)))))
@@ -155,25 +156,27 @@ q
 (test test-synthesise-case-complex-bodies
   "Test we can't synthesise CASE assignments where the bodies are too complicated."
   (signals (vl:not-synthesisable)
-    (let ((p (copy-tree '(let ((a 1)
-			       (b 2))
-			  (setq a
-			   (case b
-			     (1 12)
-			     (2
-			      (setq b 12)
-			      (+ a 1))
-			     (t 0)))))))
+    (let ((p (vl:expand/vl '(let ((a 1)
+				  (b 2))
+			     (setq a
+			      (case b
+				(1 12)
+				(2
+				 (setq b 12)
+				 (+ a 1))
+				(t 0)))))))
+
       (vl:typecheck p)
       (vl:synthesise p))))
 
 
 (test test-synthesise-let-decl
   "Test we can synthesise a conditional in a LET."
-  (let ((p (copy-tree '(let ((a (if (= 2 1)
-				    1
-				    0)))
-			(setf a (+ a 2))))))
+  (let ((p (vl:expand/vl '(let ((a (if (= 2 1)
+				       1
+				       0)))
+			   (setf a (+ a 2))))))
+
     (vl:typecheck p)
     (is (vl:synthesise p))))
 
@@ -189,13 +192,14 @@ q
 			       (:initial-value 45)))
     (vl::declare-variable 'd '((:type (unsigned-byte 8))
 			       (:initial-value 0)))
-    (let ((p (copy-tree '(case (+ a 1)
-			  (1
-			   (setq b c))
-			  (2
-			   (setq b a))
-			  (t
-			   (setq a d))))))
+    (let ((p (vl:expand/vl  '(case (+ a 1)
+			      (1
+			       (setq b c))
+			      (2
+			       (setq b a))
+			      (t
+			       (setq a d))))))
+
       (vl::dependencies p)
       (is (set-equal (vl::variable-property 'a :dependencies)
 		     '(d)))

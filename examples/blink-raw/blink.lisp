@@ -20,9 +20,9 @@
 (in-package :cl-vhdsl/examples/blink-raw)
 
 
-(defmodule blink ((clk  :width 1 :direction :in)
-		  (leds :width bits :direction :out)
-		  &key (bits 5) (delay 22))
+(defmodule/vl blink ((clk  :width 1 :direction :in)
+		     (leds :width bits :direction :out)
+		     &key (bits 5) (delay 22))
 
   (let ((counter 0 :width (+ bits delay))
 	(out 0 :width 5))

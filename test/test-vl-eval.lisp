@@ -69,8 +69,8 @@
   "Test that variables declared as constants are static constants."
   (vl::with-new-frame
     (vl::declare-variable 'a '((:width 5)
-				(:initial-value 12)
-				(:as :constant)))
+			       (:initial-value 12)
+			       (:as :constant)))
 
     (is (= (vl::ensure-static 'a)
 	   12))))
@@ -80,8 +80,8 @@
   "Test that expressions involving only constants are static constants."
   (vl::with-new-frame
     (vl::declare-variable 'a '((:width 5)
-				(:initial-value 12)
-				(:as :constant)))
+			       (:initial-value 12)
+			       (:as :constant)))
 
     (is (= (vl::ensure-static '(+ a (+ a 12)))
 	   36))))

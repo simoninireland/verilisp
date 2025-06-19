@@ -25,67 +25,71 @@
 
 (test test-array-decl
   "Test we can declare arrays."
-  (is (subtypep (vl:typecheck (copy-tree '(make-array '(16)
-					   :element-type (unsigned-byte 8))))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(make-array '(16)
+					      :element-type (unsigned-byte 8))))
 		'(array (unsigned-byte 8) (16))))
 
   ;; version without the Lisp-compatible quote on the shape
-  (is (subtypep (vl:typecheck (copy-tree '(make-array (16)
-					   :element-type (unsigned-byte 8))))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(make-array (16)
+					      :element-type (unsigned-byte 8))))
 		'(array (unsigned-byte 8) (16))))
 
   ;; at the moment we only allow one dimension
   (signals (vl:not-synthesisable)
-    (vl:typecheck (copy-tree '(make-array '(16 16)
-			       :element-type (unsigned-byte 8))))))
+    (vl:typecheck (vl:expand/vl '(make-array '(16 16)
+				  :element-type (unsigned-byte 8))))))
 
 
 (test test-array-bind
   "Test we can bind arrays in LET forms."
-  (let ((p (copy-tree '(let ((a (make-array '(16)
-				 :element-type (unsigned-byte 8)))
-			     (b 0))
-			(setq b 12)))))
+  (let ((p (vl:expand/vl '(let ((a (make-array '(16)
+				    :element-type (unsigned-byte 8)))
+				(b 0))
+			   (setq b 12)))))
+
     (is (subtypep (vl:typecheck p)
 		  '(unsigned-byte 8)))))
 
 
 (test test-synthesise-array-decl
   "Test we can synthesise array declarations."
-  (let ((p (copy-tree '(let ((a (make-array '(16)
-				 :element-type (unsigned-byte 8))
-			      :type (array (unsigned-byte 8) (32)))
-			     (b (make-array '(8)
-				 :element-type (unsigned-byte 8))
-			      :type (array (unsigned-byte 8) (16))
-			      :as :wire)
-			     (c 10 :type (unsigned-byte 8)))
-			(setf c 0)))))
+  (let ((p (vl:expand/vl '(let ((a (make-array '(16)
+				    :element-type (unsigned-byte 8))
+				 :type (array (unsigned-byte 8) (32)))
+				(b (make-array '(8)
+				    :element-type (unsigned-byte 8))
+				 :type (array (unsigned-byte 8) (16))
+				 :as :wire)
+				(c 10 :type (unsigned-byte 8)))
+			   (setf c 0)))))
+
     (vl:typecheck p)
     (is (vl:synthesise p))))
 
 
 (test test-synthesise-array-decl-type-inferred
   "Test we can synthesise array declarations when we infer the type of the array."
-  (let ((p (copy-tree '(let ((a (make-array '(16)
-				 :element-type (unsigned-byte 8)))
-			     (b (make-array '(8)
-				 :element-type (unsigned-byte 8))
-			      :as :wire)
-			     (c 10))
-			(setf c 100)))))
+  (let ((p (vl:expand/vl '(let ((a (make-array '(16)
+				    :element-type (unsigned-byte 8)))
+				(b (make-array '(8)
+				    :element-type (unsigned-byte 8))
+				 :as :wire)
+				(c 10))
+			   (setf c 100)))))
+
     (vl:typecheck p)
     (is (vl:synthesise p))))
 
 
 (test test-synthesise-array-init-from-data
   "Test we can synthesise array declarations with initial data inline."
-  (let ((p (copy-tree '(let ((b (make-array '(4)
-				 :element-type (unsigned-byte 8)
-				 :initial-contents '(1 2 3 4))
-			      :as :register)
-			     (c 10))
-			(setf c (aref b 1))))))
+  (let ((p (vl:expand/vl '(let ((b (make-array '(4)
+				    :element-type (unsigned-byte 8)
+				    :initial-contents '(1 2 3 4))
+				 :as :register)
+				(c 10))
+			   (setf c (aref b 1))))))
+
     (vl:typecheck p)
     (is (vl:synthesise p))))
 
@@ -94,12 +98,13 @@
   "Test we can synthesise array declarations with initial data from a file."
   (vl::clear-module-late-initialisation)
 
-  (let ((p (copy-tree '(let ((b (make-array '(4)
-				 :element-type (unsigned-byte 8)
-				 :initial-contents '(:file "ttt.hex"))
-			      :as :register)
-			     (c 10))
-			(setf c (aref b 1))))))
+  (let ((p (vl:expand/vl '(let ((b (make-array '(4)
+				    :element-type (unsigned-byte 8)
+				    :initial-contents '(:file "ttt.hex"))
+				 :as :register)
+				(c 10))
+			   (setf c (aref b 1))))))
+
     (vl:typecheck p)
     (vl:synthesise p)
     (is (vl::module-late-initialisation-p))))
@@ -109,28 +114,31 @@
 
 (test test-aref-simple
   "Test we can index into an array."
-  (let ((p (copy-tree '(let ((a (make-array '(16)
-				 :element-type (unsigned-byte 32))))
-			(setf (aref a 8) (aref a 0))))))
+  (let ((p (vl:expand/vl '(let ((a (make-array '(16)
+				    :element-type (unsigned-byte 32))))
+			   (setf (aref a 8) (aref a 0))))))
+
     (is (subtypep (vl:typecheck p)
 		  '(unsigned-byte 32)))))
 
 
 (test test-aref-bits
   "Test we can bit-index into an element of an array."
-  (let ((p (copy-tree '(let ((a (make-array '(16)
-				 :element-type (unsigned-byte 32))))
-			(setf (vl::bref (aref a 8) 3 :end 0)
-			 (vl::bref (aref a 0) 3 :end 0))))))
+  (let ((p (vl:expand/vl '(let ((a (make-array '(16)
+				    :element-type (unsigned-byte 32))))
+			   (setf (vl::bref (aref a 8) 3 :end 0)
+			    (vl::bref (aref a 0) 3 :end 0))))))
+
     (is (subtypep (vl:typecheck p)
 		  '(unsigned-byte 32)))))
 
 
 (test test-synthesise-aref-simple
   "Test we can synthesise a simple array reference."
-  (let ((p (copy-tree '(let ((a (make-array '(16)
-				 :element-type (unsigned-byte 32))))
-			(setf (aref a 8) (aref a 0))))))
+  (let ((p (vl:expand/vl '(let ((a (make-array '(16)
+				    :element-type (unsigned-byte 32))))
+			   (setf (aref a 8) (aref a 0))))))
+
     (vl:typecheck p)
     (is (vl:synthesise p))))
 
@@ -139,33 +147,34 @@
 
 (test test-typecheck-array-initialiser
   "Test we can typecheck an array initialiser."
-  (let ((p (copy-tree  '(let ((a (make-array (5)
-				  :initial-contents (1 2 3 4 5))))
-			 (aref a 0)))))
+  (let ((p (vl:expand/vl '(let ((a (make-array (5)
+				    :initial-contents (1 2 3 4 5))))
+			   (aref a 0)))))
     (is (subtypep (vl:typecheck p)
 		  '(unsigned-byte 8))))
 
   (signals (vl:shape-mismatch)
-    (vl:typecheck '(let ((a (make-array (5)
-			      :initial-contents (1 2 3))))
-		     (aref a 0)))))
+    (vl:typecheck
+     (vl:expand/vl (copy-tree '(let ((a (make-array (5)
+					  :initial-contents (1 2 3))))
+				 (aref a 0)))))))
 
 
 (test test-typecheck-array-initialiser-bad-value
   "Test we can detect a badly-typed value in an array initialiaser."
   (signals (vl:shape-mismatch)
-    (vl:typecheck '(let ((a (make-array (5)
-			      :element-type '(unsigned-byte 4)
-			      :initial-contents (1 2 35))))
-		     (aref a 0)))))
+    (vl:typecheck (vl:expand/vl '(let ((a (make-array (5)
+					   :element-type '(unsigned-byte 4)
+					   :initial-contents (1 2 35))))
+				  (aref a 0))))))
 
 
 (test test-syntheseise-array-init
   "Test we can synthesise array initialisation."
-  (let ((p (copy-tree '(let ((a (make-array '(10)
-				 :initial-contents '(1 2 3 4 5 6 7 8 9 10)))
-			     (b 0))
-			(setf b (aref a 1))))))
+  (let ((p (vl:expand/vl '(let ((a (make-array '(10)
+				    :initial-contents '(1 2 3 4 5 6 7 8 9 10)))
+				(b 0))
+			   (setf b (aref a 1))))))
     (vl:typecheck p)
     (is (vl:synthesise p))))
 
@@ -175,10 +184,11 @@
 (test test-synthesise-array-init-from-example
   "Test we can synthesise array initialisation from a file."
   (let* ((fn (pathname-relative-to-project-root "examples/sap-1-raw/program.bin"))
-	 (p (copy-tree `(let ((a (make-array '(10)
-					     :initial-contents '(:file ,fn)))
-			      (b 0))
-			  (setf b (aref a 1))))))
+	 (p (vl:expand/vl `(let ((a (make-array '(10)
+						:initial-contents '(:file ,fn)))
+				 (b 0))
+			     (setf b (aref a 1))))))
+
     (vl:typecheck p)
     (is (vl:synthesise p))
     (vl::run-module-late-initialisation)))

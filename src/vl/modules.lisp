@@ -214,23 +214,29 @@ of other parameter values."
 (defun make-module-interface-type (decls)
   "Return the module interface type of the DECLS of a module."
   (destructuring-bind (modargs modparams)
-      (split-args-params (decls-without-cached-frame decls))
+      (split-args-params decls)
     `(module-interface ,modparams ,modargs)))
+
+
+(defmethod add-frames-sexp ((fun (eql 'module)) args)
+  (destructuring-bind (modname decls &rest body)
+      args
+    (add-local-frame-to-decls decls)
+
+    ;; return the form
+    `(module ,modname ,decls
+	     ,@(mapcar #'add-frames body))))
 
 
 (defmethod typecheck-sexp ((fun (eql 'module)) args)
   (destructuring-bind (modname decls &rest body)
       args
 
-    (with-new-frame
+    (with-local-frame decls
       (make-module-environment decls)
 
       ;; typecheck the body of the module in its environment
       (typecheck (cons 'progn body))
-
-      ;; cache the shallowest frame for use in later passes
-      (setf (cdr (last decls))
-	    (list (list 'frame (detach-frame *global-environment*))))
 
       ;; return the interface type
       (make-module-interface-type decls))))
@@ -239,7 +245,7 @@ of other parameter values."
 (defmethod dependencies-sexp ((fun (eql 'module)) args)
   (destructuring-bind (modname decls &rest body)
       args
-    (with-frame (get-cached-frame decls)
+    (with-local-frame decls
 
       ;; no need to check decls or parameters as they're never dependent
       ;; (or are they?...)
@@ -247,10 +253,15 @@ of other parameter values."
 
 
 (defmethod float-let-blocks-sexp ((fun (eql 'module)) args)
+  (declare (optimize debug))
+
   (destructuring-bind (modname decls &rest body)
       args
+
     (destructuring-bind (newbody newenv)
-	(float-let-blocks `(progn ,@body))
+	(with-local-frame decls
+	  (float-let-blocks `(progn ,@body)))
+
       (list
        `(module ,modname ,decls
 		,(if newenv
@@ -262,8 +273,8 @@ of other parameter values."
 						       (get-environment-property n :initial-value newenv))))
 					     (decls newenv))))
 
-		       ;; cache the environment in the decls
-		       (appendf newdecls (list (list 'frame newenv)))
+		       ;; add the new local environment
+		       (setq newdecls (add-local-frame-to-decls newdecls newenv))
 
 		       `(let ,newdecls
 			  ,newbody))
@@ -324,12 +335,12 @@ of other parameter values."
   (destructuring-bind (modname decls &rest body)
       args
 
-    (with-frame (get-cached-frame decls)
+    (with-local-frame decls
       (as-literal "module ")
       (synthesise modname)
 
       (destructuring-bind (args params)
-	  (split-args-params (decls-without-cached-frame decls))
+	  (split-args-params decls)
 	;; parameters
 	(if params
 	    (as-argument-list params :before " #(" :after ")"

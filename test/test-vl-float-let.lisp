@@ -23,10 +23,10 @@
 
 (test test-let-float
   "Test that nested LETs float."
-  (let ((p (copy-tree '(let ((a 1 :width 8))
-			     (setq a 12)
-			     (let ((b (+ a 1)))
-			       (setq a (+ a b)))))))
+  (let ((p (vl:expand/vl '(let ((a 1 :width 8))
+			   (setq a 12)
+			   (let ((b (+ a 1)))
+			     (setq a (+ a b)))))))
     (vl:typecheck p)
     (destructuring-bind (form env)
 	(vl:float-let-blocks p)
@@ -40,10 +40,10 @@
 
 (test test-let-float-markers
   "Test we retain constant (and other) markers when floating."
-  (let ((p (copy-tree '(let ((a 1 :width 10))
-			      (setq a 10)
-			      (let ((b 12 :as :constant))
-				(setq a (+ b a)))))))
+  (let ((p (vl:expand/vl  '(let ((a 1 :width 10))
+			    (setq a 10)
+			    (let ((b 12 :as :constant))
+			      (setq a (+ b a)))))))
     (vl:typecheck p)
     (destructuring-bind (form env)
 	(vl::float-let-blocks p)

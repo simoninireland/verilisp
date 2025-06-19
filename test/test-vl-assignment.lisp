@@ -26,19 +26,19 @@
 (test test-setq
   "Test we can typecheck the SETQ form."
   (vl:with-new-frame
-    (is (subtypep (vl:typecheck (copy-tree '(let ((a 13))
-					     (setq a 9))))
+    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 13))
+						(setq a 9))))
 		  '(unsigned-byte 8)))
 
     (signals (vl:not-synthesisable)
-      (vl:typecheck '(let ((a 12 :as :constant))
-		      (setq a 9))))))
+      (vl:typecheck (vl:expand/vl '(let ((a 12 :as :constant))
+				    (setq a 9)))))))
 
 
 (test test-assignment-same-width
   "Test we can assign."
   (vl:with-new-frame
-    (is (subtypep (vl:typecheck (copy-tree '(let ((a 10))
+    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 10))
 					     (setq a 12))))
 		  '(unsigned-byte 5)))))
 
@@ -46,7 +46,7 @@
 (test test-assignment-same-width-sync
   "Test we can assign synchronously (same types)."
   (vl:with-new-frame
-    (is (subtypep (vl:typecheck (copy-tree '(let ((a 10))
+    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 10))
 					     (setq a 12 :sync t))))
 		  '(unsigned-byte 5)))))
 
@@ -55,23 +55,23 @@
   "Test we catch assigning a value that's too wide for its explicit type."
   (signals (vl:type-mismatch)
     (vl:with-new-frame
-      (vl:typecheck (copy-tree '(let ((a 10 :type (unsigned-byte 5)))
+      (vl:typecheck (vl:expand/vl '(let ((a 10 :type (unsigned-byte 5)))
 				 (setq a 120)))))))
 
 
 (test test-assignment-too-wide-widenable
   "Test we can assign a value to a variable that can be widened."
   (vl:with-new-frame
-    (is (subtypep (vl:typecheck (copy-tree '(let ((a 10))
-					     (setq a 120))))
+    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 10))
+						(setq a 120))))
 		  '(unsigned-byte 7)))))
 
 
 (test test-assignment-too-wide-updated
   "Test we don't update the type when we have an explicit one already."
   (vl:with-new-frame
-    (let ((p (copy-tree '(let ((a 10 :type (unsigned-byte 5) :as :register))
-			  (setq a 120)))))
+    (let ((p (vl:expand/vl '(let ((a 10 :type (unsigned-byte 5) :as :register))
+			     (setq a 120)))))
       (subtypep (vl:typecheck p)
 		'(unsigned-byte 7)))))
 
@@ -79,8 +79,8 @@
 (test test-assignment-too-wide-widenable-updated
   "Test we update the code to match inferred types."
   (vl:with-new-frame
-    (let ((p (copy-tree '(let ((a 10))
-			  (setq a 120)))))
+    (let ((p (vl:expand/vl '(let ((a 10))
+			     (setq a 120)))))
       (subtypep (vl:typecheck p)
 		'(unsigned-byte 7)))))
 
@@ -89,16 +89,16 @@
   "Test we can't assign to a non-existent variable."
   (signals (vl:unknown-variable)
     (vl:with-new-frame
-      (vl:typecheck (copy-tree '(let ((a 10))
-				 (setq b 12)))))))
+      (vl:typecheck (vl:expand/vl '(let ((a 10))
+				    (setq b 12)))))))
 
 
 (test test-assignment-constant
   "Test we can't assign to a constant variable."
   (signals (vl:not-synthesisable)
     (vl:with-new-frame
-      (vl:typecheck (copy-tree '(let ((a 10 :as :constant))
-				 (setq a 12)))))))
+      (vl:typecheck (vl:expand/vl '(let ((a 10 :as :constant))
+				    (setq a 12)))))))
 
 
 (test test-synthesise-setq
@@ -112,8 +112,8 @@
   "Test we catch the common mistake of using SETQ when we mean SETF."
   (signals (vl:not-synthesisable)
     (vl:with-new-frame
-      (vl:typecheck (copy-tree '(let ((a 0 :type (unsigned-byte 4)))
-				 (setq (bit a 0) 1)))))))
+      (vl:typecheck (vl:expand/vl '(let ((a 0 :type (unsigned-byte 4)))
+				    (setq (bit a 0) 1)))))))
 
 
 (test test-setq-dependencies
@@ -139,19 +139,19 @@
 (test test-setf-as-setq
   "Test we can convert a simple SETF into a SETQ."
   (vl:with-new-frame
-    (is (subtypep (vl:typecheck (copy-tree '(let ((a 12))
-					     (setf a 9))))
+    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 12))
+						(setf a 9))))
 		  '(unsigned-byte 4)))))
 
 
 (test test-synthesise-setf-conditional
   "Test we can synthesise SETF with a conditional value."
   (vl:with-new-frame
-    (let ((p (copy-tree '(let ((a 12)
-			       (b 2))
-			  (setf a (if (= b 1)
-				      a
-				      (+ a 1)))))))
+    (let ((p (vl:expand/vl '(let ((a 12)
+				  (b 2))
+			     (setf a (if (= b 1)
+					 a
+					 (+ a 1)))))))
       (vl:typecheck p)
       (is (vl:synthesise p)))))
 

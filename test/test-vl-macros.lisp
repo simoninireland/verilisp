@@ -50,8 +50,8 @@
 (test test-expand-when
   "Test we can expand WHEN conditionals."
   (is (equal (vl::expand-macros-in-environment '(when (= a b)
-				   (+ a 1)
-				   (- b 1)))
+						 (+ a 1)
+						 (- b 1)))
 	     '(if (= a b)
 	       (progn
 		 (+ a 1)
@@ -61,8 +61,8 @@
 (test test-expand-unless
   "Test we can expand UNLESS conditionals."
   (is (equal (vl::expand-macros-in-environment '(unless (= a b)
-				   (+ a 1)
-				   (- b 1)))
+						 (+ a 1)
+						 (- b 1)))
 	     '(if (not (= a b))
 	       (progn
 		 (+ a 1)
@@ -72,13 +72,13 @@
 (test test-expand-incf
   "Test we canm expand INCF macros."
   (is (equal (vl::expand-macros-in-environment '(let ((a 1))
-				   (incf a)))
+						 (incf a)))
 	     '(let ((a 1))
 	       (progn
 		 (setf a (+ a 1))))))
 
   (is (equal (vl::expand-macros-in-environment '(let ((a 1))
-				   (incf (bit a 5))))
+						 (incf (bit a 5))))
 	     '(let ((a 1))
 	       (progn
 		 (setf (bit a 5) (+ (bit a 5) 1)))))))
@@ -87,16 +87,16 @@
 (test test-expand-decf
   "Test we canm expand DECF macros."
   (is (equal (vl::expand-macros-in-environment '(let ((a 1))
-				   (decf a)))
+						 (decf a)))
 	     '(let ((a 1))
 	       (progn
-		 (setf a (+ a 1))))))
+		 (setf a (- a 1))))))
 
   (is (equal (vl::expand-macros-in-environment '(let ((a 1))
-				   (decf (bit a 5))))
+						 (decf (bit a 5))))
 	     '(let ((a 1))
 	       (progn
-		 (setf (bit a 5) (+ (bit a 5) 1)))))))
+		 (setf (bit a 5) (- (bit a 5) 1)))))))
 
 
 (test test-expand-maths
@@ -120,37 +120,37 @@
 (test test-expand-let-representations
   "Test we can expand the representation-specific LET variants."
   (is (equal (vl::expand-macros-in-environment '(vl:let-wires ((a 0 :width 10))
-				   (setq a 12)))
+						 (setq a 12)))
 	     '(let ((a 0 :as :wire :width 10))
 	       (progn
 		 (setq a 12)))))
   (is (equal (vl::expand-macros-in-environment '(vl:let-registers ((a 0 :width 10))
-				   (setq a 12)))
+						 (setq a 12)))
 	     '(let ((a 0 :as :register :width 10))
 	       (progn
 		 (setq a 12)))))
   (is (equal (vl::expand-macros-in-environment '(vl:let-constants ((a 0 :width 10))
-				   (setq a 12)))
+						 (setq a 12)))
 	     '(let ((a 0 :as :constant :width 10))
 	       (progn
 		 (setq a 12)))))
 
   ;; test failure
   (signals (vl:representation-mismatch)
-     (vl::expand-macros-in-environment '(vl:let-wires ((a 10 :as :constant))
-				   (setq a 12)))))
+    (vl::expand-macros-in-environment '(vl:let-wires ((a 10 :as :constant))
+					(setq a 12)))))
 
 
 (test test-no-macro-synthesis
-  "Test we can't synthesise if there are macros left enexpanded."
+  "Test we can't synthesise if there are macros left unexpanded."
 
   ;; should catch an unknown form if we typecheck without expanding
-  (let ((p (copy-tree '(let ((a 1))
-			(incf a)))))
+  (let ((p (vl:add-frames (copy-tree '(let ((a 1))
+				       (incf a))))))
     (signals (vl:unknown-form)
       (vl:typecheck p)))
 
   ;; should fail if we try to synthesise
-  (let ((p (copy-tree '(when 1 (+ 1 2)))))
+  (let ((p '(when 1 (+ 1 2))))
     (signals (vl:not-synthesisable)
       (vl:synthesise p))))
