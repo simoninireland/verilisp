@@ -27,13 +27,13 @@
 	(reset 0 :as :wire :type (unsigned-byte 1))
 
 	;; plug in to the output to visualise
-	(leds 0 :type (unsigned-byte 5) :as :register)
+	(leds 0 :type (unsigned-byte 5))
 
 	;; core state
 	(mem   (make-array '(256) :element-type (unsigned-byte 32)
 				  :initial-contents (:file "firmware.hex")))
-	(pc    0 :type (unsigned-byte 32) :as :register)
-	(instr 0 :type (unsigned-byte 32) :as :register)
+	(pc    0 :type (unsigned-byte 32))
+	(instr 0 :type (unsigned-byte 32))
 
 	;; clock management
 	(cw (make-instance 'clockworks :clk-in clk-in
@@ -57,7 +57,7 @@
 		(isStore  (= (bref instr 6 :end 0) #2r0100011))
 		(isSystem (= (bref instr 6 :end 0) #2r1110011))
 
-		;; intermediate formats
+		;; immediate formats
 		(Uimm (make-bitfields (bref instr 31)
 				      (bref instr 30 :end 12)
 				      (extend-bits 0 12)))
