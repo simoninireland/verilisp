@@ -1,4 +1,4 @@
-# Makefile for RISC-V core in RTLisp
+# Makefile for partial RISC-V core in Verilisp
 #
 # Copyright (C) 2024--2025, Simon Dobson
 #
