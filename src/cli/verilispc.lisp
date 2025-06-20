@@ -455,7 +455,7 @@ to skip files with errors."
 			(format str (filename-header fn))
 			(format str "~%"))
 
-		      (synthesise-module module str)
+		      (synthesise/vl module str)
 		      (format str "~%")))))
 
 	    ;; generate the Verilog for each module
@@ -472,7 +472,7 @@ to skip files with errors."
 			(format str (filename-header fn))
 			(format str "~%")
 
-			(synthesise-module module str))))))))
+			(synthesise/vl module str))))))))
 
     ;; if we get here we didn't bail-out earlier, so do a successful exit
     (uiop:quit 0)))
