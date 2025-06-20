@@ -156,27 +156,27 @@ of a larger compilation process."
 (defun elaborate/vl (form)
   "Elaborate FORM as a module.
 
-This runs all the relevant compiler nanopasses, returning a list
-consisting of the module interface type and the fully-elaborated
+FORM should be a program in core Verilisp, with macros expanded
+and frames applied, as done by EXCAND/VL.
+
+This function runs all the relevant compiler nanopasses, returning a
+list consisting of the module interface type and the fully-elaborated
 module ready for synthesis.
 
 This function is not usually called directly, but is called as part
 of a larger compilation process."
-  ;; expand extensions into core language
-  (let ((core (expand/vl form)))
+  ;; Typecheck and infer
+  (let* ((intf (typecheck form)))
 
-    ;; typecheck
-    (let* ((intf (typecheck core)))
+    ;; add dependencies
+    ;; Should this be part of expansion, rather than elaboration?
+    (dependencies form)
 
-      ;; add dependencies
-      ;; Should this be part of expansion, and appear before typechecking?
-      (dependencies core)
+    ;; simplify
+    (let* ((floated (car (float-let-blocks form)))
+	   (simplified (simplify-progn floated)))
 
-      ;; simplify
-      (let* ((floated (car (float-let-blocks core)))
-	     (simplified (simplify-progn floated)))
-
-	(list intf simplified)))))
+      (list intf simplified))))
 
 
 (defmacro defmodule/vl (modname decls &body body)
@@ -193,14 +193,14 @@ synthesis. Its type is added to *MODULE-INTERFACES* for importing.
 Duplicate module names will cause a DUPLICATE-MODULE error.
 
 Return the name of the newly-defined module."
-  (with-gensyms (module rc intf elaborated)
+  (with-gensyms (module expanded intf elaborated)
     (let ((code `(module ,modname ,decls
 			 ,@body)))
       `(let* ((,module ',code)
-	      (,rc (elaborate/vl ,module)))
+	      (,expanded (expand/vl ,module)))
 
 	 (destructuring-bind (,intf ,elaborated)
-	     ,rc
+	     (elaborate/vl ,expanded)
 
 	   ;; typecheck and elaborate the expanded module
 	   ;; add type to interfaces available for import
