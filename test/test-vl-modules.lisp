@@ -64,6 +64,7 @@
 
 (test test-synthesise-module-late-init
   "Test we can synthesise modules with late initialisation."
+  (vl::clear-module-registry)
   (vl::clear-module-late-initialisation)
 
   (let ((p (vl:expand/vl '(vl::module test ((clk :type (unsigned-byte 1) :direction :in)
@@ -77,6 +78,26 @@
 
     (vl:typecheck p)
     (is (vl:synthesise p)))
+
+  ;; make sure synthesis cleared the late intiialisation queue
+  (is (not (vl::module-late-initialisation-p))))
+
+
+(test test-synthesise-module-from-defmodule
+  "Test we can synthesise directly from a DEFMODULE/VL."
+  (vl::clear-module-late-initialisation)
+
+  (vl::defmodule/vl test/998 ((clk :type (unsigned-byte 1) :direction :in)
+			      (a   :type (unsigned-byte 8) :direction :in)
+			      (b   :type (unsigned-byte 4) :direction :in)
+			      &key e (f 45))
+
+    (let ((x 0 :type (unsigned-byte 8))
+	  (a (make-array '(8) :initial-contents (:file "test.hex"))))
+      (vl::@ (vl::posedge clk)
+	     (setf x (aref a 4)))))
+
+  (is (vl:synthesise (vl::get-module 'test/998)))
 
   ;; make sure synthesis cleared the late intiialisation queue
   (is (not (vl::module-late-initialisation-p))))
