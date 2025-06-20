@@ -143,18 +143,19 @@ expression in the current Lisp environment, *not* in Verilisp's
 environment. This means that parameter values can't be defined in terms
 of other parameter values."
   (declare (optimize debug))
-  (if (listp decl)
-      ;; standard declaration
-      (destructuring-bind (n v)
-	  decl
+  (with-current-form decl
+    (if (listp decl)
+	;; standard declaration
+	(destructuring-bind (n v)
+	    decl
 
-	(let ((val (eval v)))
-	  (declare-variable n `((:initial-value ,val)
-				(:as :parameter)))))
+	  (let ((val (eval v)))
+	    (declare-variable n `((:initial-value ,val)
+				  (:as :parameter)))))
 
-      ;; naked paramater
-      (declare-variable decl `((:initial-value 0)
-			       (:as :parameter)))))
+	;; naked paramater
+	(declare-variable decl `((:initial-value 0)
+				 (:as :parameter))))))
 
 
 (defun typecheck-module-params (decls)
@@ -164,27 +165,28 @@ of other parameter values."
 
 (defun typecheck-module-arg (decl)
   "Type-check a module argument declaration DECL."
-  (destructuring-bind (n &key
-			   type
-			   width
-			   (direction :in)
-			   (as :wire))
-      decl
-    (ensure-direction direction)
+  (with-current-form decl
+    (destructuring-bind (n &key
+			     type
+			     width
+			     (direction :in)
+			     (as :wire))
+	decl
+      (ensure-direction direction)
 
-    ;; if we have a width, it's a shortcut for unsigned-byte
-    (if width
-	(let* ((w (eval-in-static-environment width))
-	       (ty `(unsigned-byte ,w)))
-	  (if type
-	      ;; if we have a type, it must match
-	      (ensure-subtype ty type)
+      ;; if we have a width, it's a shortcut for unsigned-byte
+      (if width
+	  (let* ((w (eval-in-static-environment width))
+		 (ty `(unsigned-byte ,w)))
+	    (if type
+		;; if we have a type, it must match
+		(ensure-subtype ty type)
 
-	      ;; if not, re-assign is to the shortcut
-	      (setq type ty))))
+		;; if not, re-assign is to the shortcut
+		(setq type ty))))
 
-    (declare-variable n `((:type ,type)
-			  (:direction ,direction)))))
+      (declare-variable n `((:type ,type)
+			    (:direction ,direction))))))
 
 
 (defun typecheck-module-args (decls)
