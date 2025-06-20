@@ -27,3 +27,23 @@
   "Test we can type-check equality."
   (is (subtypep (vl:typecheck (vl:expand/vl '(= 1 2)))
 		'(unsigned-byte 1))))
+
+
+(test test-typecheck-inequality
+  "Test we can type-check inequality."
+  (is (subtypep (vl:typecheck (vl:expand/vl '(/= 1 2)))
+		'(unsigned-byte 1))))
+
+
+(test test-typecheck-gt-lt
+  "Test we can type-check greater-than and less-than."
+  (is (subtypep (vl:typecheck (vl:expand/vl '(< 1 2)))
+		'(unsigned-byte 1)))
+  (is (subtypep (vl:typecheck (vl:expand/vl '(> 1 2)))
+		'(unsigned-byte 1))))
+
+
+(test test-typecheck-asserted
+  "Test we can type-check assertedness."
+  (is (subtypep (vl:typecheck (vl:expand/vl '(vl:asserted-p 1)))
+		'(unsigned-byte 1))))

@@ -27,8 +27,7 @@ in many applications."
   (ensure-subtype ty 'bit))
 
 
-
-;; ---------- Equality ----------
+;; ---------- Equality and inequality ----------
 
 (defmethod typecheck-sexp ((fun (eql '=)) args)
   (destructuring-bind (l r)
@@ -70,6 +69,23 @@ in many applications."
     (as-literal ")")))
 
 
+;; ---------- Assertedness ----------
+
+(defmethod typecheck-sexp ((fun (eql 'asserted-p)) args)
+  (destructuring-bind (v)
+      args
+    (let ((ty (typecheck v)))
+      '(unsigned-byte 1))))
+
+
+(defmethod synthesise-sexp ((fun (eql 'asserted-p)) args)
+  (destructuring-bind (v)
+      args
+    (as-literal "(")
+    (synthesise v)
+    (as-literal " != 0")))
+
+
 ;; ---------- Maths ----------
 
 (defmethod typecheck-sexp ((fun (eql '<)) args)
@@ -87,5 +103,24 @@ in many applications."
     (as-literal "(")
     (synthesise l)
     (as-literal " < ")
+    (synthesise r)
+    (as-literal ")")))
+
+
+(defmethod typecheck-sexp ((fun (eql '>)) args)
+  (destructuring-bind (l r)
+      args
+    (ensure-fixed-width (typecheck l))
+    (ensure-fixed-width (typecheck r))
+
+    '(unsigned-byte 1)))
+
+
+(defmethod synthesise-sexp ((fun (eql '>)) args)
+  (destructuring-bind (l r)
+      args
+    (as-literal "(")
+    (synthesise l)
+    (as-literal " > ")
     (synthesise r)
     (as-literal ")")))

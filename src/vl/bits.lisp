@@ -109,7 +109,6 @@
     (foldr #'union (mapcar #'free-variables (remove-nulls (list var start end width))) '())))
 
 
-
 (defmethod synthesise-sexp ((fun (eql 'bref)) args)
   (destructuring-bind (var start &key end width)
       args
