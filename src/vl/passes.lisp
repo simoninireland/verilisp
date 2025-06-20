@@ -137,8 +137,14 @@ Return the new decls. if DECLS was originally NULL, this will be
 a new list containing the frame; if not, then the frame will have
 been added to the end destructively."
   (if (null decls)
-      (list (list 'local-frame f))
-      (setf (cdr (last decls)) (list (list 'local-frame f)))))
+      ;; no decls, return a new list
+      (setf decls (list (list 'local-frame f)))
+
+      ;; existing decls, append the frame
+      (setf (cdr (last decls)) (list (list 'local-frame f))))
+
+  ;; return the decls
+  decls)
 
 
 (defun get-local-frame-and-decls (decls)
