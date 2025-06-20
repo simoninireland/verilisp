@@ -17,11 +17,11 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(defmodule clockworks ((clk-in   :type (unsigned-byte 1) :direction :in)
-		       (reset-in :type (unsigned-byte 1) :direction :in)
-		       (clk      :type (unsigned-byte 1) :direction :out)
-		       (reset    :type (unsigned-byte 1) :direction :out)
-		       &key (slow 0))
+(defmodule/vl clockworks ((clk-in   :type (unsigned-byte 1) :direction :in)
+			  (reset-in :type (unsigned-byte 1) :direction :in)
+			  (clk      :type (unsigned-byte 1) :direction :out)
+			  (reset    :type (unsigned-byte 1) :direction :out)
+			  &key (slow 0))
 
   ;; clock divider
   (let ((slow-clk 0 :type (unsigned-byte (1+ slow))))
