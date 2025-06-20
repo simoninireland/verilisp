@@ -1,0 +1,10 @@
+set_io leds_out[0] 44
+set_io leds_out[1] 45
+set_io leds_out[2] 47
+set_io leds_out[3] 48
+set_io leds_out[4] 56
+
+set_io clk_in 21
+
+set_io txd  8
+set_io rxd  9
