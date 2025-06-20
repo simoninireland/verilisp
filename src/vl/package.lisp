@@ -70,6 +70,7 @@
    #:module
    #:<<
    #:>>
+   #:asserted-p
    #:@
    #:posedge
    #:negedge
@@ -83,9 +84,6 @@
    #:let-wires
    #:let-registers
    #:let-constants
-   #:state-machine
-   #:next
-   #:exit
 
    ;; DSL functions
    #:add-frames
