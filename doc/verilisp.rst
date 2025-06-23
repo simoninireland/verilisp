@@ -48,6 +48,7 @@ on the types passed to operators.
    core/control-flow
    core/tagbody
    core/arrays
+   core/coercion-casting
 
 
 Extended forms

@@ -10,5 +10,6 @@ modify it.
 .. toctree::
     :maxdepth: 1
 
-    implementation/tagbody.rst
-    implementation/constraints.rst
+    implementation/tagbody
+    implementation/constraints
+    implementation/coercion-casting
