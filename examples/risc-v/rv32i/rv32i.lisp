@@ -59,12 +59,13 @@
 
 
 ;; Simple ALU
-(defmodule/vl rv321-alu ((a       :direction :in  :width 32)
-			 (b       :direction :in  :width 32)
-			 (add/sub :direction :in  :width 1)
-			 (op      :direction :in  :width 3)
-			 (shift   :direction :in  :width 5)
-			 (c       :direction :out :width 32 ))
+(defmodule/vl rv321-alu ((a                :direction :in  :width 32)
+			 (b                :direction :in  :width 32)
+			 (add/sub          :direction :in  :width 1)
+			 (sign-extending-p :direction :in  :width 1)
+			 (op               :direction :in  :width 3)
+			 (shift            :direction :in  :width 5)
+			 (c                :direction :out :width 32 ))
   (@ (*)
      (case op
        (#2r000
@@ -79,13 +80,13 @@
 
        (#2r010
 	;; less-than unsigned
-	(setq c  (< (coerce a '(unsigned-byte 32)) ;TODO: TEST ME
-		    (coerce b '(unsigned-byte 32)))))
+	(setq c  (< (the '(unsigned-byte 32) a) ;TODO: TEST ME
+		    (the '(unsigned-byte 32) b))))
 
        (#2r011
 	;; less-than signed
-	(setq c  (< (coerce a '(signed-byte 32)) ;TODO: TEST ME
-		    (coerce b '(signed-byte 32)))))
+	(setq c  (< (the '(signed-byte 32) a) ;TODO: TEST ME
+		    (the '(signed-byte 32) b))))
 
        (#2r100
 	;; exclusive or
@@ -93,9 +94,9 @@
 
        (#2r101
 	;; right shift, logical or arithmetic
-	(setq c (if (asserted-p add/sub)
+	(setq c (if (asserted-p sign-extending-p)
 		    (>> a b) ;TODO: FIX ME: get the sign extension right
-		    (>> a (- b)))))
+		    (>> a b))))
 
        (#2r110
 	;; or
@@ -183,24 +184,26 @@
 	(with-bitfields ((funct7 7) (rs2id 5) (rs1id 5) (funct3 3) (rdid 5) (opcode 7))
 	    instr
 
-	  (let-wires ((Uimm (make-bitfields (bref instr 31)
-					    (bref instr 30 :end 12)
-					    (extend-bits 0 12)))
-		      (Iimm (make-bitfields (extend-bits (bref instr 31) 21)
-					    (bref instr 30 :end 20)))
-		      (Simm (make-bitfields (extend-bits (bref instr 31) 21)
-					    (bref instr 30 :end 25)
-					    (bref instr 11 :end 7)))
-		      (Bimm (make-bitfields (extend-bits (bref instr 31) 20)
-					    (bref instr 7)
-					    (bref instr 30 :end 25)
-					    (bref instr 11 :end 8)
-					    (extend-bits 0 1)))
-		      (Jimm (make-bitfields (extend-bits (bref instr 31) 12)
-					    (bref instr 19 :end 12)
-					    (bref instr 20)
-					    (bref instr 30 :end 21)
-					    (extend-bits 0 1))))
+	  (let-wires ((Uimm (coerce (the '(signed-byte 12) (bref instr 31 :end 12))
+				    '(signed-byte 32)))
+		      (Iimm (coerce (the '(signed-byte 12) (bref instr 31 :end 20))
+				    '(signed-byte 32)))
+		      (Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
+									   (bref instr 30 :end 25)
+									   (bref instr 11 :end 7)))
+				    '(signed-byte 32)))
+		      (Bimm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
+									   (bref instr 7)
+									    (bref instr 30 :end 25)
+									    (bref instr 11 :end 8)
+									    0))
+				    '(signed-byte 32)))
+		      (Jimm (coerce (the '(signed-byte 22) (make-bitfields (bref instr 31)
+									   (bref instr 19 :end 12)
+									   (bref instr 20)
+									   (bref instr 30 :end 21)
+									   0))
+				    '(signed-byte 32))))
 
 	    ;; state machine
 	    (@ (posedge clk)
