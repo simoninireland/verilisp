@@ -127,6 +127,7 @@
    #:direction-mismatch
    #:type-mismatch
    #:coercion-mismatch
+   #:precision-mismatch
    #:bitfield-mismatch
    #:shape-mismatch
    #:state-machine-mismatch

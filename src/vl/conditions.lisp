@@ -335,6 +335,26 @@ caused by the assignment."))
 Coercion only currently works between fixed-width types."))
 
 
+(define-condition precision-mismatch (vl-warning)
+  ((received
+    :documentation "The type we received"
+    :initarg :received
+    :reader received-type)
+   (want
+    :documentation "The type we want."
+    :initarg :want
+    :reader wanted-type))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Can'Potential loss of precision coercing ~a to ~a"
+					       (received-type c)
+					       (wanted-type c))
+				       c str)))
+  (:documentation "Condition signalled when a coercion may cause loss of precision.
+
+This happens when a value is coerced to a type with too few bits to represent
+it faithfully."))
+
+
 (define-condition bitfield-mismatch (vl-warning)
   ((pattern
     :documentation "The bitfield pattern."
