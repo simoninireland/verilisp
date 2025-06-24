@@ -22,14 +22,18 @@
 # Base address for code to be located
 BASE_ADDRESS = 0x000000
 
+# Docker container tag
+# Leave this blank to run the toolchain native; provide a tag to run in a container
+RISCV_CONTAINER_TAG = risc-v
+
 
 # ---------- Tools ----------
 
 # Tools
-AS = riscv64-linux-gnu-as
-LD = riscv64-linux-gnu-ld
-GCC = riscv64-linux-gnu-gcc
-OBJDUMP = riscv64-linux-gnu-objdump
+AS = $(CROSS_COMPILER_PREFIX)-as
+LD = $(CROSS_COMPILER_PREFIX)-ld
+GCC =$(CROSS_COMPILER_PREFIX)-gcc
+OBJDUMP = $(CROSS_COMPILER_PREFIX)-objdump
 GREP = grep
 BASH = bash
 SED = sed
@@ -42,16 +46,25 @@ AS_OPTS = -march=rv32i -mabi=ilp32 -mno-relax -fPIC
 LD_OPTS = -T bram.ld -m elf32lriscv -nostdlib
 GCC_OPTS = -nostdlib $(AS_OPTS) -static -Wl,--section-start=.text=$(BASE_ADDRESS)
 
+# Command to run tools in a container (if requested)
+ifneq ($(RISCV_CONTAINER_TAG),)
+RISCV_IN_CONTAINER = $(DOCKER) run -it --rm --mount type=bind,source=`pwd`,target=/work $(RISCV_CONTAINER_TAG)
+CROSS_COMPILER_PREFIX=riscv-none-elf
+else
+# Change to reflect the prefix of the locally-installed toolchain
+CROSS_COMPILER_PREFIX=riscv64-linux-gnu
+endif
+
 
 # ---------- Implicit rules ----------
 
 .SUFFIXES: .s .o .hex
 
 .s.o:
-	$(GCC) $(GCC_OPTS) $*.s -o $*.o
+	$(RISCV_IN_CONTAINER) $(GCC) $(GCC_OPTS) $*.s -o $*.o
 
 .o.hex:
-	$(OBJDUMP) -h $*.o | \
+	$(RISCV_IN_CONTAINER) $(OBJDUMP) -h $*.o | \
 	$(GREP) .text |\
 	$(SED) -e 's|\s\+|\t|g' -e 's|^\s\+||g'| \
 	$(AWK) '{print "$(DD) if=$*.o bs=1 count=$$((0x"$$3")) skip=$$((0x"$$6")) status=none";}' | \

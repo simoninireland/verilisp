@@ -25,7 +25,7 @@ FPGA_PACKAGE = tq144
 
 # Docker container tag
 # Leave this blank to run the toolchain native; provide a tag to run in a container
-CONTAINER_TAG = icestorm
+ICESTORM_CONTAINER_TAG = icestorm
 
 
 # ---------- Tools ----------
@@ -57,9 +57,10 @@ FPGA_GENERATED += $(foreach stem,$(FPGA_STEMS),$(stem).v $(stem).asc $(stem).bin
 
 # Command to run tools in a container (if requested)
 # (Container must run privileged to be able to upload to the device.)
-ifneq ($(CONTAINER_TAG),)
-IN_CONTAINER = $(DOCKER) run -it --rm --privileged --mount type=bind,source=`pwd`,target=/work $(CONTAINER_TAG)
+ifneq ($(ICESTORM_CONTAINER_TAG),)
+ICESTORM_IN_CONTAINER = $(DOCKER) run -it --rm --privileged --mount type=bind,source=`pwd`,target=/work $(ICESTORM_CONTAINER_TAG)
 endif
+
 
 # ---------- Implicit rules ----------
 
@@ -69,10 +70,10 @@ endif
 	$(VERILISPC) $(VERILISPC_OPTS) -o $*.v $(SOURCES)
 
 .v.json:
-	$(IN_CONTAINER) $(SYNTH) $(SYNTH_OPTS) -p "synth_ice40 -top $(TOPMODULE) -json $*.json" $<
+	$(ICESTORM_IN_CONTAINER) $(SYNTH) $(SYNTH_OPTS) -p "synth_ice40 -top $(TOPMODULE) -json $*.json" $<
 
 .json.asc:
-	$(IN_CONTAINER) $(PNR) $(PNR_OPTS) --$(FPGA_DEVICE) --package $(FPGA_PACKAGE) --json $*.json --pcf $*.pcf --asc $*.asc
+	$(ICESTORM_IN_CONTAINER) $(PNR) $(PNR_OPTS) --$(FPGA_DEVICE) --package $(FPGA_PACKAGE) --json $*.json --pcf $*.pcf --asc $*.asc
 
 .asc.bin:
-	$(IN_CONTAINER) $(PACK) $< $*.bin
+	$(ICESTORM_IN_CONTAINER) $(PACK) $< $*.bin

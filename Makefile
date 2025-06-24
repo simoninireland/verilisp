@@ -38,6 +38,10 @@ SOURCES_DOC_BUILD_DIR = doc/_build
 BINARIES = verilispc
 BINARIES_BUILD_DIR = bin
 
+CONTAINERS = \
+	lib/lattice \
+	lib/risc-v
+
 
 # ----- Tools -----
 
@@ -98,6 +102,10 @@ bin:
 doc: env $(SOURCES_ASDF) $(SOURCES_DOC) $(SOURCES_DOC_CONF)
 	$(ACTIVATE) && $(RUN_SPHINX_HTML)
 
+# Build tool containers
+containers:
+	for c in $(CONTAINERS); do (cd $$c && make); done
+
 # Build a documentation Python venv
 env: $(VENV)
 
@@ -145,6 +153,7 @@ TAGS:
 define HELP_MESSAGE
 Available targets:
    make bin          build the binaries
+   make containers   build the tool containers
    make doc          build the API documentation using Sphinx
    make release      make a release
    make clean        clean-up the build
