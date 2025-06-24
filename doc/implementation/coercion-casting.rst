@@ -84,9 +84,11 @@ synthesises the code needed to perform the conversion.
 It's permissible to omit the width of the type being coerced to, for
 example:
 
-(let ((a (make-bitfields 1 1 0 0 1 1 0 1)))
-  (let ((b (coerce a 'signed)))
-    ...)
+.. code-block:: lisp
+
+   (let ((a (make-bitfields 1 1 0 0 1 1 0 1)))
+     (let ((b (coerce a 'signed)))
+       ...)
 
 This will give ``a`` the type ``(unsigned 8)``, and then coerce it to
 type ``(signed 8)``, with a warning of a possible loss of precision.
