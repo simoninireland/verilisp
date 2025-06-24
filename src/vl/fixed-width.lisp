@@ -24,8 +24,15 @@
 (defun fixed-width-p (ty)
   "Test whether TY is a fixed-width type."
   (and (not (null ty))
-       (or (subtypep ty 'signed-byte)
-	   (subtypep ty 'unsigned-byte))))
+
+       ;; we need to test the tags, not the widths, to avoid
+       ;; issues with SUBTYPEP evaluating the widths of absurdly
+       ;; long numbers
+       (let ((tytag (if (listp ty)
+			(car ty)
+			ty)))
+	 (or (subtypep tytag 'signed-byte)
+	     (subtypep tytag 'signed-byte)))))
 
 
 (defun signed-byte-p (ty)
