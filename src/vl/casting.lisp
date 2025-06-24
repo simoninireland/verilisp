@@ -43,6 +43,8 @@
 (defmethod typecheck-sexp ((fun (eql 'coerce)) args)
   (destructuring-bind (val ty)
       args
+    (unquote ty)
+
     (let ((vty (typecheck val)))
       (if (and (fixed-width-p ty)
 	       (fixed-width-p vty))
@@ -61,6 +63,8 @@
 
   (destructuring-bind (val ty)
       args
+    (unquote ty)
+
     (let* ((vty (typecheck val))
 	   (tyw (bitwidth-type (car ty) (cdr ty)))
 	   (vtyw (bitwidth-type (car vty) (cdr vty))))
