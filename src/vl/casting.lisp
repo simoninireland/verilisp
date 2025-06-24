@@ -26,6 +26,8 @@
 (defmethod typecheck-sexp ((fun (eql 'the)) args)
   (destructuring-bind (ty val)
       args
+    (unquote ty)
+
     (let ((tyval (typecheck val)))
       (ensure-subtype tyval ty)
 
