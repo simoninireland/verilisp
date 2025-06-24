@@ -124,3 +124,41 @@ in many applications."
     (as-literal " > ")
     (synthesise r)
     (as-literal ")")))
+
+
+(defmethod typecheck-sexp ((fun (eql '<=)) args)
+  (destructuring-bind (l r)
+      args
+    (ensure-fixed-width (typecheck l))
+    (ensure-fixed-width (typecheck r))
+
+    '(unsigned-byte 1)))
+
+
+(defmethod synthesise-sexp ((fun (eql '<=)) args)
+  (destructuring-bind (l r)
+      args
+    (as-literal "(")
+    (synthesise l)
+    (as-literal " <= ")
+    (synthesise r)
+    (as-literal ")")))
+
+
+(defmethod typecheck-sexp ((fun (eql '>=)) args)
+  (destructuring-bind (l r)
+      args
+    (ensure-fixed-width (typecheck l))
+    (ensure-fixed-width (typecheck r))
+
+    '(unsigned-byte 1)))
+
+
+(defmethod synthesise-sexp ((fun (eql '>=)) args)
+  (destructuring-bind (l r)
+      args
+    (as-literal "(")
+    (synthesise l)
+    (as-literal " >= ")
+    (synthesise r)
+    (as-literal ")")))
