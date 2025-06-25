@@ -37,6 +37,8 @@
   (:export
    ;; types
    #:bitwidth
+   #:construct-type
+   #:deconstruct-type
    #:subtype-p
    #:subtype-type
    #:fixed-width-p

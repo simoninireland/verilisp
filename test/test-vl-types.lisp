@@ -168,7 +168,7 @@
 
 ;; ---------- Least upper-bounds of types ----------
 
-(test test-test-lub-fixed-width
+(test test-lub-fixed-width
   "Test we can form LUBs of fixed-with types."
 
   ;; unsigned vs unsigned
@@ -216,3 +216,37 @@
 	     '(unsigned-byte 1)))
   (is (equal (vl:lub 'bit '(unsigned-byte 1))
 	     '(unsigned-byte 1))))
+
+
+(test test-lub-fold
+  "Test we can correctly fold LUB across several types."
+  (is (equal (vl:lub '(unsigned-byte 8)
+		     '(unsigned-byte 16)
+		     '(unsigned-byte 32)
+		     '(unsigned-byte 8))
+	     '(unsigned-byte 32)))
+  (is (equal (vl:lub '(unsigned-byte 8)
+		     '(unsigned-byte 16)
+		     '(signed-byte 32)
+		     '(unsigned-byte 8))
+	     '(signed-byte 32)))
+
+  ;; include the lattice types
+  (is (equal (vl:lub '(unsigned-byte 8)
+		     '(unsigned-byte 16)
+		     nil
+		     '(unsigned-byte 8))
+	     '(unsigned-byte 16)))
+  (is (equal (vl:lub '(unsigned-byte 8)
+		     '(unsigned-byte 16)
+		     '(unsigned-byte 32)
+		     '(unsigned-byte 8)
+		     t)
+	     t))
+   (is (equal (vl:lub '(unsigned-byte 8)
+		     '(unsigned-byte 16)
+		     '(unsigned-byte 32)
+		     nil
+		     '(unsigned-byte 8)
+		     t)
+	     t)))

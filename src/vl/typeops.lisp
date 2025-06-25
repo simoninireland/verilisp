@@ -23,7 +23,10 @@
 ;; ---------- Sub-type checking ----------
 
 (defun deconstruct-type (ty)
-  "Deconstruct the type specifier TY into tag and arguments."
+  "Deconstruct the type specifier TY into tag and arguments.
+
+If TY is a naked symbol then the arguments part is nil; otherwise
+it contains the arguments."
   (if (listp ty)
       (list (car ty) (cdr ty))
       (list ty '())))
@@ -148,26 +151,32 @@ The default LUB of two types is T, the top type.")
     t))
 
 
-(defun lub (ty1 ty2)
-  "Return the least upper-bound of types TY1 and TY2 in the current environment.
+(defun lub (ty1 ty2 &rest tys)
+  "Return the least upper-bound of types TY1 and TY2 (and any further types in TYS).
 
 By default the upper bound is T, and if either is null the
 upper bound is the other. For other combinations the type tag
 is extracted and used in a call to LUB-TYPE.
 
 Type parameters are not expanded by default."
-  (cond ((null ty1)
-	 ty2)
-	((null ty2)
-	 ty1)
-	(t
-	 (destructuring-bind (ty1tag ty1args)
-	     (deconstruct-type ty1)
+  (let ((lubtype (cond ((null ty1)
+		 ty2)
+		((null ty2)
+		 ty1)
+		(t
+		 (destructuring-bind (ty1tag ty1args)
+		     (deconstruct-type ty1)
 
-	   (destructuring-bind (ty2tag ty2args)
-	       (deconstruct-type ty2)
+		   (destructuring-bind (ty2tag ty2args)
+		       (deconstruct-type ty2)
 
-	     (lub-type tyt1ag ty1args ty2tag ty2args))))))
+		     (lub-type ty1tag ty1args ty2tag ty2args)))))))
+
+    (if (null tys)
+	lubtype
+
+	;; fold across the remaining types
+	(apply #'lub (cons lubtype tys)))))
 
 
 ;; ---------- Type parameter expansion ----------
