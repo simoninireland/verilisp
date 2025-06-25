@@ -165,14 +165,20 @@ undefined."
 
 The property is updated if it is defined, and created if not.
 An UNKNOWN-VARIABLE error is signalled if N is undefined."
-  (let ((props (get-frame-properties n env)))
+  (declare (optimize debug))
+
+  (if-let ((props (get-frame-properties n env)))
     (if-let ((m (assoc prop props)))
       ;; property exists, update it
       (setf (cdr m) (list v))
 
-      ;; property does not exist, add it
+      ;; append new property to the list
       (let ((e (last props)))
-	(setf (cdr e) (list (list prop v)))))))
+	(setf (cdr e) (list (list prop v)))))
+
+    ;; empty property list, update it with just this property
+    (let ((kv (get-frame-properties-assoc n env)))
+      (setf (cdr kv) (list (list (list prop v)))))))
 
 
 (defun get-frame-declaring (n env)

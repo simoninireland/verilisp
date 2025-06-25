@@ -25,17 +25,17 @@ q
 
 (test test-if-then-else
   "Test we can check a complete if form."
-  (is (subtypep (vl:typecheck '(if 1
-				 (+ 1 2)
-				 (+ 16 8)))
-		'(unsigned-byte 6))))
+  (is (vl:subtype-p (vl:typecheck '(if 1
+				    (+ 1 2)
+				    (+ 16 8)))
+		    '(unsigned-byte 6))))
 
 
 (test test-if-then
   "Test we can check an incomplete if form."
-  (is (subtypep (vl:typecheck '(if 1
-				 (+ 1 2)))
-		 '(unsigned-byte 3))))
+  (is (vl:subtype-p (vl:typecheck '(if 1
+				    (+ 1 2)))
+		    '(unsigned-byte 3))))
 
 
 (test test-synthesise-if-statement
@@ -66,8 +66,8 @@ q
 
   ;; no else branch
   (let ((p (vl:expand/vl '(let ((a 0 :width 4))
-			(if (logand 1 1)
-			    (setf a (+ 1 2)))))))
+			   (if (logand 1 1)
+			       (setf a (+ 1 2)))))))
     (vl:typecheck p)
     (is (vl:synthesise p))))
 
@@ -96,16 +96,16 @@ q
 
 (test test-case-compatible
   "Test we can typecheck cases with compatible clauses."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 12)
-						   b)
-					      (case a
-						(1
-						 (setf b 23))
-						(2
-						 (setf b 34))
-						(t
-						 (setf b 0))))))
-		'(unsigned-byte 8))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 12)
+						       b)
+						  (case a
+						    (1
+						     (setf b 23))
+						    (2
+						     (setf b 34))
+						    (t
+						     (setf b 0))))))
+		    '(unsigned-byte 8))))
 
 
 (test test-case-incompatible

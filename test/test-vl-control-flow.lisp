@@ -26,28 +26,28 @@
 (test test-progn-type
   "Test we can typecheck a PROGN correctly."
   (vl:with-new-frame
-    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 12)
-						     (b 34))
-						(+ a b))))
-		  '(unsigned-byte 8)))
+    (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 12)
+							 (b 34))
+						    (+ a b))))
+		      '(unsigned-byte 8)))
 
-    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 12)
-						     (b 34))
-						(+ a b)
-						(- 8))))
-		  '(signed-byte 8)))
+    (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 12)
+							 (b 34))
+						    (+ a b)
+						    (- 8))))
+		      '(signed-byte 8)))
 
     ;; the larger of the two arms
-    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 7)
-						     (b 34))
-						(if a
-						    (progn
-						      256
-						      (+ a 1))
-						    (progn
-						      512
-						      (+ a 8))))))
-		  '(unsigned-byte 5)))))
+    (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 7)
+							 (b 34))
+						    (if a
+							(progn
+							  256
+							  (+ a 1))
+							(progn
+							  512
+							  (+ a 8))))))
+		      '(unsigned-byte 5)))))
 
 
 (test test-synthesise-progn
@@ -95,46 +95,46 @@
 (test test-typecheck-at
   "Test we can type-check triggered blocks."
   ;; single wire sensitivity
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((clk 0 :as :wire)
-						   (a 0))
-					      (vl::@ ((vl::posedge clk))
-					       (setf a 1)))))
-		'(unsigned-byte 1)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((clk 0 :as :wire)
+						       (a 0))
+						  (vl::@ ((vl::posedge clk))
+						   (setf a 1)))))
+		    '(unsigned-byte 1)))
 
   ;; multiple wires sensitivity
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((clk 0 :as :wire)
-						   (rst 0 :as :wire)
-						   (a 0))
-					      (vl::@ ((vl::posedge clk) (vl::negedge rst))
-					       (setf a 1)))))
-		'(unsigned-byte 1))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((clk 0 :as :wire)
+						       (rst 0 :as :wire)
+						       (a 0))
+						  (vl::@ ((vl::posedge clk) (vl::negedge rst))
+						   (setf a 1)))))
+		    '(unsigned-byte 1))))
 
 
 (test test-typecheck-edges
   "Test we can type-check edge trigger expressions."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((clk 0 :as :wire)
-						   (a 0))
-					      (vl::@ ((vl::posedge clk))
-					       (setq a clk)))))
-		'(unsigned-byte 1))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((clk 0 :as :wire)
+						       (a 0))
+						  (vl::@ ((vl::posedge clk))
+						   (setq a clk)))))
+		    '(unsigned-byte 1))))
 
 
 (test test-typecheck-wire-singleton
   "Test we can type-check single-wire triggers."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((clk 0 :as :wire)
-						   (a 0))
-					      (vl::@ clk
-					       (setq a clk)))))
-		'(unsigned-byte 1))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((clk 0 :as :wire)
+						       (a 0))
+						  (vl::@ clk
+						   (setq a clk)))))
+		    '(unsigned-byte 1))))
 
 
 (test test-typecheck-wire-trigger
   "Test we can type-check an edge trigger as a singleton, not in a list."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((clk 0 :as :wire)
-						   (a 0))
-					      (vl::@ (vl::posedge clk)
-					       (setq a clk)))))
-		'(unsigned-byte 1))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((clk 0 :as :wire)
+						       (a 0))
+						  (vl::@ (vl::posedge clk)
+						   (setq a clk)))))
+		    '(unsigned-byte 1))))
 
 
 (test test-synthesise-edges

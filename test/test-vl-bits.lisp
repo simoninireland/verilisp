@@ -25,55 +25,55 @@
 
 (test test-width-bit
   "Test we can extract a bit from a value."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-				  (vl::bref a 1))))
-		'(unsigned-byte 1))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
+						  (vl::bref a 1))))
+		    '(unsigned-byte 1))))
 
 
 (test test-width-bits
   "Test we can extract bits from a value."
   ;; single-bit equivalents
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-				 (vl::bref a 1 :end 1))))
-		'(unsigned-byte 1)))
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-				  (vl::bref a 1 :width 1))))
-		'(unsigned-byte 1)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
+						  (vl::bref a 1 :end 1))))
+		    '(unsigned-byte 1)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
+						  (vl::bref a 1 :width 1))))
+		    '(unsigned-byte 1)))
 
   ;; multiple bits
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-				  (vl::bref a 1 :width 2))))
-		'(unsigned-byte 2)))
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-				  (vl::bref a 1 :end 0))))
-		'(unsigned-byte 2)))
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a #2r10110 :width 8))
-				  (vl::bref a 7))))
-		'(unsigned-byte 8)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
+						  (vl::bref a 1 :width 2))))
+		    '(unsigned-byte 2)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
+						  (vl::bref a 1 :end 0))))
+		    '(unsigned-byte 2)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110 :width 8))
+						  (vl::bref a 7))))
+		    '(unsigned-byte 8)))
 
   ;; matching and non-matching explicit widths
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-				  (vl::bref a 4 :end 2 :width 3))))
-		'(unsigned-byte 3)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
+						  (vl::bref a 4 :end 2 :width 3))))
+		    '(unsigned-byte 3)))
   (signals (vl:type-mismatch)
     (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-		      (vl::bref a 4 :end 2 :width 4))))))
+				  (vl::bref a 4 :end 2 :width 4))))))
 
 
 (test test-positive-start-end-width
   "Test that we detect non-positive values."
   (signals (vl:value-mismatch)
     (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-		      (vl::bref a 4 :end -1)))))
+				  (vl::bref a 4 :end -1)))))
   (signals (vl:value-mismatch)
     (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-		      (vl::bref a 4 :width -1)))))
+				  (vl::bref a 4 :width -1)))))
   (signals (vl:value-mismatch)
     (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-		      (vl::bref a -2 :end 0)))))
+				  (vl::bref a -2 :end 0)))))
   (signals (vl:value-mismatch)
     (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-		      (vl::bref a -2))))))
+				  (vl::bref a -2))))))
 
 
 (test test-bit-dependencies

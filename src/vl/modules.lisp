@@ -23,11 +23,18 @@
 
 ;; ---------- Module interfaces ----------
 
-(deftype module-interface (&optional (parameters ()) (arguments ()))
+(deftype module-interface (parameters arguments frame)
   "The type of module interfaces.
 
-Interfaces consist of two lists, of parameters and arguments. At present
-we don't define any sub-typing relationships."
+Interfaces consist of two lists, of parameters and arguments, and the
+frame they form."
+  t)
+
+
+;; No meaningful sub-type relationships at present
+
+(defmethod subtype-type ((ty1tag (eql 'module-interface)) ty1args
+			 (ty2tag (eql 'module-interface)) ty2args)
   t)
 
 
@@ -39,6 +46,11 @@ we don't define any sub-typing relationships."
 (defun module-interface-arguments (ty)
   "Return the list of argument decls to modfule interface TY."
   (caddr ty))
+
+
+(defun module-interface-frame (ty)
+  "Return the frame formed by the module interface."
+  (cadddr ty))
 
 
 (defmethod expand-type-parameters-type ((ty (eql 'module-interface)) args)
@@ -150,12 +162,12 @@ of other parameter values."
 	    decl
 
 	  (let ((val (eval v)))
-	    (declare-variable n `((:initial-value ,val)
-				  (:as :parameter)))))
+	    (set-variable-properties n `((:initial-value ,val)
+					 (:as :parameter)))))
 
 	;; naked paramater
-	(declare-variable decl `((:initial-value 0)
-				 (:as :parameter))))))
+	(set-variable-properties decl `((:initial-value 0)
+					(:as :parameter))))))
 
 
 (defun typecheck-module-params (decls)
@@ -165,6 +177,8 @@ of other parameter values."
 
 (defun typecheck-module-arg (decl)
   "Type-check a module argument declaration DECL."
+  (declare (optimize debug))
+
   (with-current-form decl
     (destructuring-bind (n &key
 			     type
@@ -185,8 +199,8 @@ of other parameter values."
 		;; if not, re-assign is to the shortcut
 		(setq type ty))))
 
-      (declare-variable n `((:type ,type)
-			    (:direction ,direction))))))
+      (set-variable-properties n `((:type ,type)
+				   (:direction ,direction))))))
 
 
 (defun typecheck-module-args (decls)
@@ -195,13 +209,13 @@ of other parameter values."
 
 
 (defun env-from-module-decls (args params)
-  "Create an environment extending ENV from PARAMS and ARGS declarations of a module interface."
+  "Pop[ulate the global environment with the PARAMS and ARGS declarations of a module interface."
   (typecheck-module-params params)
   (typecheck-module-args args))
 
 
 (defun make-module-environment (decls)
-  "Return an environment built from the DECLS of a module."
+  "Populate the global environment from the DECLS of a module."
   (destructuring-bind (modargs modparams)
       (split-args-params decls)
 
@@ -217,7 +231,7 @@ of other parameter values."
   "Return the module interface type of the DECLS of a module."
   (destructuring-bind (modargs modparams)
       (split-args-params decls)
-    `(module-interface ,modparams ,modargs)))
+    `(module-interface ,modparams ,modargs ,(current-frame))))
 
 
 (defmethod add-frames-sexp ((fun (eql 'module)) args)
@@ -455,13 +469,9 @@ and causes a NOT-IMPORTABLE error if not."
     (every-value modargs)))
 
 
-(defun env-from-module-interface (intf)
-  "Return an environment corresponding to INTF."
-  (env-from-module-decls (module-interface-arguments intf)
-			 (module-interface-parameters intf)))
-
-
 (defmethod typecheck-sexp ((fun (eql 'make-instance)) args)
+  (declare (optimize debug))
+
   (destructuring-bind (modname &rest initargs)
       args
 
@@ -475,24 +485,27 @@ and causes a NOT-IMPORTABLE error if not."
       (ensure-module-arguments-match-interface modname intf modargs)
 
       ;; typecheck the provided arguments against the interface
-      (with-new-frame
-	(env-from-module-interface intf)
+      (let ((f (module-interface-frame intf))
+	    (initargs-plist (plist-alist initargs)))
+	(dolist (arg modargs)
+	  (let ((v (cdr (assoc arg initargs-plist
+			       :key #'symbol-name
+			       :test #'string-equal))))
+	    (cond ((argument-for-module-interface-p arg intf)
+		   (let ((tyval (typecheck v))
+			 (tyarg (get-frame-property arg :type f)))
+		     (ensure-subtype tyval tyarg)))
 
-	(let ((initargs-plist (plist-alist initargs)))
-	  (dolist (arg modargs)
-	    (let ((v (cdr (assoc arg initargs-plist
-				 :key #'symbol-name
-				 :test #'string-equal))))
-	      (cond ((argument-for-module-interface-p arg intf)
-		     (let ((tyval (typecheck v))
-			   (tyarg (get-type arg)))
-		       (ensure-subtype tyval tyarg)))
-		    ((parameter-for-module-interface-p arg intf)
-		     (let ((tyval (typecheck (eval-in-static-environment v)))
-			   (tyarg (get-type arg)))
-		       (ensure-subtype tyval tyarg))))))
+		  ((parameter-for-module-interface-p arg intf)
+		   (let ((tyval (typecheck (eval-in-static-environment v)))
+			 (tyarg (get-frame-property arg :type f)))
+		     (ensure-subtype tyval tyarg)))
 
-	  intf)))))
+		  (t
+		   (error 'unknown-variable :variable arg
+					    :hint "Make sure variable is an argument to ~a" modname)))))
+
+	intf))))
 
 
 (defmethod dependencies-sexp ((fun (eql 'make-instance)) args)

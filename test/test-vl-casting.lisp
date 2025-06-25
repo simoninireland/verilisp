@@ -25,8 +25,8 @@
 
 (test test-typecheck-the
   "Test we can typecheck THE."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(the (unsigned-byte 8) 12)))
-		'(unsigned-byte 8)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(the (unsigned-byte 8) 12)))
+		    '(unsigned-byte 8)))
 
   (signals (vl:type-mismatch)
     (vl:typecheck (vl:expand/vl '(the (unsigned-byte 8) 1230)))))
@@ -42,15 +42,15 @@
 
 (test test-typecheck-coerce
   "Test we can typecheck coercions."
-  (is (subtypep (vl:typecheck '(coerce 12 (unsigned-byte 8)))
-		'(unsigned-byte 8)))
+  (is (vl:subtype-p (vl:typecheck '(coerce 12 (unsigned-byte 8)))
+		    '(unsigned-byte 8)))
 
   ;; type is the type coerced to, not of the value (unlike for the)
-  (is (not (subtypep (vl:typecheck (vl:expand/vl '(coerce 12 (unsigned-byte 8))))
-		     '(unsigned-byte 4))))
+  (is (not (vl:subtype-p (vl:typecheck (vl:expand/vl '(coerce 12 (unsigned-byte 8))))
+			 '(unsigned-byte 4))))
 
-  (is (subtypep (vl:typecheck (vl:expand/vl '(coerce 12 (signed-byte 5))))
-		'(signed-byte 5)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(coerce 12 (signed-byte 5))))
+		    '(signed-byte 5)))
 
   ;; can't coerce anything not fixed-width
   (signals (vl:coercion-mismatch)
@@ -58,9 +58,9 @@
 				  (signed-byte 58)))))
 
   ;; can coerce elements though
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a (make-array '(10) :element-type (unsigned-byte 8))))
-					      (coerce (aref a 3) (signed-byte 16)))))
-		'(signed-byte 16))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a (make-array '(10) :element-type (unsigned-byte 8))))
+						  (coerce (aref a 3) (signed-byte 16)))))
+		    '(signed-byte 16))))
 
 
 (test test-synthesise-coerce-equal-width-same-sign

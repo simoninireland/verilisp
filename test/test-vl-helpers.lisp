@@ -100,6 +100,6 @@
 					      8)))))
 
 	;; the type should be that of 8, where we re-started
-	(is (subtypep ty '(unsigned-byte 4)))))
+	(is (vl:subtype-p ty '(unsigned-byte 4)))))
 
     (is (= errors 1))))

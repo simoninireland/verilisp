@@ -25,22 +25,22 @@
 
 (test test-add-widths
   "Test we can determine the widths of additions."
-  (is (subtypep (vl:typecheck '(+ 1 1))
-		'(unsigned-byte 2)))
-  (is (subtypep (vl:typecheck '(+ 15 2))
-		`(unsigned-byte 5)))
-  (is (not (subtypep (vl:typecheck '(+ 15 -2))
-		     `(unsigned-byte 5))))
-  (is (subtypep (vl:typecheck '(+ 15 -2))
-		`(signed-byte 5))))
+  (is (vl:subtype-p (vl:typecheck '(+ 1 1))
+		    '(unsigned-byte 2)))
+  (is (vl:subtype-p (vl:typecheck '(+ 15 2))
+		    `(unsigned-byte 5)))
+  (is (not (vl:subtype-p (vl:typecheck '(+ 15 -2))
+			 `(unsigned-byte 5))))
+  (is (vl:subtype-p (vl:typecheck '(+ 15 -2))
+		    `(signed-byte 5))))
 
 
 (test test-width-subtractions
   "Test we can extract the widths of subtractions."
-  (is (subtypep (vl:typecheck '(- 1))
-		'(signed-byte 2)))
-  (is (subtypep (vl:typecheck '(- 2 1))
-		'(signed-byte 3))))
+  (is (vl:subtype-p (vl:typecheck '(- 1))
+		    '(signed-byte 2)))
+  (is (vl:subtype-p (vl:typecheck '(- 2 1))
+		    '(signed-byte 3))))
 
 
 (test test-synthesise-addition-operators
@@ -61,13 +61,13 @@
 
 (test test-width-shifts
   "Test we can extract the widths of shifts."
-  (is (subtypep (vl:typecheck '(vl::<< 1 2))
-		'(unsigned-byte 4)))
-  (is (subtypep (vl:typecheck '(vl::<< 15 15))
-		'(unsigned-byte 19)))
+  (is (vl:subtype-p (vl:typecheck '(vl::<< 1 2))
+		    '(unsigned-byte 4)))
+  (is (vl:subtype-p (vl:typecheck '(vl::<< 15 15))
+		    '(unsigned-byte 19)))
 
-  (is (subtypep (vl:typecheck '(vl::>> 16 4))
-		'(unsigned-byte 5)))
+  (is (vl:subtype-p (vl:typecheck '(vl::>> 16 4))
+		    '(unsigned-byte 5)))
 
   ;; wrong number of arguments
   (dolist (op '(vl::<< vl::>>))
@@ -88,8 +88,8 @@
 
 (test test-typecheck-logop
   "Test we can typecheck the logical operators."
-  (is (subtypep (vl:typecheck '(logand #2r10110 #2r11110))
-		'(unsigned-byte 5)))
+  (is (vl:subtype-p (vl:typecheck '(logand #2r10110 #2r11110))
+		    '(unsigned-byte 5)))
 
-  (is (subtypep (vl:typecheck '(logand #2r10110 #2r1111110))
-		'(unsigned-byte 7))))
+  (is (vl:subtype-p (vl:typecheck '(logand #2r10110 #2r1111110))
+		    '(unsigned-byte 7))))

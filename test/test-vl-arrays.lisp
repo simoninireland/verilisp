@@ -25,14 +25,14 @@
 
 (test test-array-decl
   "Test we can declare arrays."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(make-array '(16)
-					      :element-type (unsigned-byte 8))))
-		'(array (unsigned-byte 8) (16))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(make-array '(16)
+						  :element-type (unsigned-byte 8))))
+		    '(array (unsigned-byte 8) (16))))
 
   ;; version without the Lisp-compatible quote on the shape
-  (is (subtypep (vl:typecheck (vl:expand/vl '(make-array (16)
-					      :element-type (unsigned-byte 8))))
-		'(array (unsigned-byte 8) (16))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(make-array (16)
+						  :element-type (unsigned-byte 8))))
+		    '(array (unsigned-byte 8) (16))))
 
   ;; at the moment we only allow one dimension
   (signals (vl:not-synthesisable)
@@ -47,8 +47,8 @@
 				(b 0))
 			   (setq b 12)))))
 
-    (is (subtypep (vl:typecheck p)
-		  '(unsigned-byte 8)))))
+    (is (vl:subtype-p (vl:typecheck p)
+		      '(unsigned-byte 8)))))
 
 
 (test test-synthesise-array-decl
@@ -118,8 +118,8 @@
 				    :element-type (unsigned-byte 32))))
 			   (setf (aref a 8) (aref a 0))))))
 
-    (is (subtypep (vl:typecheck p)
-		  '(unsigned-byte 32)))))
+    (is (vl:subtype-p (vl:typecheck p)
+		      '(unsigned-byte 32)))))
 
 
 (test test-aref-bits
@@ -129,8 +129,8 @@
 			   (setf (vl::bref (aref a 8) 3 :end 0)
 			    (vl::bref (aref a 0) 3 :end 0))))))
 
-    (is (subtypep (vl:typecheck p)
-		  '(unsigned-byte 32)))))
+    (is (vl:subtype-p (vl:typecheck p)
+		      '(unsigned-byte 32)))))
 
 
 (test test-synthesise-aref-simple
@@ -150,14 +150,14 @@
   (let ((p (vl:expand/vl '(let ((a (make-array (5)
 				    :initial-contents (1 2 3 4 5))))
 			   (aref a 0)))))
-    (is (subtypep (vl:typecheck p)
-		  '(unsigned-byte 8))))
+    (is (vl:subtype-p (vl:typecheck p)
+		      '(unsigned-byte 8))))
 
   (signals (vl:shape-mismatch)
     (vl:typecheck
      (vl:expand/vl (copy-tree '(let ((a (make-array (5)
-					  :initial-contents (1 2 3))))
-				 (aref a 0)))))))
+					 :initial-contents (1 2 3))))
+				(aref a 0)))))))
 
 
 (test test-typecheck-array-initialiser-bad-value

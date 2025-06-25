@@ -180,15 +180,14 @@ EVAL-LISP-IN-STATIC-ENVIRONMENT."
   "Evaluate Verilisp FORM in the static environment, returning its value.
 
 A NOT-STATIC error condition is signalled if FORM does not
-evaluate to a constant."
+evaluate correctly in the static environment."
   (declare (optimize debug))
 
   (with-current-form form
-    (handler-bind
-	((error (lambda (c)
-		  (error 'not-static :underlying-condition c
-				     :hint "Make sure expression is a constant known at compile-time"))))
-      (eval-in-static-environment form))))
+    (handler-case
+	(eval-in-static-environment form)
+      (error ()
+	(error 'not-static :hint "Expression must be statically constant")))))
 
 
 (defun eval-if-static (form)

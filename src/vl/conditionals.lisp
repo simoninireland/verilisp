@@ -70,13 +70,13 @@
     (if (in-expression-context-p)
 	;; in expression, synthesise as a conditional expression
 	(progn
-	  (as-literal "(")
+	  (as-literal "((")
 	  (synthesise condition)
-	  (as-literal " ? ")
+	  (as-literal ") ? (")
 	  (synthesise  then)
-	  (as-literal " : ")
+	  (as-literal ") : (")
 	  (synthesise (car else))
-	  (as-literal ")"))
+	  (as-literal "))"))
 
 	;; elsewhere, synthesise as a conditional statement
 	(progn

@@ -34,10 +34,15 @@ should be handled correctly using WITH-NEW-FRAME. However...."
   (setf *global-environment* (empty-environment)))
 
 
+(defun current-frame ()
+  "Return the current frame of the global environment."
+  *global-environment*)
+
+
 (defmacro with-frame (f &body body)
   "Attach F to the current global environment for BODY."
   (with-gensyms (oldenv)
-    `(let ((,oldenv *global-environment*))
+    `(let ((,oldenv (current-frame)))
        (unwind-protect
 	    (progn
 	      ;; attach the new frame to the global environment
@@ -68,6 +73,13 @@ should be handled correctly using WITH-NEW-FRAME. However...."
   (variable-declared-in-environment-p n *global-environment*))
 
 
+(defun ensure-variable-declared (n)
+  "Signal an UNKNOWN-VARIABLE error is N is not declared."
+  (unless (variable-declared-p n)
+    (error 'unknown-variable :variables n
+			     :hint "Make sure variale is in scope")))
+
+
 (defun variables-declared ()
   "Return the variables declared in the current global environment."
   (get-environment-names *global-environment*))
@@ -91,6 +103,14 @@ should be handled correctly using WITH-NEW-FRAME. However...."
 (defun set-variable-property (n p v)
   "Set the value of property P of variable N in the global environment to V."
   (set-environment-property n p v *global-environment*))
+
+
+(defun set-variable-properties (n props)
+  "Set the values of properties PROPS of variable N in the global environment.
+
+PROPS should be an alist mapping property names to their values."
+  (dolist (p props)
+    (set-environment-property n (car p) (cadr p) *global-environment*)))
 
 
 (defun declare-macro (m &optional underlying-name)

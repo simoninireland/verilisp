@@ -25,10 +25,10 @@
 
 (test test-literal-widths
   "Test we can extract the types of literals."
-  (is (subtypep (vl:typecheck 2)
-		'(unsigned-byte 2)))
+  (is (vl:subtype-p (vl:typecheck 2)
+		    '(unsigned-byte 2)))
 
-  (is (not (subtypep (vl:typecheck -2)
-		     '(signed-byte 2))))
-  (is (subtypep (vl:typecheck -2)
-		'(signed-byte 3))))
+  (is (not (vl:subtype-p (vl:typecheck -2)
+			 '(signed-byte 2))))
+  (is (vl:subtype-p (vl:typecheck -2)
+		    '(signed-byte 3))))

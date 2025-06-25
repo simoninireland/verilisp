@@ -21,31 +21,84 @@
 
 ;; ---------- Fixed-width integers ----------
 
+(defun fixed-width-type-bound (tyargs)
+  "Returns any bound in TYARGS, or NIL if the type is unbounded."
+  (if (or (null tyargs)
+	  (eql (car tyargs) '*))
+      nil
+      (car tyargs)))
+
+
+(defun fixed-width-type-bounded-p (ty)
+  "Test whether TY is a fixed-width type with bounds."
+  (and (fixed-width-p ty)
+       (destructuring-bind (tytag tyargs)
+	   (deconstruct-type ty)
+	 (null (fixed-width-type-bound tyargs)))))
+
+
+(defmethod subtype-type ((ty1tag (eql 'unsigned-byte)) ty1args
+			 (ty2tag (eql 'unsigned-byte)) ty2args)
+  (if-let ((ty1width (fixed-width-type-bound ty1args)))
+    ;; first type is bounded, second must be unbounded or have
+    ;; a larger bound
+    (if-let ((ty2width (fixed-width-type-bound ty2args)))
+      (<= ty1width ty2width)
+
+      t)
+
+    ;; first type is unbounded, second one must be too
+    (null (fixed-width-type-bound ty2args))))
+
+
+(defmethod subtype-type ((ty1tag (eql 'signed-byte)) ty1args
+			 (ty2tag (eql 'signed-byte)) ty2args)
+  (if-let ((ty1width (fixed-width-type-bound ty1args)))
+    ;; first type is bounded, second must be unbounded or have
+    ;; a larger bound
+    (if-let ((ty2width (fixed-width-type-bound ty2args)))
+      (<= ty1width ty2width)
+
+      t)
+
+    ;; first type is unbounded, second one must be too
+    (null (fixed-width-type-bound ty2args))))
+
+
+(defmethod subtype-type ((ty1tag (eql 'unsigned-byte)) ty1args
+			 (ty2tag (eql 'signed-byte)) ty2args)
+ (if-let ((ty1width (fixed-width-type-bound ty1args)))
+    ;; first type is bounded, second must be unbounded or have
+    ;; a strictly larger bound
+    (if-let ((ty2width (fixed-width-type-bound ty2args)))
+      (< ty1width ty2width)
+
+      t)
+
+    ;; first type is unbounded, second one must be too
+    (null (fixed-width-type-bound ty2args))))
+
+;; there is no method for SIGNED-BYTE compared to UNSIGNED-BYTE
+
+
+(defmethod subtype-type ((ty1tag (eql 'bit)) ty1args
+			 ty2tag ty2args)
+  (subtype-p '(unsigned-byte 1) (construct-type ty2tag ty2args)))
+
+
 (defun fixed-width-p (ty)
   "Test whether TY is a fixed-width type."
-  (and (not (null ty))
-
-       ;; we need to test the tags, not the widths, to avoid
-       ;; issues with SUBTYPEP evaluating the widths of absurdly
-       ;; long numbers
-       (let ((tytag (if (listp ty)
-			(car ty)
-			ty)))
-	 (or (subtypep tytag 'signed-byte)
-	     (subtypep tytag 'signed-byte)))))
+  (subtype-p ty '(or unsigned-byte signed-byte)))
 
 
 (defun signed-byte-p (ty)
   "Test whether TY is a signed fixed-width type."
-  (and (not (null ty))
-       (subtypep ty 'signed-byte)
-       (not (subtypep ty 'unsigned-byte))))
+  (subtype-p ty '(and signed-byte (not unsigned-byte))))
 
 
 (defun unsigned-byte-p (ty)
   "Test whether TY is an unsigned fixed-width type."
-  (and (fixed-width-p ty)
-       (not (signed-byte-p ty))))
+  (subtype-p ty '(and 'unsigned-byte (not signed-byte))))
 
 
 (defun ensure-fixed-width (ty)
@@ -74,28 +127,54 @@
 	    `(signed-byte ,(eval-in-static-environment bounds))))))
 
 
-
 ;; ---------- Least upper-bound ----------
 
 (defmethod lub-type ((ty1tag (eql 'unsigned-byte)) ty1args
 		     (ty2tag (eql 'unsigned-byte)) ty2args)
-  `(unsigned-byte ,(max (car ty1args) (car ty2args))))
+  (if-let ((ty1width (fixed-width-type-bound ty1args))
+	   (ty2width (fixed-width-type-bound ty2args)))
+    ;; both types have bounds, take the max
+    `(unsigned-byte ,(max ty1width ty2width))
+
+    ;; one or both types are unbound, return the unbounded type
+    'unsigned-byte))
 
 
 (defmethod lub-type ((ty1tag (eql 'signed-byte)) ty1args
 		     (ty2tag (eql 'signed-byte)) ty2args)
-  `(signed-byte ,(max (car ty1args) (car ty2args))))
+  (if-let ((ty1width (fixed-width-type-bound ty1args))
+	   (ty2width (fixed-width-type-bound ty2args)))
+    ;; both types have bounds, take the max
+    `(signed-byte ,(max ty1width ty2width))
+
+    ;; one or both types are unbound, return the unbounded type
+    'signed-byte))
 
 
 (defmethod lub-type ((ty1tag (eql 'unsigned-byte)) ty1args
 		     (ty2tag (eql 'signed-byte)) ty2args)
-  `(signed-byte ,(max (1+ (car ty1args)) (car ty2args))))
+  (if-let ((ty1width (fixed-width-type-bound ty1args))
+	   (ty2width (fixed-width-type-bound ty2args)))
+    ;; both types have bounds, take the max accounting for sign
+    `(signed-byte ,(max (1+ ty1width) ty2width))
+
+    ;; one or both types are unbound, return the unbounded type
+    'signed-byte))
 
 
 (defmethod lub-type ((ty1tag (eql 'signed-byte)) ty1args
 		     (ty2tag (eql 'unsigned-byte)) ty2args)
-  `(signed-byte ,(max (car ty1args) (1+ (car ty2args)))))
+  (lub (construct-type ty2tag ty2args) (construct-type ty1tag ty1args)))
 
+
+(defmethod lub-type ((ty1tag (eql 'bit)) ty1args
+		     ty2tag ty2args)
+  (lub '(unsigned-byte 1) (construct-type ty2tag ty2args)))
+
+
+(defmethod lub-type (ty1tag ty1args
+		     (tytag2 (eql 'bit)) ty2args)
+  (lub (construct-type ty1tag ty1args) '(unsigned-byte 1)))
 
 
 ;; ---------- Widths ----------

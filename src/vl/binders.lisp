@@ -109,6 +109,7 @@ The name is the first element, whether or not DECL is a list."
 				     (role :variable)
 				     (as :register))
 	      decl
+	    (ensure-variable-declared n)
 
 	    ;; if we have a width, it's a shortcut for unsigned-byte
 	    (if width
@@ -137,21 +138,21 @@ The name is the first element, whether or not DECL is a list."
 		    ;; no type provided, infer from the value
 		    (setq ity vty)))
 
-	      (declare-variable n `((:type ,type)
-				    (:inferred-type ,ity)
-				    (:as ,as)
-				    (:role ,role)
-				    (:initial-value ,v)
-				    (:type-constraints (,ity))))))
+	      (set-variable-properties n `((:type ,type)
+					   (:inferred-type ,ity)
+					   (:as ,as)
+					   (:role ,role)
+					   (:initial-value ,v)
+					   (:type-constraints (,ity))))))
 
 	  ;; "naked" declaration
 	  ;; TODO: What is the correct default width? -- 1 means it'll get widened
 	  ;; as needed, so is perhaps correct?
-	  (declare-variable decl `((:inferred-type (unsigned-byte 1))
-				   (:type-constraints ((unsigned-byte 1)))
-				   (:as :register)
-				   (:role :variable)
-				   (:initial-value 0)))))))
+	  (set-variable-properties decl `((:inferred-type (unsigned-byte 1))
+					  (:type-constraints ((unsigned-byte 1)))
+					  (:as :register)
+					  (:role :variable)
+					  (:initial-value 0)))))))
 
 
 (defun typecheck-env (decls)
@@ -206,7 +207,7 @@ This updates the current environment with the new properties."
     (mapc (lambda (vp)
 	    (destructuring-bind (n props)
 		vp
-	      (set-environment-properties n props *global-environment*)))
+	      (set-variable-properties n props)))
 	  newdecls)))
 
 
@@ -397,15 +398,9 @@ by LET and MODULE forms."
 
 ;; ---------- Synthesis ----------
 
-(defun array-type-p (type)
-  "Test whether TYPE is an array type.
-
-There's a slight problem in that the size or shape of the array
-type may be Verilisp expressions, whcih don't play well with SUBTYPEP.
-To avoid this we do the check manually."
-  (or (and (listp type)
-	   (eql (car type) 'array))
-      (eql type 'array)))
+(defun array-type-p (ty)
+  "Test whether TY is an array type."
+  (subtype-p ty 'array))
 
 
 (defun array-value-p (form)

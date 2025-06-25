@@ -23,29 +23,29 @@
 
 (test test-make-bitfields-literal
   "Test we can make a bitfield from literals."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(vl:make-bitfields #2r111 #2r100)))
-		'(unsigned-byte 6)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(vl:make-bitfields #2r111 #2r100)))
+		    '(unsigned-byte 6)))
 
-  (is (subtypep (vl:typecheck (vl:expand/vl '(vl:make-bitfields
-					      #2r111
-					      (the (unsigned-byte 12) 0))))
-		'(unsigned-byte 15))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(vl:make-bitfields
+						  #2r111
+						  (the (unsigned-byte 12) 0))))
+		    '(unsigned-byte 15))))
 
 
 (test test-make-bitfields-extend
   "Test we can extend bitfields."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(vl:make-bitfields
-					      #2r101
-					      (vl:extend-bits #2r0 5))))
-		'(unsigned-byte 8)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(vl:make-bitfields
+						  #2r101
+						  (vl:extend-bits #2r0 5))))
+		    '(unsigned-byte 8)))
 
   ;; repeats must be statically known, but pattern can be variable
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 8))
-					      (vl:make-bitfields (vl:extend-bits a 5)))))
-		'(unsigned-byte 20)))
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 8))
-					      (vl:make-bitfields (vl:extend-bits (+ a 9) 5)))))
-		'(unsigned-byte 25)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 8))
+						  (vl:make-bitfields (vl:extend-bits a 5)))))
+		    '(unsigned-byte 20)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 8))
+						  (vl:make-bitfields (vl:extend-bits (+ a 9) 5)))))
+		    '(unsigned-byte 25)))
   (signals (vl:not-static)
     (vl:typecheck (vl:expand/vl '(let ((a 8))
 				  (vl:make-bitfields (vl:extend-bits 0 a)))))))

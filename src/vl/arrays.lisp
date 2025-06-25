@@ -210,6 +210,22 @@ Otheriwse it is read as a literal list."
 
 ;; ---------- Array access ----------
 
+(defmethod subtype-type ((ty1tag (eql 'array)) ty1args
+			 (ty2tag (eql 'array)) ty2args)
+  (if (or (null ty1args)
+	  (eql (car ty1args) '*))
+
+      ;; if first type is unbound the second must be too
+      (or (null ty2args)
+	  (eql (car ty2args) '*))
+
+      ;; otherwise the second must be unbound or larger
+      (let ((ty1elements (car ty1args)))
+	(or (null ty2args)
+	    (eql (car ty2args) '*)
+	    (<= ty1elements (car ty2args))))))
+
+
 (defun valid-array-index-p (ty indices)
   "Ensure INDICES are a potentially valid index into TY.
 
@@ -218,13 +234,13 @@ dimensions, and must be unsigned integers.
 
 We don't check the validity of the values -- although we could, and
 probably should, for those that are statically determined."
-  (and (subtypep ty 'array)
+  (and (subtype-p ty 'array)
        (or (not (listp ty))
 	   (= (length (cddr ty))
 	      (length indices)))
        (every (lambda (i)
-		(subtypep (typecheck i)
-			  'unsigned-byte))
+		(subtype-p (typecheck i)
+			   'unsigned-byte))
 	      indices)))
 
 

@@ -26,9 +26,9 @@
 (test test-setq
   "Test we can typecheck the SETQ form."
   (vl:with-new-frame
-    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 13))
-						(setq a 9))))
-		  '(unsigned-byte 8)))
+    (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 13))
+						    (setq a 9))))
+		      '(unsigned-byte 8)))
 
     (signals (vl:not-synthesisable)
       (vl:typecheck (vl:expand/vl '(let ((a 12 :as :constant))
@@ -38,17 +38,17 @@
 (test test-assignment-same-width
   "Test we can assign."
   (vl:with-new-frame
-    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 10))
-					     (setq a 12))))
-		  '(unsigned-byte 5)))))
+    (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 10))
+						    (setq a 12))))
+		      '(unsigned-byte 5)))))
 
 
 (test test-assignment-same-width-sync
   "Test we can assign synchronously (same types)."
   (vl:with-new-frame
-    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 10))
-					     (setq a 12 :sync t))))
-		  '(unsigned-byte 5)))))
+    (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 10))
+						    (setq a 12 :sync t))))
+		      '(unsigned-byte 5)))))
 
 
 (test test-assignment-too-wide
@@ -56,15 +56,15 @@
   (signals (vl:type-mismatch)
     (vl:with-new-frame
       (vl:typecheck (vl:expand/vl '(let ((a 10 :type (unsigned-byte 5)))
-				 (setq a 120)))))))
+				    (setq a 120)))))))
 
 
 (test test-assignment-too-wide-widenable
   "Test we can assign a value to a variable that can be widened."
   (vl:with-new-frame
-    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 10))
-						(setq a 120))))
-		  '(unsigned-byte 7)))))
+    (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 10))
+						    (setq a 120))))
+		      '(unsigned-byte 7)))))
 
 
 (test test-assignment-too-wide-updated
@@ -72,8 +72,8 @@
   (vl:with-new-frame
     (let ((p (vl:expand/vl '(let ((a 10 :type (unsigned-byte 5) :as :register))
 			     (setq a 120)))))
-      (subtypep (vl:typecheck p)
-		'(unsigned-byte 7)))))
+      (vl:subtype-p (vl:typecheck p)
+		    '(unsigned-byte 7)))))
 
 
 (test test-assignment-too-wide-widenable-updated
@@ -81,8 +81,8 @@
   (vl:with-new-frame
     (let ((p (vl:expand/vl '(let ((a 10))
 			     (setq a 120)))))
-      (subtypep (vl:typecheck p)
-		'(unsigned-byte 7)))))
+      (vl:subtype-p (vl:typecheck p)
+		    '(unsigned-byte 7)))))
 
 
 (test test-assignment-out-of-scope
@@ -125,7 +125,7 @@
     (vl::declare-variable 'd '((:type (unsigned-byte 8))))
 
     (vl::dependencies '(setq a (+ b c 23)))
-     (is (set-equal (vl::variable-property 'a :dependencies)
+    (is (set-equal (vl::variable-property 'a :dependencies)
 		   '(b c)))
 
     ;; assigning a to d should traverse into a's dependencies
@@ -139,9 +139,9 @@
 (test test-setf-as-setq
   "Test we can convert a simple SETF into a SETQ."
   (vl:with-new-frame
-    (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 12))
-						(setf a 9))))
-		  '(unsigned-byte 4)))))
+    (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 12))
+						    (setf a 9))))
+		      '(unsigned-byte 4)))))
 
 
 (test test-synthesise-setf-conditional

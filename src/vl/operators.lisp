@@ -34,22 +34,25 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 ;; ---------- Maths ----------
 
 (defun typecheck-addition (args)
-  "Type-check an addition or subtraction of ARGS.
-
-The width of the resulting number is the width of the widest argument
-plus the number of other arguments."
+  "Type-check an addition or subtraction of ARGS."
   (let ((tys (mapcar #'typecheck args)))
     (dolist (ty tys)
       (ensure-fixed-width ty))
 
-    (let* ((ws (mapcar #'bitwidth tys))
-	   (minus (some #'signed-byte-p tys))
-	   (w `(+ (max ,@ws)
-		  (1- ,(length args)))))
+    ;; form the LUB of the arguments, increasing the width by one
+    ;; for each term added
+    (foldr (lambda (oldlubty ty)
+	     (let ((lubty (lub oldlubty ty)))
+	       (destructuring-bind (tytag tyargs)
+		   (deconstruct-type lubty)
+		 (if-let ((w (fixed-width-type-bound tyargs)))
+		   ;; bounded LUB, increment the bound
+		   `(,tytag ,(1+ w))
 
-      (if minus
-	  `(signed-byte ,w)
-	  `(unsigned-byte ,w)))))
+		   ;; unbounded, leave as-is
+		   lubty))))
+	   (cdr tys)
+	   (car tys))))
 
 
 (defun fold-constant-expressions-addition (fun args)

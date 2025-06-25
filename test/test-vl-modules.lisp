@@ -25,17 +25,17 @@
 
 (test test-typecheck-module
   "Test we can typecheck a module definition."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(vl:module test ((clk :type (unsigned-byte 1) :direction :in)
-							      &key (p 1))
-					      (let ((a 1))
-						(setq a 0)))))
-		'vl::module-interface)))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(vl:module test ((clk :type (unsigned-byte 1) :direction :in)
+								  &key (p 1))
+						  (let ((a 1))
+						    (setq a 0)))))
+		    'vl::module-interface)))
 
 
 (test test-test-typecheck-module-interface-correctness
   "Test we can identify non-module interface types."
-  (is (not (subtypep (vl:typecheck (vl:expand/vl '(+ 1 2)))
-		     'module-interface))))
+  (is (not (vl:subtype-p (vl:typecheck (vl:expand/vl '(+ 1 2)))
+			 'module-interface))))
 
 
 (test test-module-no-wires
@@ -121,8 +121,8 @@
 							      :clk-out clk)))
 			     clock)))))
 
-    (is (subtypep (vl:typecheck p)
-		  'vl::module-interface)))
+    (is (vl:subtype-p (vl:typecheck p)
+		      'vl::module-interface)))
 
   ;; check we need to wire all arguments
   (signals (vl:not-importable)
@@ -157,15 +157,15 @@
 			  (clk_out :direction :out :as :wire :type (unsigned-byte 1)))
     (setq clk_out clk_in))
 
-  (is (subtypep (type-of (vl:typecheck (vl:expand/vl '(vl:module moduleinstanciatebitfields
-						       ((clk_in :type (unsigned-byte 1) :direction :in :as :wire))
-						       (let ((ctrl 0 :type (unsigned-byte 4) :as :wire))
-							 (vl:with-bitfields (clk b2 b1 b0)
-							     ctrl
-							   (let ((clock (make-instance 'clock :clk_in clk_in
-											      :clk_out clk)))
-							     clock)))))))
-		'vl::module-interface))
+  (is (vl:subtype-p (type-of (vl:typecheck (vl:expand/vl '(vl:module moduleinstanciatebitfields
+							   ((clk_in :type (unsigned-byte 1) :direction :in :as :wire))
+							   (let ((ctrl 0 :type (unsigned-byte 4) :as :wire))
+							     (vl:with-bitfields (clk b2 b1 b0)
+								 ctrl
+							       (let ((clock (make-instance 'clock :clk_in clk_in
+												  :clk_out clk)))
+								 clock)))))))
+		    'vl::module-interface))
 
   (let ((p (vl:expand/vl '(vl:module moduleinstanciatebitfields
 			   ((clk_in :type (unsigned-byte 1) :direction :in :as :wire))
@@ -299,8 +299,8 @@
 			     (vl:@ (vl:posedge clk)
 				   (setq data-out (aref mem addr-in))))))))
 
-    (is (subtypep (vl:typecheck p)
-		  'vl::module-interface))))
+    (is (vl:subtype-p (vl:typecheck p)
+		      'vl::module-interface))))
 
 
 (test test-module-array-type-correct
@@ -315,8 +315,8 @@
 				  b)
 			     (setq b (aref mem addr-in))))))
 
-      (is (subtypep (vl:typecheck p)
-		    '(unsigned-byte 8)))
+      (is (vl:subtype-p (vl:typecheck p)
+			'(unsigned-byte 8)))
       (is (vl:synthesise p)))))
 
 
@@ -344,8 +344,8 @@
 				      b)
 				 (setq b (aref mem addr-in))))))
 
-	  (subtypep (vl:typecheck p)
-		    '(unsigned-byte 8))
+	  (vl:subtype-p (vl:typecheck p)
+			'(unsigned-byte 8))
 	  (vl:synthesise p))))
 
     (is (= errors 0))

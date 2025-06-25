@@ -63,8 +63,8 @@
 			   (vl::with-bitfields (a a a b b b c)
 			       a
 			     (setf a (+ b c)))))))
-    (is (subtypep (vl:typecheck p)
-		  '(unsigned-byte 10)))))
+    (is (vl:subtype-p (vl:typecheck p)
+		      '(unsigned-byte 10)))))
 
 
 (test test-with-bitfields-typo
@@ -85,5 +85,5 @@
 							     d e f)
 					   ctrl
 					 (setf a d)))))))
-    (is (subtypep (vl:typecheck (vl:expand-macros-in-environment p))
-		  'vl::module-interface))))
+    (is (vl:subtype-p (vl:typecheck (vl:expand-macros-in-environment p))
+		      'vl::module-interface))))

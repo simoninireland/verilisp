@@ -23,9 +23,9 @@
 
 (test test-let-single
   "Test we can typecheck an expression."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 1 :width 5))
-				 (+ 1 a))))
-		'(unsigned-byte 6))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 1 :width 5))
+						  (+ 1 a))))
+		    '(unsigned-byte 6))))
 
 
 (test test-let-at-least-one
@@ -37,17 +37,17 @@
 
 (test test-let-single-infer-width
   "Test we can infer a width."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 1))
-					      (+ 1 a))))
-		'(unsigned-byte 2))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 1))
+						  (+ 1 a))))
+		    '(unsigned-byte 2))))
 
 
 (test test-let-double
   "Test we can typecheck an expression with two variables."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 1 :width 8)
-						   (b 6 :width 16))
-					      (+ a b))))
-		'(unsigned-byte 24))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 1 :width 8)
+						       (b 6 :width 16))
+						  (+ a b))))
+		    '(unsigned-byte 24))))
 
 
 (test test-let-too-narrow
@@ -59,9 +59,9 @@
 
 (test test-let-widen
   "Test we can take the width from a given type."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 5 :type (unsigned-byte 8)))
-					      (setf a (+ 1 a)))))
-		'(unsigned-byte 9))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 5 :type (unsigned-byte 8)))
+						  (setf a (+ 1 a)))))
+		    '(unsigned-byte 9))))
 
 
 (test test-let-missing-width-type-conflicts
@@ -80,39 +80,39 @@
 
 (test test-let-result
   "Test we pick up the right result type."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 99)
-						   (b 100 :width 8))
-					      (+ b 1)
-					      (+ b a b))))
-		'(unsigned-byte 10))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 99)
+						       (b 100 :width 8))
+						  (+ b 1)
+						  (+ b a b))))
+		    '(unsigned-byte 10))))
 
 
 (test test-let-constant
   "Test we admit constant bindings."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 15 :as :constant))
-					      a)))
-		'(unsigned-byte 4))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 15 :as :constant))
+						  a)))
+		    '(unsigned-byte 4))))
 
 
 (test test-let-naked
   "Test that we accept "naked" declarations."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 10)
-						   b)
-					      (+ a b))))
-		`(unsigned-byte 5))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 10)
+						       b)
+						  (+ a b))))
+		    `(unsigned-byte 5))))
 
 
 (test test-binders-conditional
   "Test we can assign to a conditional."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 1)
-						   (b 23))
-					      (let ((c (if (= a 0)
-							   23
-							   1)
-						       :as :wire
-						       :type (unsigned-byte 32)))
-						(setq a c)))))
-		'(unsigned-byte 32))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 1)
+						       (b 23))
+						  (let ((c (if (= a 0)
+							       23
+							       1)
+							   :as :wire
+							   :type (unsigned-byte 32)))
+						    (setq a c)))))
+		    '(unsigned-byte 32))))
 
 
 (test test-binders-free-variables
@@ -153,9 +153,9 @@
 
 (test test-let-width
   "Test the :width shortcuts works."
-  (is (subtypep (vl:typecheck (vl:expand/vl '(let ((a 0 :width 12))
-					      a)))
-		'(unsigned-byte 12))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 0 :width 12))
+						  a)))
+		    '(unsigned-byte 12))))
 
 
 (test test-let-float-order

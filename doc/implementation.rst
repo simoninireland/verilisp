@@ -10,6 +10,7 @@ modify it.
 .. toctree::
     :maxdepth: 1
 
+    implementation/subtypes
     implementation/tagbody
     implementation/constraints
     implementation/coercion-casting

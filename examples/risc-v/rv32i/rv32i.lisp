@@ -59,24 +59,24 @@
 
 
 ;; Simple ALU
-(defmodule/vl rv321-alu ((a                :direction :in  :width 32)
-			 (b                :direction :in  :width 32)
-			 (add/sub          :direction :in  :width 1)
-			 (sign-extending-p :direction :in  :width 1)
-			 (op               :direction :in  :width 3)
-			 (shift            :direction :in  :width 5)
-			 (c                :direction :out :width 32 ))
+(defmodule/vl rv321-alu ((a                :direction :in  :type (unsigned-byte 32))
+			 (b                :direction :in  :type (unsigned-byte 32))
+			 (add/sub          :direction :in  :type (unsigned-byte 1))
+			 (sign-extending-p :direction :in  :type (unsigned-byte 1))
+			 (op               :direction :in  :type (unsigned-byte 3))
+			 (shift            :direction :in  :type (unsigned-byte 5))
+			 (c                :direction :out :type (unsigned-byte 32)))
   (@ (*)
      (case op
        (#2r000
 	;; add or subtract
 	(setq c (if (asserted-p add/sub)
-		    (- a b)
-		    (+ a b))))
+		    (coerce (- a b) '(unsigned-byte 32))
+		    (coerce (+ a b) '(unsigned-byte 32)))))
 
        (#2r001
 	;; left shift
-	(setq c (<< a b)))
+	(setq c (coerce (<< a b) '(unsigned-byte 32))))
 
        (#2r010
 	;; less-than unsigned
@@ -152,10 +152,10 @@
 	(instr 0 :width 32)
 
 	;; working registers
-	(rs1             :width 32)
-	(rs2             :width 32)
-	(write-back-data :width 32)
-	(next-pc         :width 32)
+	(rs1             0 :width 32)
+	(rs2             0 :width 32)
+	(write-back-data 0 :width 32)
+	(next-pc         0 :width 32)
 
 	;; registers
 	(register-file (make-array (32) :element-type (unsigned-byte 32)
@@ -163,14 +163,14 @@
 
     ;; wiring
     (let-wires (a b c compare
-		(op      :width 3)
-		(add/sub :width 1)
+		(op      0 :width 3)
+		(add/sub 0 :width 1)
 
 		;; memory access
-		(addr       :width 32)
-		(data       :width 32)
-		(rd/wr      :width 1)
-		(write-mask :width 4))
+		(addr       0 :width 32)
+		(data       0 :width 32)
+		(rd/wr      0 :width 1)
+		(write-mask 0 :width 4))
 
       (let ((mem (make-instance 'ram :addr addr :data data
 				     :rd/wr rd/wr :write-mask write-mask))
