@@ -117,8 +117,18 @@ calculations that can be done early.")
 (defgeneric add-frames-sexp (fun args)
   (:documentation "Add frames to FUN applied to ARGS.
 
-The method is responsible for how the local frame is stored within
-the program.")
+Mathods on this function should add a local frame to the form for later
+use and recurse into sub-forms.
+
+The frame should be populated with the names of any variables introduced
+by the form: this allows later passes to interrogate the locally-defined
+environment, and to add and access properties of those variables.
+
+The way the frame is stored is not specified, but the functions
+ADD-FRAMES-TO-DECLS and GET-LOCAL-FRAME-AND-DECLS pefrom adding
+and accessing by extending the list of declarations found in LET and
+MODULE forms. The WITH-LOCAL-FRAME macro an then be used to apply
+the frame automatically in other methods.")
   (:method (fun args)
     `(,fun ,@(mapcar #'add-frames args))))
 
@@ -128,20 +138,26 @@ the program.")
 
 A new, empty, frame is added if F is omitted.
 
-Each decl in DECLS should either be a symbol or a list whose head is
-a symbol.
+Each decl in DECLS should either be a symbol or a list whose head is a
+symbol. Any keywords or lambda-list decorators are ignored.The frame
+is populated with the names, with no properties.
 
-The frame is stored as a new decl with name LOCAL-FRAME.
-
-Return the new decls. if DECLS was originally NULL, this will be
-a new list containing the frame; if not, then the frame will have
+Return the new decls. If DECLS was originally NULL, this will be
+a new list containing just the frame; if not, then the frame will have
 been added to the end destructively."
   (if (null decls)
       ;; no decls, return a new list
       (setf decls (list (list 'local-frame f)))
 
       ;; existing decls, append the frame
-      (setf (cdr (last decls)) (list (list 'local-frame f))))
+      (let ((names (remove-if (lambda (n)
+				(or (keywordp n)
+				    (member n '(&key &allow-other-keys &rest &optional))))
+			      (mapcar #'name-in-decl decls))))
+	(mapc (lambda (n)
+		(declare-environment-variable n '() f))
+	      names)
+	(setf (cdr (last decls)) (list (list 'local-frame f)))))
 
   ;; return the decls
   decls)

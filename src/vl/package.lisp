@@ -35,13 +35,15 @@
 		#:words)
 
   (:export
-   ;; fixed-width types
-   #:unsigned-byte
-   #:signed-byte
+   ;; types
    #:bitwidth
+   #:subtype-p
+   #:subtype-type
    #:fixed-width-p
    #:unsigned-byte-p
    #:signed-byte-p
+   #:lub
+   #:lub-type
 
    ;; environments
    #:*global-environment*

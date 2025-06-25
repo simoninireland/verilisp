@@ -20,6 +20,89 @@
 (in-package :vl)
 
 
+;; ---------- Sub-type checking ----------
+
+(defun deconstruct-type (ty)
+  "Deconstruct the type specifier TY into tag and arguments."
+  (if (listp ty)
+      (list (car ty) (cdr ty))
+      (list ty '())))
+
+
+(defun construct-type (tytag tyargs)
+  "Construct a type specifier from TYTAG and TYARGS.
+
+This is simply TYTAG is TYARGS is nil, or a list specifier."
+  (if (null tyargs)
+      tytag
+      (cons tytag tyargs)))
+
+
+;; The builtin SUBTYPEP is sometimes either too aggressive or too
+;; demanding in what it requires. So we provide a generic version
+;; that's minimally intrusive.
+
+(defgeneric subtype-type (ty1tag ty1args ty2tag ty2args)
+  (:documentation "Test whether one type is a sub-type of another.
+
+Methods on this function should specialise on the type tags and
+be a generally admitting as possible, for example by not examining
+tyer arguments when not needed.")
+
+  (:method (ty1tag ty1args (ty2tag (eql 'or)) ty2args)
+    ;; union type, one of the types matches
+    (some (curry #'subtype-p (construct-type ty1tag ty1args)) ty2args))
+
+  (:method (ty1tag ty1args (ty2tag (eql 'and)) ty2args)
+    ;; intersection type, all of the types matches
+    (every (curry #'subtype-p (construct-type ty1tag ty1args)) ty2args))
+
+  (:method (ty1tag ty1args (ty2tag (eql 'not)) ty2args)
+    ;; negation type, must not match
+    (not (subtype-p (construct-type ty1tag ty1args) (car ty2args)))))
+
+
+(defun subtype-p (ty1 ty2)
+  "Determine whether TY1 is a sub-type of TY2.
+
+Some complex type specifiers are supported for TY2, currently OR, AND,
+and NOT types. The 'lattice' types of top (T) and bottom (NIL) are
+also supported
+
+This function should be used in preference to the built-in SUBTYPEP
+when comparing Verilisp types."
+  (declare (optimize debug))
+
+  (cond ((null ty1)
+	 ;; the nil (bottom) type is a sub-type of everything
+	 t)
+
+	((eql ty1 t)
+	 ;; the t (top) type is only a sub-type of top
+	 (eql ty2 t))
+
+	((null ty2)
+	 ;; the nil (bottom) type has no sub-types
+	 nil)
+
+	((eql ty2 t)
+	 ;; the t (top) type has every type as subtypes
+	 t)
+
+	(t
+	 (destructuring-bind (ty1tag ty1args)
+	     (deconstruct-type ty1)
+
+	   (destructuring-bind (ty2tag ty2args)
+	       (deconstruct-type ty2)
+
+	     (handler-case
+		 (subtype-type ty1tag ty1args ty2tag ty2args)
+
+	       ;; if there is no comparison provided, the test fails
+	       (error nil)))))))
+
+
 ;; ---------- Type checking ----------
 
 (defun ensure-subtype (ty1 ty2)
@@ -29,7 +112,7 @@ Signals TYPE-MISMATCH is the types are not compatible. This
 can be ignored for systems not concerned with loss of precision."
   (let ((ety1 (expand-type-parameters ty1))
 	(ety2 (expand-type-parameters ty2)))
-    (when (not (subtypep ety1 ety2))
+    (when (not (subtype-p ety1 ety2))
       (warn 'type-mismatch :expected ty2 :got ty1))))
 
 
@@ -54,6 +137,17 @@ The type is tagged TYTAG with arguments TYARGS."))
 
 ;; ---------- Least upper-bounds ----------
 
+(defgeneric lub-type (ty1tag ty1args ty2tag ty2args)
+  (:documentation "Return the least upper-bound of two types in the current environment.
+
+The types are tagged TY1TAG and TY2TAG, with specialising arguments
+TY1ARGS and TY2ARGS respectively (both of which can be nil).
+
+The default LUB of two types is T, the top type.")
+  (:method (ty1tag ty1args ty2tag ty2args)
+    t))
+
+
 (defun lub (ty1 ty2)
   "Return the least upper-bound of types TY1 and TY2 in the current environment.
 
@@ -67,21 +161,13 @@ Type parameters are not expanded by default."
 	((null ty2)
 	 ty1)
 	(t
-	 (let ((ty1s (safe-car-cdr ty1))
-	       (ty2s (safe-car-cdr ty2)))
-	   (lub-type (car ty1s) (cadr ty1s)
-		     (car ty2s) (cadr ty2s))))))
+	 (destructuring-bind (ty1tag ty1args)
+	     (deconstruct-type ty1)
 
+	   (destructuring-bind (ty2tag ty2args)
+	       (deconstruct-type ty2)
 
-(defgeneric lub-type (ty1tag ty1args ty2tag ty2args)
-  (:documentation "Return the least upper-bound of two types in tyhe current environment.
-
-The types are tagged TY1TAG and TY2TAG, with specialising arguments
-TY1ARGS and TY2ARGS respectively (both of which can be nil).
-
-The default LUB of two types is T.")
-  (:method (ty1tag ty1args ty2tag ty2args)
-    t))
+	     (lub-type tyt1ag ty1args ty2tag ty2args))))))
 
 
 ;; ---------- Type parameter expansion ----------
