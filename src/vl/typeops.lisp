@@ -62,7 +62,11 @@ tyer arguments when not needed.")
 
   (:method (ty1tag ty1args (ty2tag (eql 'not)) ty2args)
     ;; negation type, must not match
-    (not (subtype-p (construct-type ty1tag ty1args) (car ty2args)))))
+    (not (subtype-p (construct-type ty1tag ty1args) (car ty2args))))
+
+  ;TODO: Extend to handle complex type specifiers on the left as well
+  ;; as on the right
+  )
 
 
 (defun subtype-p (ty1 ty2)
@@ -148,7 +152,10 @@ TY1ARGS and TY2ARGS respectively (both of which can be nil).
 
 The default LUB of two types is T, the top type.")
   (:method (ty1tag ty1args ty2tag ty2args)
-    t))
+    t)
+
+  ;TODO: Extend to handle complex type specifiers
+  )
 
 
 (defun lub (ty1 ty2 &rest tys)
@@ -160,17 +167,16 @@ is extracted and used in a call to LUB-TYPE.
 
 Type parameters are not expanded by default."
   (let ((lubtype (cond ((null ty1)
-		 ty2)
-		((null ty2)
-		 ty1)
-		(t
-		 (destructuring-bind (ty1tag ty1args)
-		     (deconstruct-type ty1)
+			ty2)
+		       ((null ty2)
+			ty1)
+		       (t
+			(destructuring-bind (ty1tag ty1args)
+			    (deconstruct-type ty1)
+			  (destructuring-bind (ty2tag ty2args)
+			      (deconstruct-type ty2)
 
-		   (destructuring-bind (ty2tag ty2args)
-		       (deconstruct-type ty2)
-
-		     (lub-type ty1tag ty1args ty2tag ty2args)))))))
+			    (lub-type ty1tag ty1args ty2tag ty2args)))))))
 
     (if (null tys)
 	lubtype
