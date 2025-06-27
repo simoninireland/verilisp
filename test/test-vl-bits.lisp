@@ -76,6 +76,8 @@
 				  (vl::bref a -2))))))
 
 
+;; ---------- Generalised place ----------
+
 (test test-bit-dependencies
   "Test we can extract bref dependencies properly."
   (vl:with-new-frame
@@ -89,20 +91,42 @@
 			       (:initial-value 0)
 			       (:as :constant)))
 
-    (let ((p (vl:expand/vl '(progn
-			     (setq a (+ (vl:bref b d :end 0) 19))
-			     (setq c a)))))
+    (vl:expand/vl '(progn
+		    (setq a (+ (vl:bref b d :end 0) 19))
+		    (setq c a)))
 
-      (vl:typecheck p)
-      (vl::dependencies p)
+    ;; not (b d) as d is a constant
+    (is (set-equal (vl::variable-property 'a :depends-on)
+		   '(b)))
 
-      ;; not (a d) as d is a constant
-      (is (set-equal (vl::variable-property 'a :dependencies)
-		     '(b)))
+    (is (null (vl::variable-property 'b :depends-on)))
 
-      (is (null (vl::variable-property 'b :dependencies)))
+    (is (set-equal (vl::variable-property 'c :depends-on)
+		   '(a)))
 
-      ;; not (a b d) as above
-      (is (set-equal (vl::variable-property 'c :dependencies)
-		     '(a b)))
-      (is (null (vl::variable-property 'd :dependencies))))))
+    ;; not (a b d), for the same reasons as above
+    (is (set-equal (vl::traverse-dependencies 'c)
+		   '(a b)))
+    (is (null (vl::variable-property 'd :depends-on)))))
+
+
+(test test-bit-target
+  "Test we can use bitfields as targets."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '((:type (unsigned-byte 8))
+			       (:initial-value 12)))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))
+			       (:initial-value 24)))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))
+			       (:initial-value 0)))
+
+    (vl:expand/vl '(setf (vl:bref a 2 :end 0) 0))
+    (is (null (vl::variable-property 'a :depends-on)))
+
+    (vl:expand/vl '(setf (vl:bref a 4 :end 2) (vl:bref b 2 :end 0)))
+    (is (set-equal (vl::variable-property 'a :depends-on)
+		   '(b)))
+
+    (vl:expand/vl '(setf (vl:bref c 4 :end 2) (vl:bref c 2 :end 0)))
+    (is (set-equal (vl::variable-property 'c :depends-on)
+		   '(c)))))

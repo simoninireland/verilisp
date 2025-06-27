@@ -285,7 +285,10 @@ The :DEPENDS-ON property is set for each variable.")
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
-      (dependencies-sexp fun args))))
+      (with-vl-errors-not-synthesisable
+	(with-unknown-forms
+	  (with-current-form form
+	    (dependencies-sexp fun args)))))))
 
 
 (defgeneric dependencies-sexp (fun args)

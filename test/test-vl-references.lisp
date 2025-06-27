@@ -79,6 +79,15 @@
     (is (null (search s "a-b-c")))))
 
 
+;; (vl:expand/vl '(module clock/123 ((clk-in  :direction :in  :as :wire :type (unsigned-byte 1))
+;;			      (clk-out :direction :out :as :wire :type (unsigned-byte 1))
+;;			      &key (p 1) (q-r 2))
+;;     (let ((a-b-c 12)
+;;	  (d 19))
+;;       (setq a-b-c (+ 3 a-b-c d q-r)))
+;;     (setq clk-out clk-in)))
+
+
 (test test-legalise-modules-instanciate
   "Test that we synthesise module instanciation correctly."
   (vl:clear-module-registry)

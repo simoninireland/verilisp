@@ -188,15 +188,12 @@
     (vl::declare-variable 'c '((:type (unsigned-byte 8))
 			       (:initial-value 0)))
 
-    (let ((p (vl:expand/vl  '(progn
-			      (setq a (+ b 19))
-			      (setq c a)))))
+    (vl:expand/vl  '(progn
+		     (setq a (+ b 19))
+		     (setq c a)))
 
-      (vl:typecheck p)
-      (vl::dependencies p)
-
-      (is (set-equal (vl::variable-property 'a :dependencies)
-		     '(b)))
-      (is (null (vl::variable-property 'b :dependencies)))
-      (is (set-equal (vl::variable-property 'c :dependencies)
-		     '(a b))))))
+    (is (set-equal (vl::variable-property 'a :depends-on)
+		   '(b)))
+    (is (null (vl::variable-property 'b :depends-on)))
+    (is (set-equal (vl::variable-property 'c :depends-on)
+		   '(a)))))

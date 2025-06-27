@@ -143,6 +143,56 @@
     (is (vl:synthesise p))))
 
 
+;; ---------- Generalised place ----------
+
+(test test-aref-dependencies
+  "Test we can extract aref dependencies properly."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '((:initial-value (make-array '(16)
+						:element-type (unsigned-byte 8)))))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))
+			       (:initial-value 24)))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))
+			       (:initial-value 0)))
+    (vl::declare-variable 'd '((:type (unsigned-byte 8))
+			       (:initial-value 0)
+			       (:as :constant)))
+
+    (vl:expand/vl '(progn
+		    (setq b (+ (aref a 23) 19))
+		    (setq c (+ (aref a d) b))))
+
+    (is (set-equal (vl::variable-property 'b :depends-on)
+		   '(a)))
+    (is (set-equal (vl::variable-property 'c :depends-on)
+		   '(a b)))))
+
+
+(test test-aref-target
+  "Test we can use array elements as targets."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '((:initial-value (make-array '(16)
+						:element-type (unsigned-byte 8)))))
+    (vl::declare-variable 'b '((:type (unsigned-byte 8))
+			       (:initial-value 24)))
+    (vl::declare-variable 'c '((:type (unsigned-byte 8))
+			       (:initial-value 0)))
+
+    (vl:expand/vl '(setq (aref a 1) b))
+    (is (set-equal (vl::variable-property 'a :depends-on)
+		   '(b)))
+    (is (null (vl::variable-property 'b :depends-on)))
+
+    (vl:expand/vl '(setq (aref a 1) (aref a c)))
+    (is (set-equal (vl::variable-property 'a :depends-on)
+		   '(a b c))) ; b from the previous form
+
+    (is (set-equal (vl:updated-variables '(setq (aref a 1) b))
+		   '(a)))
+    (is (set-equal (vl:updated-variables '(setq (aref a 1) (aref a c)))
+		   '(a)))))
+
+
 ;; ---------- Initialisation ----------
 
 (test test-typecheck-array-initialiser

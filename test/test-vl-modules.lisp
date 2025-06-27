@@ -143,7 +143,6 @@
 			       (setq clk 1)))))))
 
     (vl:typecheck p)
-    (setq p (car (vl:float-let-blocks p)))
     (setq p (vl:simplify-progn (car (vl:float-let-blocks p))))
     (is (vl:synthesise p))))
 
@@ -218,6 +217,9 @@
     (setq clk_out clk_in))
 
   (vl:with-new-frame
+    (vl::declare-variable 'a '((:type (unsigned-byte 1))
+			       (:initial-value 0)
+			       (:as :wire)))
     (vl::declare-variable 'c '((:type (unsigned-byte 1))
 			       (:initial-value 0)
 			       (:as :wire)))
@@ -278,6 +280,7 @@
   (vl:defmodule/vl soc ((clk-in   :type (unsigned-byte 1) :direction :in)
 			(clk      :type (unsigned-byte 1) :direction :out)
 			(reset    :type (unsigned-byte 1) :direction :out))
+
     (let ((c (make-instance 'clockworks :clk-in clk-in
 					:reset-in 0
 					:clk clk
@@ -306,6 +309,11 @@
 (test test-module-array-type-correct
   "Test we can create an array with size given by a parameter."
   (vl:with-new-frame
+    (vl::declare-variable 'clk '())
+    (vl::declare-variable 'addr-in '())
+    (vl::declare-variable 'data-out '())
+    (vl::declare-variable 'size '())
+
     (vl::make-module-environment '((clk      :width 1  :direction :in)
 				   (addr-in  :width 32 :direction :in)
 				   (data-out :width 32 :direction :out)
@@ -335,6 +343,11 @@
 			      (muffle-warning condition))))
 
       (vl:with-new-frame
+	(vl::declare-variable 'clk '())
+	(vl::declare-variable 'addr-in '())
+	(vl::declare-variable 'data-out '())
+	(vl::declare-variable 'size '())
+
 	(vl::make-module-environment '((clk      :width 1  :direction :in)
 				       (addr-in  :width 32 :direction :in)
 				       (data-out :width 32 :direction :out)

@@ -21,16 +21,6 @@
 (declaim (optimize debug))
 
 
-;; A binder defines an environment, and we expect the following
-;; keys to be provided where appropriate:
-;;
-;; - :width -- the width of a value in bits
-;; - :type -- the type being held by the binding
-;; - :direction -- direction of dataflow for module arguments
-;; - :as -- the representation to be used, one of Lregister, :wire, :constant
-;;
-;; Default and consistency checks are applied.
-
 (defun width-can-store-p (w ty env)
   "Test whether W bits can accommodate the values of TY in ENV."
   (>= (eval-in-static-environment w env)
@@ -95,11 +85,11 @@ The name is the first element, whether or not DECL is a list."
     (with-recover-on-error
 	;; on error, return the most general and innocuous result to
 	;; allow us to continue
-	(declare-variable (safe-car decl) `((:type (unsigned-byte *default-register-width*))
-					    (:as :register)
-					    (:role :variable)
-					    (:initial-value 0)
-					    (:type-constraints (unsigned-byte *default-register-width*))))
+	(set-variable-properties (safe-car decl) `((:type (unsigned-byte *default-register-width*))
+						   (:as :register)
+						   (:role :variable)
+						   (:initial-value 0)
+						   (:type-constraints (unsigned-byte *default-register-width*))))
 
       (if (listp decl)
 	  ;; full declaration
@@ -166,8 +156,10 @@ The name is the first element, whether or not DECL is a list."
 Each constraint is a type needed by some operation in the scope of a
 variable. The inferred type is the widest type (least upper-bound)
 that can accommodate all these constraints, assuming that there is
-one."
-  (foldr #'lub constraints nil))
+one.
+
+The resulting type must be representable."
+  (foldr #'lurb constraints nil))
 
 
 (defun typecheck-infer-decl (decl)
@@ -234,16 +226,18 @@ This updates the current environment with the new properties."
 
 The dependencies are all the other variables that appear on the
 right-hand side of an assignment."
-  (if (listp decl)
-      (destructuring-bind (n v &key &allow-other-keys)
-	  decl
-	(let* ((fvs (free-variables v))
-	       (all-fvs (traverse-dependencies fvs))
-	       (deps (variable-property n :dependencies :default nil)))
-	  (set-variable-property n :dependencies (union deps all-fvs))))
+  (with-current-form decl
+    (with-recover-on-error
+	;; on error, leave dependencies alone
+	nil
 
-      ;; naked declaration has no dependencies, by definition
-      nil))
+	(if (listp decl)
+	    (destructuring-bind (n v &key &allow-other-keys)
+		decl
+
+	      (let ((fvs (remove-if #'static-constant-p (free-variables v)))
+		    (depends-on (variable-property n :depends-on :default nil)))
+		(set-variable-property n :dependencies (union depends-on fvs))))))))
 
 
 (defmethod dependencies-sexp ((fun (eql 'let)) args)
@@ -259,18 +253,49 @@ right-hand side of an assignment."
 
 
 
-;; ---------- Variable re-writing ----------
+;; ---------- Free variables ----------
+
+(defun free-variables-decl (decl)
+  "Calculate the free variables for DECL.
+
+The free variables are all the variables that appear on the
+right-hand side of an assignment."
+  (if (listp decl)
+      (destructuring-bind (n v &key &allow-other-keys)
+	  decl
+	(declare (ignore n))
+
+	(remove-if #'static-constant-p (free-variables v)))))
+
 
 (defmethod free-variables-sexp ((fun (eql 'let)) args)
   (declare (optimize debug))
 
   (destructuring-bind (decls &rest body)
       args
+
     (with-local-frame decls
       (let ((lns (variables-declared-in-current-frame))
-	    (fvs (foldr #'union (mapcar #'free-variables body) '())))
-	(set-difference fvs lns)))))
+	    (body-fvs (foldr #'union (mapcar #'free-variables body) '()))
+	    (decl-fvs (foldr #'union (mapcar #'free-variables-decl decls) '())))
 
+	(set-difference (union body-fvs decl-fvs) lns)))))
+
+
+(defmethod updated-sexp ((fun (eql 'let)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (decls &rest body)
+      args
+
+    (with-local-frame decls
+      (let ((lns (variables-declared-in-current-frame))
+	    (body-fvs (foldr #'union (mapcar #'updated-variables body) '())))
+
+	(set-difference body-fvs lns)))))
+
+
+;; ---------- Variable re-writing ----------
 
 (defun rewrite-variables-keys (kvs rewrite)
   "Rewrite variables in the values of the key/value pairs KVS using REWRITE."
@@ -364,12 +389,11 @@ right-hand side of an assignment."
       (when (null newenv)
 	(setq newenv (make-frame)))
       (with-local-frame decls
-	(let ((f *global-environment*))
-	  ;; add the new declarations to the front of NEWENV
-	  (add-frame-to-environment f newenv t)
+	;; add the new declarations to the front of NEWENV
+	(add-frame-to-environment (current-frame) newenv t)
 
-	  ;; return the re-written body and the new environment
-	  (list newbody newenv))))))
+	;; return the re-written body and the new environment
+	(list newbody newenv)))))
 
 
 ;; ---------- PROGN simplification ----------
@@ -433,6 +457,8 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 
 (defun synthesise-register (n)
   "Synthesise a register N within a LET block."
+  (declare (optimize debug))
+
   (let ((v (get-initial-value n)))
     (as-literal "reg ")
     (let* ((type (get-type n))

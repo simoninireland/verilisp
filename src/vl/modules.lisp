@@ -275,8 +275,7 @@ of other parameter values."
       args
 
     (destructuring-bind (newbody newenv)
-	(with-local-frame decls
-	  (float-let-blocks `(progn ,@body)))
+	(float-let-blocks `(progn ,@body))
 
       (list
        `(module ,modname ,decls
@@ -289,14 +288,16 @@ of other parameter values."
 						       (get-environment-property n :initial-value newenv))))
 					     (decls newenv))))
 
-		       ;; add the new local environment
-		       (setq newdecls (add-local-frame-to-decls newdecls newenv))
+		       ;; add the new decls as a local frame
+		       (setq newdecls (add-local-frame-to-decls newdecls))
 
 		       `(let ,newdecls
 			  ,newbody))
 
 		     ;; no declarations, just use the new body
 		     newbody))
+
+       ;; no remaining variables to float
        (make-frame)))))
 
 

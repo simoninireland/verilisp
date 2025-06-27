@@ -49,7 +49,28 @@
 	  end)))
 
 
-(defmethod generalised-place-sexp-p ((fun (eql 'bref)) args)
+(defmethod free-variables-sexp ((fun (eql 'bref)) args)
+  (destructuring-bind (target start &key end width)
+      args
+    (remove-nulls (foldr #'union (mapcar #'free-variables
+					 (list target start end width))
+			 '()))))
+
+
+(defmethod updated-variables-sexp ((fun (eql 'bref)) args)
+  (destructuring-bind (target &rest selectorargs)
+      args
+    (declare (ignore selectorargs))
+
+    (if (symbolp target)
+	;; place targets a variable directly, return that
+	(list target)
+
+	;; place is complex, recurse into it
+	(updated-variables target))))
+
+
+(defmethod generalised-place-sexp-p ((selector (eql 'bref)) selectorargs)
   t)
 
 

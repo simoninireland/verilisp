@@ -131,12 +131,32 @@ Verilisp, but don't /require/ it."
     `(array ,element-type ,shape)))
 
 
-(defmethod free-variables-sexp ((fun (eql 'array)) args)
+;; Arrays match covariantly on element types, ignoring shapes
+;TODO:  (This may even be too much for what we can do in hardware?)
+
+(defmethod subtype-type ((ty1tag (eql 'array)) ty1args
+			 (ty2tag (eql 'array)) ty2args)
+  (cond ((null ty1args)
+	 (null ty2args))
+
+	((null ty2args)
+	 t)
+
+	(t
+	 (destructuring-bind (et1 &rest et1args)
+	     ty1args
+	   (destructuring-bind (et2 &rest et2args)
+	       ty2args
+
+	     (subtype-p et1 et2))))))
+
+
+(defmethod free-variables-sexp ((fun (eql 'make-array)) args)
   ;; can't have any free variables (I don't think)
   nil)
 
 
-(defmethod dependencies-sexp ((fun (eql 'array)) args)
+(defmethod dependencies-sexp ((fun (eql 'make-array)) args)
   ;; can't have any dependencies (I don't think)
   nil)
 
@@ -269,17 +289,28 @@ probably should, for those that are statically determined."
       (element-type-of-array ty))))
 
 
-(defmethod free-variables-sexp ((fun (eql 'make-array)) args)
-  ;; can't have any free variables (I don't think)
-  nil)
+(defmethod free-variables-sexp ((fun (eql 'aref)) args)
+  (destructuring-bind (target &rest indices)
+      args
+    (remove-nulls (foldr #'union (mapcar #'free-variables
+					 (cons target indices))
+			 '()))))
 
 
-(defmethod dependencies-sexp ((fun (eql 'make-array)) args)
-  ;; can't have any dependencies (I don't think)
-  nil)
+(defmethod updated-variables-sexp ((fun (eql 'aref)) args)
+  (destructuring-bind (target &rest indices)
+      args
+    (declare (ignore indices))
+
+    (if (symbolp target)
+	;; place targets a variable directly, return that
+	(list target)
+
+	;; place is complex, recurse into it
+	(updated-variables target))))
 
 
-(defmethod generalised-place-sexp-p ((fun (eql 'aref)) args)
+(defmethod generalised-place-sexp-p ((selector (eql 'aref)) selectorargs)
   t)
 
 

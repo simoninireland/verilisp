@@ -25,12 +25,12 @@
 
 (test test-tagbody-compled-form
   "Test we can construct a compiled form of TAGBODY."
-  (let* ((p (vl:expand/vl '(tagbody
-			    one
-			    (setq a 1)
-			    (setq b 2)
-			    two
-			    (setq b 0))))
+  (let* ((p '(tagbody
+	      one
+	      (setq a 1)
+	      (setq b 2)
+	      two
+	      (setq b 0)))
 	 (q (vl:expand/vl `(let (a b)
 			     ,p))))
 
@@ -47,13 +47,13 @@
 
 (test test-synthesise-tagbody
   "Teat we can synthesise a TAGBODY."
-  (let* ((p (vl:expand/vl '(tagbody
-			    one
-			    (setq a 1)
-			    (setq b 2)
-			    two
-			    (setq b 0)
-			    (go one))))
+  (let* ((p '(tagbody
+	      one
+	      (setq a 1)
+	      (setq b 2)
+	      two
+	      (setq b 0)
+	      (go one)))
 	 (q (vl:expand/vl `(let (a b)
 			     ,p))))
 

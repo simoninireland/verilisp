@@ -75,19 +75,22 @@
 			       (:initial-value 45)))
     (vl::declare-variable 'd '((:type (unsigned-byte 8))
 			       (:initial-value 0)))
-    (let ((p (vl:expand/vl '(progn
-			     (setq a 8)
-			     (setq a b)
-			     (setq b (+ b c))))))
-      (vl::dependencies p)
+    (vl:expand/vl '(progn
+		    (setq a 8)
+		    (setq a b)
+		    (setq b (+ b c))))
 
-      ;; b depends on itself
-      (is (set-equal (vl::variable-property 'b :dependencies)
-		     '(b c)))
+    ;; b depends on itself
+    (is (set-equal (vl::variable-property 'b :depends-on)
+		   '(b c)))
 
-      ;; a should also depend on c, after b's later update
-      (is (set-equal (vl::variable-property 'a :dependencies)
-		     '(b c))))))
+    ;; b as direct dependency...
+    (is (set-equal (vl::variable-property 'a :depends-on)
+		   '(b)))
+
+    ;; ... and c when traversed
+    (is (set-equal (vl::traverse-dependencies 'a)
+		   '(b c)))))
 
 
 ;; ---------- @ ----------
@@ -184,16 +187,19 @@
     (vl::declare-variable 'clk '((:type (unsigned-byte 1))
 				 (:initial-value 0)))
 
-    (let ((p (vl:expand/vl '(vl:@ (vl:posedge clk)
-			     (setq a 8)
-			     (setq a (+ b clk))
-			     (setq b (+ b c))))))
-      (vl::dependencies p)
+    (vl:expand/vl '(vl:@ (vl:posedge clk)
+		    (setq a 8)
+		    (setq a (+ b clk))
+		    (setq b (+ b c))))
 
-      ;; b depends on itself
-      (is (set-equal (vl::variable-property 'b :dependencies)
-		     '(b c)))
+    ;; b depends on itself
+    (is (set-equal (vl::variable-property 'b :depends-on)
+		   '(b c)))
 
-      ;; a should also depend on c and clk, after b's later update
-      (is (set-equal (vl::variable-property 'a :dependencies)
-		     '(b c clk))))))
+    ;; direct dependencies...
+    (is (set-equal (vl::variable-property 'a :depends-on)
+		   '(b clk)))
+
+    ;; ... and a should also depend on c,after b's later update
+    (is (set-equal (vl::traverse-dependencies 'a)
+		   '(b c clk)))))

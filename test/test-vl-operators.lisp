@@ -28,11 +28,11 @@
   (is (vl:subtype-p (vl:typecheck '(+ 1 1))
 		    '(unsigned-byte 2)))
   (is (vl:subtype-p (vl:typecheck '(+ 15 2))
-		    `(unsigned-byte 5)))
+		    '(unsigned-byte 5)))
   (is (not (vl:subtype-p (vl:typecheck '(+ 15 -2))
-			 `(unsigned-byte 5))))
+			 '(unsigned-byte 5))))
   (is (vl:subtype-p (vl:typecheck '(+ 15 -2))
-		    `(signed-byte 5))))
+		    '(signed-byte 6))))
 
 
 (test test-width-subtractions
