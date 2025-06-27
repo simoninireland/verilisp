@@ -41,10 +41,12 @@
    #:deconstruct-type
    #:subtype-p
    #:subtype-type
+   #:representable-type-p
    #:fixed-width-p
    #:unsigned-byte-p
    #:signed-byte-p
    #:lub
+   #:lurb
    #:lub-type
 
    ;; environments
@@ -93,6 +95,7 @@
    #:add-frames
    #:typecheck
    #:free-variables
+   #:updated-variables
    #:rewrite-variables
    #:float-let-blocks
    #:simplify-progn
@@ -117,6 +120,7 @@
    #:vl-warning
    #:recover
    #:not-synthesisable
+   #:not-representable
    #:syntax-error
    #:unknown-variable
    #:unknown-module

@@ -111,6 +111,21 @@ it contains non-synthesisable syntax, or because of a problem with the
 synthesiser's code generator."))
 
 
+(define-condition not-representable (vl-error)
+  ((ty
+    :documentation "The type that can't be represented."
+    :initarg :type
+    :reader unrepresentable-type))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Cannot represent value of type ~a"
+					       (unrepresentable-type c))
+				       c str)))
+  (:documentation "Condition signalled when a value can't be represented.
+
+This is usually caused by unsatisfiable type constraints arising from
+variable assignments."))
+
+
 ;; ---------- Checking ----------
 
 (define-condition unknown-variable (vl-error)

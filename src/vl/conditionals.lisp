@@ -35,8 +35,9 @@
       ;; the type of the expression is the widest of the
       ;; types of the two arms
       (if else
-	  (lub tythen tyelse)
+	  (lurb tythen tyelse)   ; largest representable type
 	  tythen))))
+
 
 (defun synthesise-if-expression (form)
   "Synthesise FORM as a continued expansion of conditions."
@@ -58,7 +59,6 @@
 	    (synthesise-sexp fun args)))
 
       (synthesise form)))
-
 
 
 (defmethod synthesise-sexp ((fun (eql 'if)) args)

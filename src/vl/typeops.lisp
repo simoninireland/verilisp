@@ -28,7 +28,9 @@
 If TY is a naked symbol then the arguments part is nil; otherwise
 it contains the arguments."
   (if (listp ty)
-      (list (car ty) (cdr ty))
+      (if (null ty)
+	  (list '() '())
+	  (list (car ty) (cdr ty)))
       (list ty '())))
 
 
@@ -39,6 +41,21 @@ This is simply TYTAG is TYARGS is nil, or a list specifier."
   (if (null tyargs)
       tytag
       (cons tytag tyargs)))
+
+
+(defun representable-type-p (ty)
+  "Tests whether TY is representable.
+
+Cut-off un-representable types in the type lattice. This includes
+unbounded UNSIGNED-BYTE and SIGNED-BYTE types, and the lattice types T
+and NIL."
+  (destructuring-bind (tytag tyargs)
+      (deconstruct-type ty)
+
+    (not (or (null tytag)
+	     (eql tytag t)
+	     (and (member tytag '(unsigned-byte signed-byte))
+		  (null tyargs))))))
 
 
 ;; The builtin SUBTYPEP is sometimes either too aggressive or too
@@ -64,7 +81,7 @@ tyer arguments when not needed.")
     ;; negation type, must not match
     (not (subtype-p (construct-type ty1tag ty1args) (car ty2args))))
 
-  ;TODO: Extend to handle complex type specifiers on the left as well
+					;TODO: Extend to handle complex type specifiers on the left as well
   ;; as on the right
   )
 
@@ -158,31 +175,54 @@ The default LUB of two types is T, the top type.")
   )
 
 
-(defun lub (ty1 ty2 &rest tys)
-  "Return the least upper-bound of types TY1 and TY2 (and any further types in TYS).
+(defun lub (ty &rest tys)
+  "Return the least upper-bound of types TY and any further types in TYS.
 
 By default the upper bound is T, and if either is null the
 upper bound is the other. For other combinations the type tag
 is extracted and used in a call to LUB-TYPE.
 
 Type parameters are not expanded by default."
-  (let ((lubtype (cond ((null ty1)
-			ty2)
-		       ((null ty2)
-			ty1)
-		       (t
-			(destructuring-bind (ty1tag ty1args)
-			    (deconstruct-type ty1)
-			  (destructuring-bind (ty2tag ty2args)
-			      (deconstruct-type ty2)
+  (flet ((lubtype (ty1 ty2)
+	   (cond ((null ty1)
+		  ty2)
+		 ((null ty2)
+		  ty1)
+		 (t
+		  (destructuring-bind (ty1tag ty1args)
+		      (deconstruct-type ty1)
+		    (destructuring-bind (ty2tag ty2args)
+			(deconstruct-type ty2)
 
-			    (lub-type ty1tag ty1args ty2tag ty2args)))))))
+		      (lub-type ty1tag ty1args ty2tag ty2args)))))))
 
-    (if (null tys)
-	lubtype
+    (foldr #'lubtype tys ty)))
 
-	;; fold across the remaining types
-	(apply #'lub (cons lubtype tys)))))
+
+(defun lurb (ty &rest tys)
+  "Return the least upper representable bound of TY1 and any further TYS.
+
+Representable types are those identified by REPRESENTABLE-TYPE-P. A
+NOT-REPRSENTABLE error is signalled if there is no representable
+upper bound."
+  (flet ((lurbtype (ty1 ty2)
+	   (if (representable-type-p ty1)
+	       (if (representable-type-p ty2)
+		   ;; both types are representable, return their LUB
+		   (lub ty1 ty2)
+
+		   ;; TY2 is un-representable, return TY1
+		   ty1)
+
+	       ;; TY1 is un-representable, return TY2
+	       ty2)))
+
+    (let ((lurb (foldr #'lurbtype tys ty)))
+      (if (representable-type-p lurb)
+	  lurb
+
+	  (error 'not-representable :type lurb
+				    :hint "Make sure types are representable")))))
 
 
 ;; ---------- Type parameter expansion ----------
