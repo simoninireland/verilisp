@@ -62,6 +62,10 @@ isn't declared."
       tyval)))
 
 
+(defmethod updated-variables-sexp ((fun (eql 'setq)) args)
+  (updated-variables `(setf ,@args)))
+
+
 (defmethod dependencies-sexp ((fun (eql 'setq)) args)
   (dependencies `(setf ,@args)))
 
@@ -72,49 +76,19 @@ isn't declared."
 
 ;; ---------- setf (generalised places) ----------
 
-(defgeneric generalised-place-p (form)
-  (:documentation "Test whether FORM is a generalised place.
-
-Generalised places can appear as the target of SETF forms. (In other
-languages they are sometimes referred to as /lvalues/.) This is
-separate, but related to, their type: a generalised place has a type,
-but is also SETF-able.
-
-By default forms are /not/ generalised places.")
-  (:method ((form integer))
-    nil)
-  (:method ((form symbol))
-    (not (get-constant form)))
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (generalised-place-sexp-p fun args))))
-
-
-;; No need to dive into the args in most cases, just the selector
-
-;; There might be a better approach to this using reference types
-;; to differentiate between l- and r-value instances
-
-(defgeneric generalised-place-sexp-p (fun args)
-  (:documentation "Test whether FUN applied to ARGS identifies a generalised place.
-
-The default is for a form /not/ to be a generalised place.")
-  (:method (fun args)
-    nil))
-
-
 (defun ensure-generalised-place (form)
   "Ensure FORM is a generalised place."
   (unless (generalised-place-p form)
-    (error 'not-synthesisable :hint "Make sure the code identifies a generalised, SETF-able, place")))
+    (error 'not-synthesisable :hint "Make sure the target of the assignment is a generalised, SETF-able, place")))
 
 
 (defmethod typecheck-sexp ((fun (eql 'setf)) args)
   (destructuring-bind (var val &key sync)
       args
     (if (listp var)
-	(typecheck-sexp-setf (car var) val (cdr var) :sync sync)
+	(destructuring-bind (selector &rest selectorargs)
+	    var
+	  (typecheck-sexp-setf selector val selectorargs :sync sync))
 
 	;; a SETF to a simple variable is a SETQ
 	(typecheck `(setq ,var ,val :sync ,sync)))))
@@ -130,18 +104,31 @@ The default is for a form /not/ to be a generalised place.")
     tyvar))
 
 
+(defmethod updated-variables-sexp ((fun (eql 'setf)) args)
+  (destructuring-bind (place v &key &allow-other-keys)
+      args
+    (if (symbolp place)
+	;; place targets a variable directly
+	(list place)
+
+	;; place is generalised
+	(updated-variables place))))
+
+
 (defmethod dependencies-sexp ((fun (eql 'setf)) args)
   (declare (optimize debug))
 
-  (destructuring-bind (n v &key &allow-other-keys)
+  (destructuring-bind (place v &key &allow-other-keys)
       args
 
-    (let* ((fvs (free-variables v))
-	   (all-fvs (traverse-dependencies fvs))
-	   (deps (variable-property n :dependencies :default nil)))
-      (set-variable-property n :dependencies (union deps all-fvs))
+    (let ((ns (updated-variables `(,fun ,@args)))
+	  (fvs (remove-if #'static-constant-p (free-variables v))))
 
-      (list n))))
+      ;; set the dependencies for the target
+      (mapc (lambda (n)
+	      (let ((depends-on (variable-property n :depends-on :default nil)))
+		(set-variable-property n :depends-on (union depends-on fvs))))
+	    ns))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'setf)) args)

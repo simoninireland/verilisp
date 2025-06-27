@@ -41,6 +41,27 @@ free instances to new names.")
     (foldr #'union (mapcar #'free-variables args) '())))
 
 
+(defgeneric updated-variables (form)
+  (:documentation "Return all free variables in FORM that are updated.")
+  (:method ((form integer))
+    nil)
+  (:method ((form symbol))
+    nil)
+  (:method ((form list))
+    (destructuring-bind (fun &rest args)
+	form
+      (updated-variables-sexp fun args))))
+
+
+(defgeneric updated-variables-sexp (fun args)
+  (:documentation "Return all variables free that are updated in FUN applied to ARGS.
+
+The default is for no variables to be updated. Methods on this function should
+return any updated variables.")
+  (:method (fun args)
+    nil))
+
+
 ;; ---------- Variable re-writing ----------
 
 (defgeneric rewrite-variables (form rewrite)
@@ -227,12 +248,40 @@ This matches a form (SETF (SELECTOR SELECTORARGS) VAL) and allows
 different selectors to be used as generalised places."))
 
 
+;; ---------- Generalised places ----------
+
+(defgeneric generalised-place-p (form)
+  (:documentation "Test whether FORM is a generalised place.
+
+Generalised places can appear as the target of SETF forms. (In other
+languages they are sometimes referred to as /lvalues/.) This is
+separate, but related to, their type: a generalised place has a type,
+but is also SETF-able.")
+  (:method ((form integer))
+    nil)
+  (:method ((form symbol))
+    (not (get-constant form)))
+  (:method ((form list))
+    (destructuring-bind (fun &rest args)
+	form
+      (generalised-place-sexp-p fun args))))
+
+
+(defgeneric generalised-place-sexp-p (selector selectorargs)
+  (:documentation "Test whether SELECTOR applied to SELECTORARGS identifies a generalised place.
+
+Methods on this function should identify those forms that are generalised places.
+Usually this will only involve examining SELECTOR.")
+  (:method (selector selectorargs)
+    nil))
+
+
 ;; ---------- Dependencies ----------
 
 (defgeneric dependencies (form)
   (:documentation "Find all the depenencies in FORM.
 
-Return a list of variables whose dependencies have been changed.")
+The :DEPENDS-ON property is set for each variable.")
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
@@ -242,24 +291,38 @@ Return a list of variables whose dependencies have been changed.")
 (defgeneric dependencies-sexp (fun args)
   (:documentation "Find the dependencies of FUN applied to ARGS.
 
-Return a list of variables whose dependencies have been changed.")
+Methods on this function should be built for each operator that makes
+and assignment, to capture the dataflow.")
   (:method (fun args)
-    (foldr #'union (mapcar #'dependencies args) '())))
+    (mapc #'dependencies args)))
 
 
 (defun traverse-dependencies (ns)
   "Traverse the dependencies for the variables NS.
 
-This returns the dependencies of the NS, and all the dependencies of those
-dependencies, and so on recursively. Constants do not count as dependencies
-as they can't be updated."
-  (foldr #'union (mapcar (lambda (n)
-			   (if (static-constant-p n)
-			       nil
-			       (union (list n)
-				      (variable-property n :dependencies :default nil))))
-			 ns)
-	 '()))
+NS can be a variable name or a list of variables.
+
+Return the dependencies of the NS, and all the dependencies of those
+dependencies, and so on recursively. Constants do not count as
+dependencies as they can't be updated."
+
+  ;; get the direct dependencies
+  (let ((direct (foldr #'union
+		       (mapcar (lambda (n)
+				 (variable-property n :depends-on :default nil))
+			       (if (listp ns)
+				   ns
+				   (list ns)))
+		       '())))
+
+    ;; traverse to further dependencies
+    (foldr #'union (mapcar (lambda (n)
+			     (if (static-constant-p n)
+				 nil
+				 (union (list n)
+					(variable-property n :depends-on :default nil))))
+			   direct)
+	   '())))
 
 
 ;; ---------- Let block coalescence ----------
