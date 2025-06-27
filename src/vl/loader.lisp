@@ -150,6 +150,9 @@ of a larger compilation process."
   (let* ((expanded (expand-macros-in-environment form *macro-environment*))
 	 (framed (add-frames expanded)))
 
+    ;; add dataflow dependencies to the tree
+    (dependencies framed)
+
     framed))
 
 
@@ -167,10 +170,6 @@ This function is not usually called directly, but is called as part
 of a larger compilation process."
   ;; Typecheck and infer
   (let* ((intf (typecheck form)))
-
-    ;; add dependencies
-    ;; Should this be part of expansion, rather than elaboration?
-    (dependencies form)
 
     ;; simplify
     (let* ((floated (car (float-let-blocks form)))
