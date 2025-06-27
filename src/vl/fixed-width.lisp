@@ -93,12 +93,12 @@
 
 (defun signed-byte-p (ty)
   "Test whether TY is a signed fixed-width type."
-  (subtype-p ty '(and signed-byte (not unsigned-byte))))
+  (subtype-p ty 'signed-byte))
 
 
 (defun unsigned-byte-p (ty)
   "Test whether TY is an unsigned fixed-width type."
-  (subtype-p ty '(and 'unsigned-byte (not signed-byte))))
+  (subtype-p ty '(or unsigned-byte bit)))
 
 
 (defun ensure-fixed-width (ty)
