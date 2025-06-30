@@ -1,0 +1,6 @@
+* Development of an SPI ROM module
+
+  This example drives the SPI Flash ROM attached to the IceStick
+  development board. It is derived from [[https://github.com/BrunoLevy/learn-fpga/blob/master/FemtoRV/TUTORIALS/spi_flash.md][Learn-FPGA]] tutorial,
+  transliterated from Verilog to Verilisp, and then refined into a
+  more Lisp-like solution.
