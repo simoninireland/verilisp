@@ -1,0 +1,10 @@
+* Full RISC-V 32-bit integer core
+
+  This is the full RISC-V core defined as ~step17.v~ in the [[https://github.com/BrunoLevy/learn-fpga/blob/master/FemtoRV/TUTORIALS/FROM_BLINKER_TO_RISCV/README.md][Learning FPGA]]
+  tutorial, translated into Verilisp as a larger test for synthesis.
+  It targets the IceStick FPGA development board.
+
+** Usage
+
+   Run ~make~ to create the bitstream, including the core itself and its
+   firmware. The ~make upload~ to upload to the IceStick.
