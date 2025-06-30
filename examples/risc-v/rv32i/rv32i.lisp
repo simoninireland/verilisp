@@ -21,12 +21,13 @@
 ;; ---------- Supporting modules ----------
 
 ;; RAM
-(defmodule/vl ram ((addr       :direction :in)
-		   (rd/wr      :direction :in :width 1)
-		   (write-mask :direction :in :width 4)
-		   (data       :direction :inout)
+(defmodule/vl ram (addr rd/wr write-mask data
 		   &key
 		   (words 256))
+  (declare (type (unsigned-byte 32) addr data)
+	   (type bit rd/wr)
+	   (type (unsigned-byte 4) write-mask)
+	   (direction inout data))
 
   (let ((mem (make-array (words) :element-type (unsigned-byte 32)
 				 :initial-element 0)))
@@ -37,9 +38,9 @@
 	     ;; writing
 	     (let ((updated (aref mem word-addr)))
 	       (with-bitfields (b3 b3 b3 b3 b3 b3 b3 b3
-				b2 b2 b2 b2 b2 b2 b2 b2
-				b1 b1 b1 b1 b1 b1 b1 b1
-				b0 b0 b0 b0 b0 b0 b0 b0)
+				   b2 b2 b2 b2 b2 b2 b2 b2
+				   b1 b1 b1 b1 b1 b1 b1 b1
+				   b0 b0 b0 b0 b0 b0 b0 b0)
 		   updated
 					;TODO: Is the mask being interpreted correctly?
 		 (when (asserted-p (bref write-mask 0))
@@ -59,13 +60,14 @@
 
 
 ;; Simple ALU
-(defmodule/vl rv321-alu ((a                :direction :in  :type (unsigned-byte 32))
-			 (b                :direction :in  :type (unsigned-byte 32))
-			 (add/sub          :direction :in  :type (unsigned-byte 1))
-			 (sign-extending-p :direction :in  :type (unsigned-byte 1))
-			 (op               :direction :in  :type (unsigned-byte 3))
-			 (shift            :direction :in  :type (unsigned-byte 5))
-			 (c                :direction :out :type (unsigned-byte 32)))
+(defmodule/vl rv321-alu (a b add/sub sign-extending-p
+			 op shift c)
+  (declare (type (unsigned-byte 32) a b c)
+	   (type bit add/sub sign-extending-p)
+	   (type (unsigned-byte 3) op)
+	   (type (unsigned-byte 5) shift)
+	   (direction out c))
+
   (@ (*)
      (case op
        (#2r000
@@ -108,10 +110,11 @@
 
 
 ;; Simple comparator
-(defmodule/vl rv32i-comparator ((a  :direction :in  :width 32)
-				(b  :direction :in  :width 32)
-				(op :direction :in  :width 3)
-				(c  :direction :out :width 32))
+(defmodule/vl rv32i-comparator (a b op c)
+  (declare (type (unsigned-byte 32) a b c)
+	   (type (unsigned-byte 3) op)
+	   (direction out c))
+
   (@ (*)
      (case op
        (#2r000
@@ -144,33 +147,38 @@
 
 ;; ---------- Core ----------
 
-(defmodule/vl rv32i ((clk   :direction :in :width 1)
-		     (reset :direction :in :width 1))
+(defmodule/vl rv32i (clk reset)
+  (declare (type bit clk reset))
 
   ;; state
-  (let ((pc 0 :width 32)
-	(instr 0 :width 32)
+  (let ((pc 0)
+	(instr 0)
 
 	;; working registers
-	(rs1             0 :width 32)
-	(rs2             0 :width 32)
-	(write-back-data 0 :width 32)
-	(next-pc         0 :width 32)
+	(rs1             0)
+	(rs2             0)
+	(write-back-data 0)
+	(next-pc         0)
 
 	;; registers
 	(register-file (make-array (32) :element-type (unsigned-byte 32)
 					:initial-element 0)))
+    (declare (type (unsigned-byte 32) pc instr rs1 rs2 write-back-data next-pc))
 
     ;; wiring
     (let-wires (a b c compare
-		(op      0 :width 3)
-		(add/sub 0 :width 1)
+		  (op      0)
+		  (add/sub 0)
 
-		;; memory access
-		(addr       0 :width 32)
-		(data       0 :width 32)
-		(rd/wr      0 :width 1)
-		(write-mask 0 :width 4))
+		  ;; memory access
+		  (addr       0)
+		  (data       0)
+		  (rd/wr      0)
+		  (write-mask 0))
+      (declare (type (unsigned-byte 32) a b c addr data)
+	       (type (unsigned-byte 3) op)
+	       (type (unsigned-byte 4) write-mask)
+	       (type bit add/sub rd/wr))
 
       (let ((mem (make-instance 'ram :addr addr :data data
 				     :rd/wr rd/wr :write-mask write-mask))
@@ -194,9 +202,9 @@
 				    '(signed-byte 32)))
 		      (Bimm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
 									   (bref instr 7)
-									    (bref instr 30 :end 25)
-									    (bref instr 11 :end 8)
-									    0))
+									   (bref instr 30 :end 25)
+									   (bref instr 11 :end 8)
+									   0))
 				    '(signed-byte 32)))
 		      (Jimm (coerce (the '(signed-byte 22) (make-bitfields (bref instr 31)
 									   (bref instr 19 :end 12)
@@ -333,7 +341,7 @@
 			   (setq write-mask (cond ((= read-type #2r00)
 						   ;; store byte
 						   (if (asserted-p (bref addr 1))
-						       ;TODO: Check these masks are correct
+					;TODO: Check these masks are correct
 						       ;; writing to byte in upper half-word
 						       (if (asserted-p (bref addr 0))
 							   #2r1000
