@@ -72,7 +72,8 @@
    #:ensure-static
    #:eval-if-static
 
-   ;; extra Verilisp functions and macros not in Common Lisp
+   ;; extra Verilisp functions, macros, and declarations
+   ;; not present in Common Lisp
    #:module
    #:<<
    #:>>
@@ -84,6 +85,11 @@
    #:with-bitfields
    #:make-bitfields
    #:extend-bits
+   #:register
+   #:wire
+   #:constant
+   #:width
+   #:as
    #:0=
    #:0/=
    #:2*
@@ -93,6 +99,7 @@
 
    ;; DSL functions
    #:add-frames
+   #:declare-annotation
    #:typecheck
    #:free-variables
    #:updated-variables
@@ -126,6 +133,7 @@
    #:unknown-module
    #:unknown-state
    #:unknown-form
+   #:unrecognised-declaration
    #:duplicate-variable
    #:duplicate-module
    #:duplicate-state

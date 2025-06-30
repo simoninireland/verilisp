@@ -197,3 +197,23 @@
     (is (null (vl::variable-property 'b :depends-on)))
     (is (set-equal (vl::variable-property 'c :depends-on)
 		   '(a)))))
+
+
+(test test-let-declarations
+  "Test the detailed behaviour of declarations."
+  (vl:with-new-frame
+    (vl::declare-variable 'a '())
+    (vl::declare-variable 'b '())
+    (vl::declare-variable 'c '())
+
+    (vl:expand/vl '(declare (type (unsigned-byte 16) a b)
+			    (vl:width 8 c)))
+    (is (vl:subtype-p (vl::get-type 'a) '(unsigned-byte 16)))
+    (is (vl:subtype-p (vl::get-type 'b) '(unsigned-byte 16)))
+    (is (vl:subtype-p (vl::get-type 'c) '(unsigned-byte 8)))
+
+    (vl:expand/vl '(declare (vl:as vl:wire a)))
+    (is (eql (vl::get-representation 'a) 'vl:wire))
+
+    (signals (vl:unrecognised-declaration)
+      (vl:expand/vl '(declare (temp a b c))))))

@@ -44,6 +44,7 @@
 			  ("rep"      . representation-mismatch)
 			  ("coerce"   . coercion-mismatch)
 			  ("prec"     . precision-mismatch)
+			  ("declare"  . unrecognised-declaration)
 			  ("infer"    . type-inferred))
   "An alist mapping warning flags on the command line to warning class names.")
 

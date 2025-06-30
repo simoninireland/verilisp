@@ -413,7 +413,22 @@ the data, and/or making sure there's the right amount of it."))
   (:documentation "Condition signalled when an unrecognised state is encountered.
 
 This usualy happens when a state is targeted as the next state (using the
-NEXT macro) that isn;t defined in the surrounding state machine."))
+NEXT macro) that isn't defined in the surrounding state machine."))
+
+
+(define-condition unrecognised-declaration (vl-warning)
+  ((tag
+    :documentation "The declared annotation tag."
+    :initarg :tag
+    :reader tag))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Unrecognised declaration annotation ~a"
+					       (tag c))
+				       c str)))
+  (:documentation "Condition signalled when an unrecognised annotationis encountered.
+
+This is often benign, indicating that an annotation has appeared
+in a DECLARE form that isn't (yet) handled by Verilisp."))
 
 
 (define-condition type-inferred (vl-warning)

@@ -47,6 +47,7 @@
 			     (:file "typeops")
 			     (:file "identifiers")
 			     (:file "fixed-width")
+			     (:file "declare")
 			     (:file "assignment")
 			     (:file "literals")
 			     (:file "references")
