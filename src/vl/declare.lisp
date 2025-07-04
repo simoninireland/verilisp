@@ -71,3 +71,15 @@ so use in later passes."))
     (mapc (lambda (n)
 	    (set-variable-property n :as rep))
 	  vars)))
+
+
+(defmethod declare-annotation ((tag (eql 'ignore)) args)
+  (mapc (lambda (n)
+	  (set-variable-property n :ignore t))
+	args))
+
+
+(defmethod declare-annotation ((tag (eql 'ignorable)) args)
+  (mapc (lambda (n)
+	  (set-variable-property n :ignorable t))
+	args))
