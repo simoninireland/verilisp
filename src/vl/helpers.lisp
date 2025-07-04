@@ -23,12 +23,11 @@
 ;; ---------- Errors that underlie Verilisp ----------
 
 (defmacro with-vl-errors-not-synthesisable (&body body)
-  "Run BODY within a handler that makes Verilisp errors non-synthesisable.
+  "Run BODY within a handler that translates non-Verilisp errors.
 
 Non-error conditions are passed through; non-Verilisp-specific errors
-are reported as NON-SYNTHESISABLE errors."
-  `(handler-bind ((vl-error (lambda (condition)
-				  (error condition)))
+are reported as NOT-SYNTHESISABLE errors."
+  `(handler-bind ((vl-error #'identity)
 
 		  (error (lambda (condition)
 			   (error 'not-synthesisable :underlying-condition condition))))
