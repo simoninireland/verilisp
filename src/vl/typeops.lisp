@@ -102,7 +102,7 @@ when comparing Verilisp types."
 	 t)
 
 	((eql ty1 t)
-	 ;; the t (top) type is only a sub-type of top
+	 ;; the t (top) type is only a super-type of top
 	 (eql ty2 t))
 
 	((null ty2)
@@ -203,7 +203,7 @@ Type parameters are not expanded by default."
   "Return the least upper representable bound of TY1 and any further TYS.
 
 Representable types are those identified by REPRESENTABLE-TYPE-P. A
-NOT-REPRSENTABLE error is signalled if there is no representable
+NOT-REPRESENTABLE error is signalled if there is no representable
 upper bound."
   (flet ((lurbtype (ty1 ty2)
 	   (if (representable-type-p ty1)
