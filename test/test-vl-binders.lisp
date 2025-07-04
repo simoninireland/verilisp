@@ -216,4 +216,7 @@
     (is (eql (vl::get-representation 'a) 'vl:wire))
 
     (signals (vl:unrecognised-declaration)
-      (vl:expand/vl '(declare (temp a b c))))))
+      (vl:expand/vl '(declare (temp a b c))))
+
+    (signals (vl:unknown-variable)
+      (vl:expand/vl '(declare (type bit d))))))

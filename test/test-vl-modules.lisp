@@ -156,14 +156,14 @@
 			  (clk_out :direction :out :as :wire :type (unsigned-byte 1)))
     (setq clk_out clk_in))
 
-  (is (vl:subtype-p (type-of (vl:typecheck (vl:expand/vl '(vl:module moduleinstanciatebitfields
-							   ((clk_in :type (unsigned-byte 1) :direction :in :as :wire))
-							   (let ((ctrl 0 :type (unsigned-byte 4) :as :wire))
-							     (vl:with-bitfields (clk b2 b1 b0)
-								 ctrl
-							       (let ((clock (make-instance 'clock :clk_in clk_in
-												  :clk_out clk)))
-								 clock)))))))
+  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(vl:module moduleinstanciatebitfields
+						  ((clk_in :type (unsigned-byte 1) :direction :in :as :wire))
+						  (let ((ctrl 0 :type (unsigned-byte 4) :as :wire))
+						    (vl:with-bitfields (clk b2 b1 b0)
+							ctrl
+						      (let ((clock (make-instance 'clock :clk_in clk_in
+											 :clk_out clk)))
+							clock))))))
 		    'vl::module-interface))
 
   (let ((p (vl:expand/vl '(vl:module moduleinstanciatebitfields
