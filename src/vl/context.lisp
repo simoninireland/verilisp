@@ -65,12 +65,12 @@ should be handled correctly using WITH-NEW-FRAME. However...."
 
 (defun declare-variable (n props)
   "Declare a new variable N with properties PROPS in the global environment."
-  (declare-environment-variable n props *global-environment*))
+  (declare-environment-variable n props (current-frame)))
 
 
 (defun variable-declared-p (n)
   "Test whether variable N is declared in the global environment."
-  (variable-declared-in-environment-p n *global-environment*))
+  (variable-declared-in-environment-p n (current-frame)))
 
 
 (defun ensure-variable-declared (n)
@@ -82,17 +82,17 @@ should be handled correctly using WITH-NEW-FRAME. However...."
 
 (defun variables-declared ()
   "Return the variables declared in the current global environment."
-  (get-environment-names *global-environment*))
+  (get-environment-names (current-frame)))
 
 
 (defun variables-declared-in-current-frame ()
   "Return the variables declared in only the shallowest frame of the global environment."
-  (get-frame-names *global-environment*))
+  (get-frame-names (current-frame)))
 
 
 (defun variable-properties (n)
   "Return the property list of variable N in the global environment."
-  (get-environment-properties n *global-environment*))
+  (get-environment-properties n (current-frame)))
 
 
 (defun variable-property (n p &key default)
@@ -102,7 +102,7 @@ should be handled correctly using WITH-NEW-FRAME. However...."
 
 (defun set-variable-property (n p v)
   "Set the value of property P of variable N in the global environment to V."
-  (set-environment-property n p v *global-environment*))
+  (set-environment-property n p v (current-frame)))
 
 
 (defun set-variable-properties (n props)
@@ -110,7 +110,7 @@ should be handled correctly using WITH-NEW-FRAME. However...."
 
 PROPS should be an alist mapping property names to their values."
   (dolist (p props)
-    (set-environment-property n (car p) (cadr p) *global-environment*)))
+    (set-environment-property n (car p) (cadr p) (current-frame))))
 
 
 (defun declare-macro (m &optional underlying-name)
