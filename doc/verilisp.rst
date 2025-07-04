@@ -42,6 +42,7 @@ on the types passed to operators.
 
    core/binders
    core/rep-spec-binders
+   core/declarations
    core/operators
    core/conditionals
    core/assignment
