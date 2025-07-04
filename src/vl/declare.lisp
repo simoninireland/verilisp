@@ -33,9 +33,17 @@ so use in later passes."))
 	  (with-current-form dec
 	    (destructuring-bind (tag &rest decargs)
 		dec
+
 	      (handler-case
 		  (declare-annotation tag decargs)
+
+		(vl-error (c)
+		  (error c))
+
 		(error ()
+		  ;; other errors are interpreted as an
+		  ;; unkown declaration
+		  ;TODO: Might be too wide?
 		  (warn 'unrecognised-declaration :tag tag))))))
 	args))
 

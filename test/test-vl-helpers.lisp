@@ -102,4 +102,4 @@
 	;; the type should be that of 8, where we re-started
 	(is (vl:subtype-p ty '(unsigned-byte 4)))))
 
-    (is (= errors 1))))
+    (is (= errors 2)))) ;; one from dependencies, one from typecheck

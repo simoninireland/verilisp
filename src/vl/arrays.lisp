@@ -136,6 +136,8 @@ Verilisp, but don't /require/ it."
 
 (defmethod subtype-type ((ty1tag (eql 'array)) ty1args
 			 (ty2tag (eql 'array)) ty2args)
+  (declare (optimize debug))
+
   (cond ((null ty1args)
 	 (null ty2args))
 

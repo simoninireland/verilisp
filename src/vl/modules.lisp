@@ -498,9 +498,7 @@ and causes a NOT-IMPORTABLE error if not."
 		     (ensure-subtype tyval tyarg)))
 
 		  ((parameter-for-module-interface-p arg intf)
-		   (let ((tyval (typecheck (eval-in-static-environment v)))
-			 (tyarg (get-frame-property arg :type f)))
-		     (ensure-subtype tyval tyarg)))
+		   (typecheck (eval-in-static-environment v)))
 
 		  (t
 		   (error 'unknown-variable :variable arg

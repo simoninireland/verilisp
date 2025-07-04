@@ -27,10 +27,11 @@
 
 Non-error conditions are passed through; non-Verilisp-specific errors
 are reported as NOT-SYNTHESISABLE errors."
-  `(handler-bind ((vl-error #'identity)
+  `(handler-bind ((vl-error (lambda (c)
+			      (error c)))
 
-		  (error (lambda (condition)
-			   (error 'not-synthesisable :underlying-condition condition))))
+		  (error (lambda (c)
+			   (error 'not-synthesisable :underlying-condition c))))
 
      ,@body))
 
@@ -62,15 +63,15 @@ function is implementation-dependent."
 
 Any unknown forms are reported as UNKNOWN-FORM exceptions. The
 actual way these forms are captured is unfortunately implementation-specific."
-  `(handler-bind ((error #'(lambda (condition)
+  `(handler-bind ((error #'(lambda (c)
 			     (declare (optimize debug))
 
-			     (if-let ((form (failed-form condition)))
+			     (if-let ((form (failed-form c)))
 			       ;; we encountered an unknown form, signal it as such
 			       (error 'unknown-form :form form)
 
 			       ;; propagate the condition
-			       (error condition)))))
+			       (error c)))))
      ,@body))
 
 

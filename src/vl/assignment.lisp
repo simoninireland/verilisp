@@ -118,17 +118,21 @@ isn't declared."
 (defmethod dependencies-sexp ((fun (eql 'setf)) args)
   (declare (optimize debug))
 
-  (destructuring-bind (place v &key &allow-other-keys)
-      args
+  (with-recover-on-error
+      ;; leave dependencies alone
+      nil
 
-    (let ((ns (updated-variables `(,fun ,@args)))
-	  (fvs (remove-if #'static-constant-p (free-variables v))))
+    (destructuring-bind (place v &key &allow-other-keys)
+	args
 
-      ;; set the dependencies for the target
-      (mapc (lambda (n)
-	      (let ((depends-on (variable-property n :depends-on :default nil)))
-		(set-variable-property n :depends-on (union depends-on fvs))))
-	    ns))))
+      (let ((ns (updated-variables `(,fun ,@args)))
+	    (fvs (remove-if #'static-constant-p (free-variables v))))
+
+	;; set the dependencies for the target
+	(mapc (lambda (n)
+		(let ((depends-on (variable-property n :depends-on :default nil)))
+		  (set-variable-property n :depends-on (union depends-on fvs))))
+	      ns)))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'setf)) args)
