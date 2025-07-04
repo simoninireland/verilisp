@@ -32,11 +32,10 @@
       (let (a)
 	(setq a (/ 12 0)))))
 
-  ;; passes the unknown variable condition
+  ;; passes the Verilisp condition
   (signals (vl::unknown-variable)
-    (vl::with-vl-errors-not-synthesisable
-      (vl:typecheck (vl:expand/vl '(let (a)
-				    (setq b (+ 12 2))))))))
+    (vl:expand/vl '(let (a)
+		    (setq b (+ 12 2))))))
 
 
 ;; ---------- with-unknown-form ----------
