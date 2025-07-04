@@ -21,47 +21,6 @@
 (declaim (optimize debug))
 
 
-;; ---------- Macros we allow in Verilisp ----------
-
-(defvar *macro-environment* (empty-environment)
-  "The frame containing all the macros available in Verilisp.
-
-The frame is initially detatched. It should be attached to the global
-environment before calling EXPAND-MACROS-IN-ENVIRONMENT (and can be
-detached again afterwards).")
-
-
-;; declare all macros available by default
-(with-frame *macro-environment*
-  ;; conditionals
-  (declare-macro 'cond)
-  (declare-macro 'when 'when/vl)
-  (declare-macro 'unless 'unless/vl)
-
-  ;; representation-specific lets
-  (declare-macro 'let-wires)
-  (declare-macro 'let-registers)
-  (declare-macro 'let-constants)
-
-  ;; places
-  (declare-macro 'incf 'incf/vl)
-  (declare-macro 'decf 'decf/vl)
-
-  ;; tests and maths
-  (declare-macro '0=)
-  (declare-macro '0/=)
-  (declare-macro '1+ '1+/vl)
-  (declare-macro '1- '1-/vl)
-  (declare-macro '2* '2*)
-
-  ;; variable introduction and aliasing
-  (declare-macro 'with-bitfields)
-
-  ;; state machines
-  (declare-macro 'tagbody 'tagbody/vl)
-  (declare-macro 'go 'go/vl))
-
-
 ;; ---------- Module registry ----------
 
 (defvar *module-list* nil

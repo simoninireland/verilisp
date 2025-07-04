@@ -124,7 +124,7 @@ Fixed bits are constant 0s or 1s."
 	`(,s (bref ,arg ,start :end ,end) :width ,(1+ (- start end))))))
 
 
-(defmacro with-bitfields (pattern arg &body body)
+(defmacro/vl with-bitfields (pattern arg &body body)
   "Create variables matching the bitfield PATTERN applied to ARG in BODY.
 
 The pattern consists of a list of variable names, with each

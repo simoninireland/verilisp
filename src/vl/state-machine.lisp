@@ -217,7 +217,7 @@ unique variable name."
 	   ,@new-states)))))
 
 
-(defmacro tagbody/vl (&body body)
+(defmacro/vl tagbody (&body body)
   "Compile a state machine consisting of STATES."
   (let ((states (extract-tagbody-states body)))
     (ensure-unique-state-labels states)
@@ -229,7 +229,7 @@ unique variable name."
 
 ;; ---------- GO ----------
 
-(defmacro go/vl (label)
+(defmacro/vl go (label)
   "Change state to LABEL."
   (ensure-state-machine-context 'go)
   (ensure-state-label label)
