@@ -45,8 +45,8 @@ jumps either to ``start`` if the machine has finished, or to
 (Put another way, ``tagbody`` is basically a ``progn`` with the option
 to jump to arbitrarily-labelled places within it.)
 
-From this description, it should be clear that this machine /never
-exits/, unless there's some other mechanism that resets ``a`` to 0.
+From this description, it should be clear that this machine *never
+exits*, unless there's some other mechanism that resets ``a`` to 0.
 
 
 State machines in hardware
@@ -70,6 +70,7 @@ variable to keep track of the state.
      (let ((start 0)                  ; state labels
 	   (increment 1)
 	   (count 2))
+
        (let ((state start))           ; current state variable
 	 (case state
 	   (start
@@ -120,7 +121,7 @@ state machine.
 
 To run this machine we need to repeatedly execute its body, which we
 can do by placing it inside an ``@`` block to be run at each rising
-block edge.
+clock edge.
 
 .. code-block:: lisp
 
@@ -143,8 +144,8 @@ which means that some common Verilog constructions (like having code
 in other sensitive blocks refer to the state of another state machine)
 can't be built in Verilisp. It also means that outside code can't
 change the state of a machine: the only way to change state is through
-a ``go`` within the ``tagbody`` itself.  One can argue these are both
-advantages.
+a ``go`` within the ``tagbody`` itself. One can argue that these are
+both advantages in terms of code clarity.
 
 
 .. _implementation-tagbody-differences-with-cl:
@@ -201,13 +202,14 @@ A nested machine might look like this:
 	increment
 	  (let ((b 5))
 	    (tagbody
-	      (delay                  ; delay loop
+	     delay                    ; delay loop
 	       (decf b)
 	       (if (= b 0)
 		   (progn
 		     (incf a)
-		     (go count))))))  ; jump to an
+		     (go count))      ; jump to an
 				      ; outer-machine state
+		   (go delay))))      ; go round again
 
 	count
 	  (if (= a 10)

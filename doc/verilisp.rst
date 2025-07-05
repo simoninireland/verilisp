@@ -14,8 +14,8 @@ This may not seem very useful, but because Verilisp code is embedded
 into Lisp we have all the power of Lisp available to generate Verilisp
 code. As long as the result is Verilisp we can use *any* Lisp code to
 generate it. Specifically we can define macros that expand Lisp code
-into Verilisp code. The result is that we can easily extend Verilisp with
-new language constructs, as long as they expand into the core
+into Verilisp code. The result is that we can easily extend Verilisp
+with new language constructs, as long as they expand into the core
 synthesisable fragment.
 
 
@@ -50,6 +50,7 @@ on the types passed to operators.
    core/tagbody
    core/arrays
    core/coercion-casting
+   core/macros
 
 
 Extended forms

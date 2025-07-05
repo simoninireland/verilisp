@@ -16,8 +16,9 @@ Sub-typing
 
 Unfortunately, the built-in :code:`subtypep` function for testing the
 sub-type relationship is slightly misbehaving for our purposes.
-Specifically it doesn't short-cut the evaluation of type tags for types
-that aren't compound, and this can cause some subtle problems.
+Specifically it doesn't always short-cut the evaluation of type tags
+for types that aren't compound, and this can cause some subtle
+problems.
 
 Rather than code-around these problems individually, Verilisp defines
 a new function that provides exactly the sub-typing relationships we
@@ -36,7 +37,8 @@ The disadvantage of this approach is the Verilisp implementation needs
 to use a non-standard type comparison function. The two functions'
 names are also perhaps too similar for comfort. The advantage is that
 there is better control over the type comparisons, which may reflect
-slightly different constraints than those that appear in Lisp generally.
+slightly different constraints than those that appear in Lisp
+generally.
 
 
 .. _implementation-complex-types:
