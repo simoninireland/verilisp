@@ -36,6 +36,18 @@ are reported as NOT-SYNTHESISABLE errors."
      ,@body))
 
 
+;; ---------- Implicit forms ----------
+
+(defmacro with-implicit-progn (body)
+  "Return the forms in BODY as an implicit PROGN form."
+  `(cons 'progn ,body))
+
+
+(defmacro with-implicit-tagbody (body)
+  "Return the forms in BODY as an implicit TAGBODY form."
+  `(cons 'tagbody ,body))
+
+
 ;; ---------- Unknown forms in Verilisp code ----------
 
 (defun failed-form (condition)

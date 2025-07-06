@@ -345,7 +345,7 @@ right-hand side of an assignment."
   (destructuring-bind (decls &rest body)
       args
     (let ((newdecls (mapcar #'expand-macros-decl decls))
-	  (newbody (expand-macros (cons 'progn body))))
+	  (newbody (expand-macros (with-implicit-progn body))))
       `(let ,newdecls
 	 ,newbody))))
 
@@ -359,7 +359,7 @@ right-hand side of an assignment."
       args
 
     (destructuring-bind (newbody newenv)
-	(float-let-blocks `(progn ,@body))
+	(float-let-blocks (with-implict-progn body))
 
       ;; add our declarations to the environment
       (when (null newenv)
