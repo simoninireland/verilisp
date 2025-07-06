@@ -241,11 +241,26 @@ removed."
   (:documentation "Type-check the application of FUN to ARGS in the global environment."))
 
 
-(defgeneric typecheck-sexp-setf (selector val selectorargs &key sync)
+(defgeneric check-sexp-setf (selector val selectorargs &key sync)
   (:documentation "Type-check a SETF form allowing generalised places.
 
 This matches a form (SETF (SELECTOR SELECTORARGS) VAL) and allows
 different selectors to be used as generalised places."))
+
+
+(defgeneric widthinfer (form)
+  (:documentation "Infer variable widths in FORM in the current global environment.")
+  (:method ((form list))
+    (let ((fun (car form))
+	  (args (cdr form)))
+      (with-vl-errors-not-synthesisable
+	(with-unknown-forms
+	  (with-current-form form
+	    (expand-type-parameters (widthinfer-sexp fun args))))))))
+
+
+(defgeneric widthinfer-sexp (fun args)
+  (:documentation "Infer widths in FUN to ARGS in the global environment."))
 
 
 ;; ---------- Generalised places ----------
