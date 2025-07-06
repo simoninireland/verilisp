@@ -343,7 +343,8 @@
 				     (setq data-out (aref mem addr-in))))))))
 
     (is (vl::subtype-p (vl::typecheck p)
-		       'module-interface))))
+		       'module-interface))
+    (is (vl::synthesise p))))
 
 
 (test test-module-array-type-correct
