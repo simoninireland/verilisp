@@ -59,7 +59,7 @@ the value that the bitfields are extracted from. For example after:
 
 .. code-block:: lisp
 
-   (let ((opcode 0 :width 8))
+   (let ((opcode 0))
       (with-bitfields (a a a a b b b b)
 	   opcode
 	 (setf a #2r111)

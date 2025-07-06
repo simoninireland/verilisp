@@ -1,7 +1,7 @@
 .. _core-coercion:
 
-Coercion (``coerce``) and casting (``the``)
-===========================================
+Coercion and casting
+====================
 
 Sometimes an application needs to change or assert the type of some
 value or expression.

@@ -41,10 +41,10 @@ on the types passed to operators.
 .. toctree::
 
    core/binders
-   core/rep-spec-binders
    core/declarations
    core/operators
    core/conditionals
+   core/cond
    core/assignment
    core/control-flow
    core/tagbody
@@ -63,5 +63,4 @@ synthesis that nonetheless don't need to be core language features.
 
 .. toctree::
 
-   core/cond
    core/with-bitfields

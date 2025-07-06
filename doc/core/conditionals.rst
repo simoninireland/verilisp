@@ -3,8 +3,10 @@
 Conditionals
 ============
 
-Verilisp has two conditional forms supporting one- and two-armed general
-conditions (``if``) and multi-way tests for value equality (``case``).
+Verilisp has two conditional forms supporting one- and two-armed
+general conditions (``if``) and multi-way tests for value equality
+(``case``).
+
 
 ``if``
 ------
@@ -58,3 +60,9 @@ The ``t`` branch is executed if none of the other branches is
 triggered. The values guarding the arms must be constants, not
 expressions: for a more flexible multi-armed conditional see
 :ref:`core-cond`.
+
+
+Compatibility
+-------------
+
+``if`` and ``case`` behave exactly as in Common Lisp.

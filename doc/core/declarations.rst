@@ -25,7 +25,7 @@ for ``type`` when assigning unsigned integer types, for example:
    (let ((a 0)
 	 (clk 0))
      (declare (width 32 a)
-	      (type bit clk))
+	      (width 1 clk))
      ...)
 
 is equivalent to the declaration above.
@@ -44,8 +44,8 @@ scope. This can suppress some warnings.
 
 Declarations all add information to a program that the compiler can
 use. Verilisp will in any case attempt to infer the various attributes
-of variables, and issue warnings if the inferred types are
-incompatible with any provided by ``declare``.
+of variables, and issue warnings if the inferred values are
+incompatible with any provided explicitly by ``declare``.
 
 
 Compatibility
@@ -56,10 +56,10 @@ but supporting some different annotations. The annotations shared with
 Common Lisp are:
 
 - ``type``
-- ``width``
 - ``ignore`` and ``ignorable``
 
 The new annotations are:
 
 - ``as``
+- ``width``
 - ``direction``

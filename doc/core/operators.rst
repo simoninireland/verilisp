@@ -3,8 +3,9 @@
 Operators
 =========
 
-Verilisp includes a wide range of mathematical and logical operators. In
-general these are the same as those in Lisp, and behave identically.
+Verilisp includes a wide range of mathematical and logical operators.
+In general these are the same as those in Lisp, and behave
+identically.
 
 
 Lisp operators
@@ -32,7 +33,7 @@ Lisp operators
 
 
 Verilisp-specific operators
--------------------------
+---------------------------
 
 Bitwise shifts in Lisp use the ``ash`` ("arithmetic shift") function
 which shifts left or right depending on the sign of its second

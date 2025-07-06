@@ -6,12 +6,13 @@ Coercion and casting
 These two terms are often used interchangeably, but they actually
 denote two subtly different operations.
 
-A *coercion* of a value forces it to a particular type. Critically,
-this may involve changing the representation of the value while
-maintaining its meaning in some sense.
 
 Coercion
 --------
+
+A *coercion* of a value forces it to a particular type. Critically,
+this may involve changing the representation of the value while
+maintaining its meaning in some sense.
 
 The ``coerce`` form is used to coerce a value. For example,
 
@@ -24,6 +25,19 @@ coerces the value 12 to the type ``signed-byte 32``, a signed 32-bit
 word. This involves changing the representation of 12, which would by
 default need 4 bits: the value of the ``coerce`` form will have 32
 bits, with the most significant being the sign.
+
+.. note::
+
+   In this particular case it might be clearer to write:
+
+   .. code-block:: lisp
+
+      (let ((a 12))
+	(declare (type (unsigned-byte 32) a))
+
+	...)
+
+   which would have the same effect.
 
 Coercion depends on the type of the value and the type it is being
 coerced to, and can cause issues. For the fixed-width integer types
@@ -96,6 +110,9 @@ type ``(signed 8)``, with a warning of a possible loss of precision.
 
 Casting
 -------
+
+A *cast* declares that a given value is of a given type, without
+performing any change of representation.
 
 The ``the`` form simply checks that a value can be interpreted as a
 value of the type required, and takes this as its type. It signals an

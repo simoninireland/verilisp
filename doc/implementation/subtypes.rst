@@ -57,13 +57,14 @@ specifiers, and Verilisp supports:
   (unsigned-byte 12))`) that include all values that are members of
   all of the component types
 - Negation types (for example :code:`(not unsigned-byte)`) that
-  include all values that are values on the component type
+  include all values that are not members of the component type
 
 .. note::
+
    Common Lisp also includes two additional complex type specifiers,
    :code:`satisfies` and :code:`member`. These are used to determine
-	 whether a particular value is a member of a type, and as such
-	 are not (yet) needed or supported by Verilisp.
+   whether a particular value is a member of a type, and as such
+   are not (yet) needed or supported by Verilisp.
 
 The type lattice is completed with the :code:`t` (top) and :code:`nil`
 (bottom) types.
@@ -83,12 +84,15 @@ Verilisp provides two functions for computing LUBs.
 .. cl:function:: lub
 
 
+As with sub-types, the LUB calculations are provided generically.
+
 .. cl:generic:: lub-type
    :nospecializers:
 
 
 Note that since the LUB relationship is symmetrical, you should make
-sure that methods can if necessary handle types in either position.
+sure that methods on this function can handle types in either
+position.
 
 
 Type (de)construction

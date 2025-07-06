@@ -51,6 +51,12 @@ As shown above, sensitivities can be expressed in three ways:
 ``posedge`` and ``negedge``
 ---------------------------
 
-These two operators can *only* appear in sensitivity lists. They set the
-``@`` block to be sensitive to positive (rising) or negative (falling)
-edges respectively on a wire.
+These two operators can *only* appear in sensitivity lists. They set
+the ``@`` block to be sensitive to positive (rising) or negative
+(falling) edges respectively on a wire.
+
+
+Compatibility
+-------------
+
+``progn`` behaves exactly as in Common Lisp.
