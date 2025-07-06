@@ -25,7 +25,7 @@ q
 
 (test test-if-then-else
   "Test we can check a complete if form."
-  (is (vl:subtype-p (vl:typecheck '(if 1
+  (is (vl::subtype-p (vl::typecheck '(if 1
 				    (+ 1 2)
 				    (+ 16 8)))
 		    '(unsigned-byte 6))))
@@ -33,7 +33,7 @@ q
 
 (test test-if-then
   "Test we can check an incomplete if form."
-  (is (vl:subtype-p (vl:typecheck '(if 1
+  (is (vl::subtype-p (vl::typecheck '(if 1
 				    (+ 1 2)))
 		    '(unsigned-byte 3))))
 
@@ -41,54 +41,58 @@ q
 (test test-synthesise-if-statement
   "Test we can synthesise if forms."
   ;; as statements
-  (dolist (x '((let ((a 0 :width 4))
+  (dolist (x '((let ((a 0))
+		 (declare (width 4 a))
 		 (if (logand 1 1)
 		     (setf a (+ 1 2))
 		     (setf a (+ 1 3))))
-	       (let ((a 0 :width 4))
+	       (let ((a 0))
+		 (declare (width 4 a))
 		 (if (logand 1 1)
 		     (setf a (+ 1 2))
 
 		     ;; a two-form else branch
 		     (setf a (+ 1 3))
 		     (setf a 12)))
-	       (let ((a 0 :width 4))
+	       (let ((a 0))
+		 (declare (width 4 a))
 		 (if (logand 1 1)
 		     (progn
 		       ;; a two-form else branch
 		       (setf a (+ 1 2))
 		       (setf a (+ 1 3)))
 		     (setf a 12)))))
-    (let ((p (vl:expand/vl x)))
-      (vl:with-new-frame
-	(vl:typecheck p)
-	(is (vl:synthesise p)))))
+    (let ((p (vl::expand/vl x)))
+      (vl::with-new-frame
+	(vl::typecheck p)
+	(is (vl::synthesise p)))))
 
   ;; no else branch
-  (let ((p (vl:expand/vl '(let ((a 0 :width 4))
-			   (if (logand 1 1)
-			       (setf a (+ 1 2)))))))
-    (vl:typecheck p)
-    (is (vl:synthesise p))))
+  (let ((p (vl::expand/vl '(let ((a 0))
+			    (declare (width 4 a))
+			    (if (logand 1 1)
+				(setf a (+ 1 2)))))))
+    (vl::typecheck p)
+    (is (vl::synthesise p))))
 
 
 (test test-if-dependencies
   "Test we can extract dependencies from IF."
-  (vl:with-new-frame
-    (vl::declare-variable 'a '((:type (unsigned-byte 8))
-			       (:initial-value 12)))
-    (vl::declare-variable 'b '((:type (unsigned-byte 8))
-			       (:initial-value 1)))
-    (vl::declare-variable 'c '((:type (unsigned-byte 8))
-			       (:initial-value 45)))
-    (vl::declare-variable 'd '((:type (unsigned-byte 8))
-			       (:initial-value 0)))
+  (vl::with-new-frame
+    (vl::declare-variable 'a '((type (unsigned-byte 8))
+			       (initial-value 12)))
+    (vl::declare-variable 'b '((type (unsigned-byte 8))
+			       (initial-value 1)))
+    (vl::declare-variable 'c '((type (unsigned-byte 8))
+			       (initial-value 45)))
+    (vl::declare-variable 'd '((type (unsigned-byte 8))
+			       (initial-value 0)))
 
-    (vl:expand/vl '(if (> a 1)
+    (vl::expand/vl '(if (> a 1)
 		    (setq a b)
 		    (setq a c)))
 
-    (is (set-equal (vl::variable-property 'a :depends-on)
+    (is (set-equal (vl::variable-property 'a 'depends-on)
 		   '(b c)))))
 
 
@@ -96,7 +100,7 @@ q
 
 (test test-case-compatible
   "Test we can typecheck cases with compatible clauses."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 12)
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 12)
 						       b)
 						  (case a
 						    (1
@@ -110,8 +114,8 @@ q
 
 (test test-case-incompatible
   "Test we catch cases with incompatible clauses."
-  (signals (vl:type-mismatch)
-    (is (vl:typecheck (vl:expand/vl '(let ((a 12)
+  (signals (vl::type-mismatch)
+    (is (vl::typecheck (vl::expand/vl '(let ((a 12)
 					   b)
 				      (case a
 					(1
@@ -123,7 +127,7 @@ q
 
 (test test-synthesise-case
   "Test we can synthesise a CASE."
-  (let ((p (vl:expand/vl '(let ((a 12)
+  (let ((p (vl::expand/vl '(let ((a 12)
 				(b 0))
 			   (case a
 			     (1
@@ -133,14 +137,14 @@ q
 			      (setf a 0))
 			     (t
 			      (setf b 0)))))))
-    (vl:with-new-frame
-      (vl:typecheck p)
-      (is (vl:synthesise p)))))
+    (vl::with-new-frame
+      (vl::typecheck p)
+      (is (vl::synthesise p)))))
 
 
 (test test-synthesise-case-assignment
   "Test we can assign to the results of a CASE block."
-  (let ((p (vl:expand/vl '(let ((a 1)
+  (let ((p (vl::expand/vl '(let ((a 1)
 				(b 2))
 			   (setq a
 			    (case b
@@ -148,15 +152,15 @@ q
 			      (2 (+ a 1))
 			      (t 0)))))))
 
-    (vl:with-new-frame
-      (vl:typecheck p)
-      (is (vl:synthesise p)))))
+    (vl::with-new-frame
+      (vl::typecheck p)
+      (is (vl::synthesise p)))))
 
 
 (test test-synthesise-case-complex-bodies
   "Test we can't synthesise CASE assignments where the bodies are too complicated."
-  (signals (vl:not-synthesisable)
-    (let ((p (vl:expand/vl '(let ((a 1)
+  (signals (vl::not-synthesisable)
+    (let ((p (vl::expand/vl '(let ((a 1)
 				  (b 2))
 			     (setq a
 			      (case b
@@ -166,33 +170,33 @@ q
 				 (+ a 1))
 				(t 0)))))))
 
-      (vl:typecheck p)
-      (vl:synthesise p))))
+      (vl::typecheck p)
+      (vl::synthesise p))))
 
 
 (test test-synthesise-let-decl
   "Test we can synthesise a conditional in a LET."
-  (let ((p (vl:expand/vl '(let ((a (if (= 2 1)
+  (let ((p (vl::expand/vl '(let ((a (if (= 2 1)
 				       1
 				       0)))
 			   (setf a (+ a 2))))))
 
-    (vl:typecheck p)
-    (is (vl:synthesise p))))
+    (vl::typecheck p)
+    (is (vl::synthesise p))))
 
 
 (test test-case-dependencies
   "Test we can extract dependencies from CASE."
-  (vl:with-new-frame
-    (vl::declare-variable 'a '((:type (unsigned-byte 8))
-			       (:initial-value 12)))
-    (vl::declare-variable 'b '((:type (unsigned-byte 8))
-			       (:initial-value 1)))
-    (vl::declare-variable 'c '((:type (unsigned-byte 8))
-			       (:initial-value 45)))
-    (vl::declare-variable 'd '((:type (unsigned-byte 8))
-			       (:initial-value 0)))
-    (vl:expand/vl  '(case (+ a 1)
+  (vl::with-new-frame
+    (vl::declare-variable 'a '((type (unsigned-byte 8))
+			       (initial-value 12)))
+    (vl::declare-variable 'b '((type (unsigned-byte 8))
+			       (initial-value 1)))
+    (vl::declare-variable 'c '((type (unsigned-byte 8))
+			       (initial-value 45)))
+    (vl::declare-variable 'd '((type (unsigned-byte 8))
+			       (initial-value 0)))
+    (vl::expand/vl  '(case (+ a 1)
 		     (1
 		      (setq b c))
 		     (2
@@ -200,9 +204,9 @@ q
 		     (t
 		      (setq a d))))
 
-    (is (set-equal (vl::variable-property 'a :depends-on)
+    (is (set-equal (vl::variable-property 'a 'depends-on)
 		   '(d)))
-    (is (set-equal (vl::variable-property 'b :depends-on)
+    (is (set-equal (vl::variable-property 'b 'depends-on)
 		   '(c a)))
-    (is (null (vl::variable-property 'c :depends-on)))
-    (is (null (vl::variable-property 'd :depends-on)))))
+    (is (null (vl::variable-property 'c 'depends-on)))
+    (is (null (vl::variable-property 'd 'depends-on)))))

@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 
 
 (defmethod bitwidth ((val symbol))
@@ -30,6 +30,10 @@
 
 
 (defmethod free-variables ((form symbol))
+  (list form))
+
+
+(defmethod updated-variables ((form symbol))
   (list form))
 
 

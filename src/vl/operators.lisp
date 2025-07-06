@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 (declaim (optimize debug))
 
 
@@ -35,6 +35,8 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 
 (defun typecheck-addition (args)
   "Type-check an addition or subtraction of ARGS."
+  (declare (optimize debug))
+
   (let ((tys (mapcar #'typecheck args)))
     (dolist (ty tys)
       (ensure-fixed-width ty))

@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 (declaim (optimize debug))
 
 
@@ -125,13 +125,13 @@ isn't declared."
     (destructuring-bind (place v &key &allow-other-keys)
 	args
 
-      (let ((ns (updated-variables `(,fun ,@args)))
+      (let ((ns (updated-variables place))
 	    (fvs (remove-if #'static-constant-p (free-variables v))))
 
 	;; set the dependencies for the target
 	(mapc (lambda (n)
-		(let ((depends-on (variable-property n :depends-on :default nil)))
-		  (set-variable-property n :depends-on (union depends-on fvs))))
+		(let ((depends-on (variable-property n 'depends-on :default nil)))
+		  (set-variable-property n 'depends-on (union depends-on fvs))))
 	      ns)))))
 
 

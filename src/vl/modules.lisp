@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 (declaim (optimize debug))
 
 
@@ -98,9 +98,9 @@ The late intiialisations are cleared once they have been run."
 (deftype direction ()
   "The type of dataflow directions.
 
-Valid directions are :IN, :OUT, and :INOUT, and are seen from the
+Valid directions are IN, OUT, and INOUT, and are seen from the
 perspective of inside the module."
-  '(member :in :out :inout))
+  '(member in out inout))
 
 
 (defun direction-p (dir)
@@ -113,7 +113,7 @@ perspective of inside the module."
 
 Signal VALUE-MISMATCH as an error if not."
   (unless (direction-p dir)
-    (error 'value-mismatch :expected (list :in :out :inout) :got dir)))
+    (error 'value-mismatch :expected (list 'in 'out 'inout) :got dir)))
 
 
 (defun split-args-params (decls)
@@ -140,11 +140,8 @@ either bare names ot lists of names and values."
 
 
 (defun module-parameter-p (n)
-  "Test whether N is a module paramater.
-
-Module parameters have type :lisp to indicate that they should
-be interpolated."
-  (eql (get-type n) :lisp))
+  "Test whether N is a module paramater."
+  (eql (get-representation n) 'parameter))
 
 
 (defun typecheck-module-param (decl)
@@ -162,12 +159,12 @@ of other parameter values."
 	    decl
 
 	  (let ((val (eval v)))
-	    (set-variable-properties n `((:initial-value ,val)
-					 (:as :parameter)))))
+	    (set-variable-properties n `((initial-value ,val)
+					 (as parameter)))))
 
 	;; naked paramater
-	(set-variable-properties decl `((:initial-value 0)
-					(:as :parameter))))))
+	(set-variable-properties decl `((initial-value 0)
+					(as parameter))))))
 
 
 (defun typecheck-module-params (decls)
@@ -175,32 +172,13 @@ of other parameter values."
   (mapc #'typecheck-module-param decls))
 
 
-(defun typecheck-module-arg (decl)
-  "Type-check a module argument declaration DECL."
+(defun typecheck-module-arg (n)
+  "Type-check a module argument declaration N."
   (declare (optimize debug))
 
-  (with-current-form decl
-    (destructuring-bind (n &key
-			     type
-			     width
-			     (direction :in)
-			     (as :wire))
-	decl
-      (ensure-direction direction)
-
-      ;; if we have a width, it's a shortcut for unsigned-byte
-      (if width
-	  (let* ((w (eval-in-static-environment width))
-		 (ty `(unsigned-byte ,w)))
-	    (if type
-		;; if we have a type, it must match
-		(ensure-subtype ty type)
-
-		;; if not, re-assign is to the shortcut
-		(setq type ty))))
-
-      (set-variable-properties n `((:type ,type)
-				   (:direction ,direction))))))
+  (with-current-form n
+    ;; set defaults
+    (set-variable-properties-unless-set n '((as wire)))))
 
 
 (defun typecheck-module-args (decls)
@@ -241,7 +219,8 @@ of other parameter values."
 
     ;; return the form
     `(module ,modname ,decls
-	     ,@(mapcar #'add-frames body))))
+	     ,@(with-local-frame decls
+		 (mapcar #'add-frames body)))))
 
 
 (defmethod typecheck-sexp ((fun (eql 'module)) args)
@@ -274,31 +253,45 @@ of other parameter values."
   (destructuring-bind (modname decls &rest body)
       args
 
-    (destructuring-bind (newbody newenv)
-	(float-let-blocks `(progn ,@body))
+    ;; extract any declarations
+    (let ((declarations (if (eql (caar body) 'declare)
+			    (prog1
+				(car body)
+			      (setq body (cdr body))))))
 
-      (list
-       `(module ,modname ,decls
-		,(if newenv
-		     ;; declare the floated declarations around the body
-		     (let ((newdecls (mapcar (lambda (np)
-					       (destructuring-bind (n &rest props)
-						   np
-						 (list n
-						       (get-environment-property n :initial-value newenv))))
-					     (decls newenv))))
+      (destructuring-bind (newbody newenv)
+	  (float-let-blocks `(progn ,@body))
 
-		       ;; add the new decls as a local frame
-		       (setq newdecls (add-local-frame-to-decls newdecls))
+	(list
+	 `(module ,modname
+		  ,@(if declarations
+			(list decls declarations)
+			(list decls))
+		  ,(if newenv
+		       ;; declare the floated declarations around the body
+		       (let ((newdecls (mapcar (lambda (np)
+						 (destructuring-bind (n props)
+						     np
+						   (list n
+							 (get-environment-property n 'initial-value newenv))))
+					       (decls newenv))))
 
-		       `(let ,newdecls
-			  ,newbody))
+			 ;; add the new decls as a local frame
+			 (setq newdecls (add-local-frame-to-decls newdecls))
+			 (with-local-frame newdecls
+			   (dolist (np (decls newenv))
+			     (destructuring-bind (n props)
+				 np
+			       (set-variable-properties n (copy-list props)))))
 
-		     ;; no declarations, just use the new body
-		     newbody))
+			 `(let ,newdecls
+			    ,newbody))
 
-       ;; no remaining variables to float
-       (make-frame)))))
+		       ;; no declarations, just use the new body
+		       newbody))
+
+	 ;; no remaining variables to float
+	 (make-frame))))))
 
 
 
@@ -326,18 +319,20 @@ of other parameter values."
 	(synthesise decl))))
 
 
-(defun synthesise-arg (decl)
+(defun synthesise-arg (n)
   "Return the code for argument N."
   (declare (optimize debug))
 
-  (destructuring-bind (n &key direction type (as :wire))
-      decl
-    (let ((width (bitwidth type)))
+  (let ((type (get-type n))
+	(direction (variable-property n 'direction))
+	(as (variable-property n 'as)))
+
+    (let ((width (apply #'bitwidth-type (deconstruct-type type))))
       (as-literal (format nil "~a ~a"
 			  (case direction
-			    (:in    "input")
-			    (:out   "output")
-			    (:inout "inout"))
+			    ('in    "input")
+			    ('out   "output")
+			    ('inout "inout"))
 			  (if (and (integerp width)
 				   (= width 1))
 			      ""
@@ -390,22 +385,18 @@ of other parameter values."
 
 ;; ---------- Module instanciation ----------
 
-(defun get-argument-or-parameter (n decls)
-  "Retrieve argument or parameter N from DECLS.
-
-N should be a string, which is matched against DECLS by symbol name."
-  (if-let ((v (assoc n decls :key #'symbol-name :test #'string-equal)))
-    (cdr v)))
-
-
-(defun argument-for-module-interface-p (a intf)
-  "Test whether A is an argument of INTF."
-  (not (null (get-argument-or-parameter a (module-interface-arguments intf)))))
+(defun argument-for-module-interface-p (n intf)
+  "Test whether N is an argument of INTF."
+  (not (null (member n (module-interface-arguments intf)
+		     :key #'symbol-name
+		     :test #'string-equal))))
 
 
-(defun parameter-for-module-interface-p (a intf)
-  "Test whether A is a parameter of INTF."
-  (not (null (get-argument-or-parameter a (module-interface-parameters intf)))))
+(defun parameter-for-module-interface-p (n intf)
+  "Test whether N is a parameter of INTF."
+  (not (null (assoc n (module-interface-parameters intf)
+		    :key #'symbol-name
+		    :test #'string-equal))))
 
 
 (defun module-arguments-match-interface-p (intf modargs)
@@ -417,7 +408,7 @@ MODARGS must refer to an argument or a parameter of INTF."
    ;; every module argument is provided
    (every (lambda (arg)
 	    (member arg modargs :test #'string-equal))
-	  (mapcar #'symbol-name (mapcar #'car (module-interface-arguments intf))))
+	  (mapcar #'symbol-name (module-interface-arguments intf)))
 
    ;; every modarg is either a module argument or parameter
    (every (lambda (arg)
@@ -494,7 +485,7 @@ and causes a NOT-IMPORTABLE error if not."
 			       :test #'string-equal))))
 	    (cond ((argument-for-module-interface-p arg intf)
 		   (let ((tyval (typecheck v))
-			 (tyarg (get-frame-property arg :type f)))
+			 (tyarg (get-frame-property arg 'type f)))
 		     (ensure-subtype tyval tyarg)))
 
 		  ((parameter-for-module-interface-p arg intf)
@@ -509,6 +500,7 @@ and causes a NOT-IMPORTABLE error if not."
 
 (defmethod dependencies-sexp ((fun (eql 'make-instance)) args)
   ;; skip (because everything has to be an expression)
+  ;TODO: Is this the right design, or should we depend on the expressions?
   nil)
 
 
@@ -551,18 +543,16 @@ and causes a NOT-IMPORTABLE error if not."
 	(as-literal ")")))))
 
 
-(defun synthesise-arg-binding (decl args)
-  "Synthesise the binding of DECL from ARGS in ENV."
-  (destructuring-bind (n &key &allow-other-keys)
-      decl
-    (let ((v (cdr (assoc n args
-			 :key #'symbol-name
-			 :test #'string-equal))))
-      (as-literal ".")
-      (synthesise n)
-      (as-literal "(")
-      (synthesise v)
-      (as-literal ")"))))
+(defun synthesise-arg-binding (n args)
+  "Synthesise the binding of N from ARGS in ENV."
+  (let ((v (cdr (assoc n args
+		       :key #'symbol-name
+		       :test #'string-equal))))
+    (as-literal ".")
+    (synthesise n)
+    (as-literal "(")
+    (synthesise v)
+    (as-literal ")")))
 
 
 (defun synthesise-module-instance-params (initargs intf)

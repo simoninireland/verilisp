@@ -18,14 +18,15 @@
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (defpackage verilisp/test
-  (:use :cl :alexandria :fiveam :verilisp/utils)
+  (:use :cl :alexandria :fiveam :verilisp/core :verilisp/utils)
   (:local-nicknames
+   (:vl :verilisp/core)
    (:def :verilisp/def))
   (:import-from :fiveam #:is #:test))
 
 (in-package :verilisp/test)
 
-(def-suite verilisp)       ;; utilities
+(def-suite verilisp/utils) ;; utilities
 (def-suite verilisp/vl)    ;; synthesisable fragment of Lisp
 (def-suite verilisp/def)   ;; architectural component definitions
 

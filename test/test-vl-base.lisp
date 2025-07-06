@@ -21,7 +21,7 @@
 (in-suite verilisp/vl)
 
 
-(defparameter emptyenv (vl:empty-environment))
+(defparameter emptyenv (vl::empty-environment))
 
 
 ;; ---------- Frames ----------
@@ -50,7 +50,7 @@
     (is (vl::get-frame-properties 'a env)
 	'((:a 1) (:b 2)))
 
-    (signals (vl:unknown-variable)
+    (signals (vl::unknown-variable)
       (vl::get-frame-properties 'b env))))
 
 
@@ -80,7 +80,7 @@
       (equal (vl::get-frame-declaring 'a env2) env1)
       (equal (vl::get-frame-declaring 'b env1) env1)
 
-      (signals (vl:unknown-variable)
+      (signals (vl::unknown-variable)
 	(vl::get-frame-declaring 'c env2)))))
 
 
@@ -108,7 +108,7 @@
 (test test-names
   "Test we can extract names from an environment."
   ;; empty environment has no names
-  (is (null (vl:get-environment-names emptyenv)))
+  (is (null (vl::get-environment-names emptyenv)))
 
   (let ((env1 (vl::add-frame emptyenv)))
     (vl::declare-environment-variable 'a '((:a 1 :b 2)) env1)
@@ -142,7 +142,7 @@
 	(is (vl::variable-declared-in-environment-p 'a env3))
 
 	;; variable can't be found from topmost frame
-	(signals (vl:unknown-variable)
+	(signals (vl::unknown-variable)
 	  (vl::get-frame-properties 'a env3))
 
 	;; ...but is found correctly globally
@@ -192,7 +192,7 @@
       (is (string-equal (vl::ensure-legal-identifier from) to))))
 
   ;; check signalling of really bad variable name choice
-  (signals (vl:not-synthesisable)
+  (signals (vl::not-synthesisable)
     (vl::make-legal-identifier "_")))
 
 

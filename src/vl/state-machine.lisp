@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 (declaim (optimize debug))
 
 
@@ -188,9 +188,10 @@ unique variable name."
   (let* ((decls (let ((i 0))
 		  (mapcar (lambda (label)
 			    (prog1
-				`(,label ,i :as :constant)
+				`(,label ,i)
 			      (incf i)))
 			  (state-labels states))))
+	 (declarations `(declare (as constant ,@(state-labels states))))
 
 	 ;; prepend a state change to fall-through to the following state,
 	 ;; rotating to the initial state if we fall out of the bottom
@@ -212,6 +213,7 @@ unique variable name."
     ;; reset at each turn of the machine. If we stopped doing that for
     ;; any reason we'd need something different.
     `(let ,decls
+       ,declarations
        (let ((,state-variable ,(initial-state-label states)))
 	 (case ,state-variable
 	   ,@new-states)))))

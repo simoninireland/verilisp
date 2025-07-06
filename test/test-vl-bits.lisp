@@ -25,7 +25,7 @@
 
 (test test-width-bit
   "Test we can extract a bit from a value."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
 						  (vl::bref a 1))))
 		    '(unsigned-byte 1))))
 
@@ -33,46 +33,47 @@
 (test test-width-bits
   "Test we can extract bits from a value."
   ;; single-bit equivalents
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-						  (vl::bref a 1 :end 1))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
+						  (bref a 1 :end 1))))
 		    '(unsigned-byte 1)))
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-						  (vl::bref a 1 :width 1))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
+						  (bref a 1 :width 1))))
 		    '(unsigned-byte 1)))
 
   ;; multiple bits
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-						  (vl::bref a 1 :width 2))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
+						  (bref a 1 :width 2))))
 		    '(unsigned-byte 2)))
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-						  (vl::bref a 1 :end 0))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
+						  (bref a 1 :end 0))))
 		    '(unsigned-byte 2)))
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110 :width 8))
-						  (vl::bref a 7))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
+						     (declare (width 8 a))
+						     (bref a 7))))
 		    '(unsigned-byte 8)))
 
   ;; matching and non-matching explicit widths
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-						  (vl::bref a 4 :end 2 :width 3))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
+						  (bref a 4 :end 2 :width 3))))
 		    '(unsigned-byte 3)))
-  (signals (vl:type-mismatch)
-    (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
-				  (vl::bref a 4 :end 2 :width 4))))))
+  (signals (vl::type-mismatch)
+    (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
+				  (bref a 4 :end 2 :width 4))))))
 
 
 (test test-positive-start-end-width
   "Test that we detect non-positive values."
-  (signals (vl:value-mismatch)
-    (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
+  (signals (vl::value-mismatch)
+    (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
 				  (vl::bref a 4 :end -1)))))
-  (signals (vl:value-mismatch)
-    (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
+  (signals (vl::value-mismatch)
+    (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
 				  (vl::bref a 4 :width -1)))))
-  (signals (vl:value-mismatch)
-    (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
+  (signals (vl::value-mismatch)
+    (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
 				  (vl::bref a -2 :end 0)))))
-  (signals (vl:value-mismatch)
-    (vl:typecheck (vl:expand/vl '(let ((a #2r10110))
+  (signals (vl::value-mismatch)
+    (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
 				  (vl::bref a -2))))))
 
 
@@ -80,53 +81,54 @@
 
 (test test-bit-dependencies
   "Test we can extract bref dependencies properly."
-  (vl:with-new-frame
-    (vl::declare-variable 'a '((:type (unsigned-byte 8))
-			       (:initial-value 12)))
-    (vl::declare-variable 'b '((:type (unsigned-byte 8))
-			       (:initial-value 24)))
-    (vl::declare-variable 'c '((:type (unsigned-byte 8))
-			       (:initial-value 0)))
-    (vl::declare-variable 'd '((:type (unsigned-byte 8))
-			       (:initial-value 0)
-			       (:as :constant)))
+  (vl::with-new-frame
+    (vl::declare-variable 'a '((type (unsigned-byte 8))
+			       (initial-value 12)))
+    (vl::declare-variable 'b '((type (unsigned-byte 8))
+			       (initial-value 24)))
+    (vl::declare-variable 'c '((type (unsigned-byte 8))
+			       (initial-value 0)))
+    (vl::declare-variable 'd '((type (unsigned-byte 8))
+			       (initial-value 0)
+			       (as constant)))
 
-    (vl:expand/vl '(progn
-		    (setq a (+ (vl:bref b d :end 0) 19))
+    (vl::expand/vl '(progn
+		    (setq a (+ (vl::bref b d :end 0) 19))
 		    (setq c a)))
 
     ;; not (b d) as d is a constant
-    (is (set-equal (vl::variable-property 'a :depends-on)
+    (is (set-equal (vl::variable-property 'a 'depends-on)
 		   '(b)))
 
-    (is (null (vl::variable-property 'b :depends-on)))
+    (is (null (vl::variable-property 'b 'depends-on)))
 
-    (is (set-equal (vl::variable-property 'c :depends-on)
+    (is (set-equal (vl::variable-property 'c 'depends-on)
 		   '(a)))
 
     ;; not (a b d), for the same reasons as above
     (is (set-equal (vl::traverse-dependencies 'c)
 		   '(a b)))
-    (is (null (vl::variable-property 'd :depends-on)))))
+    (is (null (vl::variable-property 'd 'depends-on)))))
 
 
 (test test-bit-target
   "Test we can use bitfields as targets."
-  (vl:with-new-frame
-    (vl::declare-variable 'a '((:type (unsigned-byte 8))
-			       (:initial-value 12)))
-    (vl::declare-variable 'b '((:type (unsigned-byte 8))
-			       (:initial-value 24)))
-    (vl::declare-variable 'c '((:type (unsigned-byte 8))
-			       (:initial-value 0)))
+  (vl::with-new-frame
+    (vl::declare-variable 'a '((type (unsigned-byte 8))
+			       (initial-value 12)))
+    (vl::declare-variable 'b '((type (unsigned-byte 8))
+			       (initial-value 24)))
+    (vl::declare-variable 'c '((type (unsigned-byte 8))
+			       (initial-value 0)))
 
-    (vl:expand/vl '(setf (vl:bref a 2 :end 0) 0))
-    (is (null (vl::variable-property 'a :depends-on)))
+    (vl::expand/vl '(setf (bref a 2 :end 0) 0))
+    (is (null (vl::variable-property 'a 'depends-on)))
 
-    (vl:expand/vl '(setf (vl:bref a 4 :end 2) (vl:bref b 2 :end 0)))
-    (is (set-equal (vl::variable-property 'a :depends-on)
+    (vl::expand/vl '(setf (bref a 4 :end 2) (bref b 2 :end 0)))
+    (is (set-equal (vl::variable-property 'a 'depends-on)
 		   '(b)))
 
-    (vl:expand/vl '(setf (vl:bref c 4 :end 2) (vl:bref c 2 :end 0)))
-    (is (set-equal (vl::variable-property 'c :depends-on)
+
+    (vl::expand/vl '(setf (bref c 4 :end 2) (bref c 2 :end 0)))
+    (is (set-equal (vl::variable-property 'c 'depends-on)
 		   '(c)))))

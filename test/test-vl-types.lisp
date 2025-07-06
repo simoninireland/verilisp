@@ -71,99 +71,99 @@
   "Test the fixed-width types for sub-type relationships."
 
   ;; unsigned vs unsigned
-  (is (vl:subtype-p 'unsigned-byte 'unsigned-byte))
-  (is (vl:subtype-p 'unsigned-byte '(unsigned-byte *)))
-  (is (vl:subtype-p '(unsigned-byte *) '(unsigned-byte *)))
-  (is (vl:subtype-p '(unsigned-byte *) 'unsigned-byte))
-  (is (vl:subtype-p '(unsigned-byte 12) 'unsigned-byte))
-  (is (vl:subtype-p '(unsigned-byte 12) '(unsigned-byte 12)))
-  (is (vl:subtype-p '(unsigned-byte 12) '(unsigned-byte 16)))
-  (is (not (vl:subtype-p '(unsigned-byte 12) '(unsigned-byte 8))))
+  (is (vl::subtype-p 'unsigned-byte 'unsigned-byte))
+  (is (vl::subtype-p 'unsigned-byte '(unsigned-byte *)))
+  (is (vl::subtype-p '(unsigned-byte *) '(unsigned-byte *)))
+  (is (vl::subtype-p '(unsigned-byte *) 'unsigned-byte))
+  (is (vl::subtype-p '(unsigned-byte 12) 'unsigned-byte))
+  (is (vl::subtype-p '(unsigned-byte 12) '(unsigned-byte 12)))
+  (is (vl::subtype-p '(unsigned-byte 12) '(unsigned-byte 16)))
+  (is (not (vl::subtype-p '(unsigned-byte 12) '(unsigned-byte 8))))
 
   ;; signed vs signed
-  (is (vl:subtype-p 'signed-byte 'signed-byte))
-  (is (vl:subtype-p 'signed-byte '(signed-byte *)))
-  (is (vl:subtype-p '(signed-byte *) '(signed-byte *)))
-  (is (vl:subtype-p '(signed-byte *) 'signed-byte))
-  (is (vl:subtype-p '(signed-byte 12) 'signed-byte))
-  (is (vl:subtype-p '(signed-byte 12) '(signed-byte 12)))
-  (is (vl:subtype-p '(signed-byte 12) '(signed-byte 16)))
-  (is (not (vl:subtype-p '(signed-byte 12) '(signed-byte 8))))
+  (is (vl::subtype-p 'signed-byte 'signed-byte))
+  (is (vl::subtype-p 'signed-byte '(signed-byte *)))
+  (is (vl::subtype-p '(signed-byte *) '(signed-byte *)))
+  (is (vl::subtype-p '(signed-byte *) 'signed-byte))
+  (is (vl::subtype-p '(signed-byte 12) 'signed-byte))
+  (is (vl::subtype-p '(signed-byte 12) '(signed-byte 12)))
+  (is (vl::subtype-p '(signed-byte 12) '(signed-byte 16)))
+  (is (not (vl::subtype-p '(signed-byte 12) '(signed-byte 8))))
 
   ;; unsigned vs signed
-  (is (vl:subtype-p 'unsigned-byte 'signed-byte))
-  (is (vl:subtype-p '(unsigned-byte *) 'signed-byte))
-  (is (vl:subtype-p '(unsigned-byte *) '(signed-byte *)))
-  (is (vl:subtype-p '(unsigned-byte 12) 'signed-byte))
-  (is (vl:subtype-p '(unsigned-byte 12) '(signed-byte 13)))
-  (is (not (vl:subtype-p '(unsigned-byte 12) '(signed-byte 12))))
-  (is (not (vl:subtype-p '(unsigned-byte 12) '(signed-byte 8))))
+  (is (vl::subtype-p 'unsigned-byte 'signed-byte))
+  (is (vl::subtype-p '(unsigned-byte *) 'signed-byte))
+  (is (vl::subtype-p '(unsigned-byte *) '(signed-byte *)))
+  (is (vl::subtype-p '(unsigned-byte 12) 'signed-byte))
+  (is (vl::subtype-p '(unsigned-byte 12) '(signed-byte 13)))
+  (is (not (vl::subtype-p '(unsigned-byte 12) '(signed-byte 12))))
+  (is (not (vl::subtype-p '(unsigned-byte 12) '(signed-byte 8))))
 
   ;; signed vs unsigned
-  (is (not (vl:subtype-p 'signed-byte 'unsigned-byte)))
+  (is (not (vl::subtype-p 'signed-byte 'unsigned-byte)))
 
   ;; bits
-  (is (vl:subtype-p 'bit 'unsigned-byte))q
-  (is (vl:subtype-p 'bit '(unsigned-byte 1)))
-  (is (vl:subtype-p 'bit '(unsigned-byte 8))))
+  (is (vl::subtype-p 'bit 'unsigned-byte))q
+  (is (vl::subtype-p 'bit '(unsigned-byte 1)))
+  (is (vl::subtype-p 'bit '(unsigned-byte 8))))
 
 
 (test test-type-fixed-width
   "Test the classifiers."
 
   ;; fixed width
-  (is (vl:fixed-width-p 'unsigned-byte))
-  (is (vl:fixed-width-p 'signed-byte))
-  (is (vl:fixed-width-p '(unsigned-byte 8)))
-  (is (vl:fixed-width-p '(signed-byte 8)))
-  (is (vl:fixed-width-p 'bit))
+  (is (vl::fixed-width-p 'unsigned-byte))
+  (is (vl::fixed-width-p 'signed-byte))
+  (is (vl::fixed-width-p '(unsigned-byte 8)))
+  (is (vl::fixed-width-p '(signed-byte 8)))
+  (is (vl::fixed-width-p 'bit))
 
   ;; detailed classes
-  (is (vl:unsigned-byte-p 'unsigned-byte))
-  (is (not (vl:unsigned-byte-p 'signed-byte)))
-  (is (vl:signed-byte-p 'signed-byte))
-  (is (vl:signed-byte-p 'unsigned-byte)))
+  (is (vl::unsigned-byte-p 'unsigned-byte))
+  (is (not (vl::unsigned-byte-p 'signed-byte)))
+  (is (vl::signed-byte-p 'signed-byte))
+  (is (vl::signed-byte-p 'unsigned-byte)))
 
 
 (test test-type-lattice
   "Test the type lattice."
 
   ;; top type
-  (is (vl:subtype-p 'unsigned-byte t))
-  (is (vl:subtype-p '(unsigned-byte 8) t))
-  (is (vl:subtype-p nil t))
-  (is (vl:subtype-p t t))
-  (is (not (vl:subtype-p t 'unsigned-byte)))
+  (is (vl::subtype-p 'unsigned-byte t))
+  (is (vl::subtype-p '(unsigned-byte 8) t))
+  (is (vl::subtype-p nil t))
+  (is (vl::subtype-p t t))
+  (is (not (vl::subtype-p t 'unsigned-byte)))
 
   ;; bottom type
-  (is (vl:subtype-p nil 'unsigned-byte))
-  (is (vl:subtype-p nil '(unsigned-byte 8)))
-  (is (not (vl:subtype-p 'unsigned-byte nil)))
-  (is (not (vl:subtype-p '(signed-byte 8) nil)))
-  (is (not (vl:subtype-p t nil)))
-  (is (vl:subtype-p nil nil)))
+  (is (vl::subtype-p nil 'unsigned-byte))
+  (is (vl::subtype-p nil '(unsigned-byte 8)))
+  (is (not (vl::subtype-p 'unsigned-byte nil)))
+  (is (not (vl::subtype-p '(signed-byte 8) nil)))
+  (is (not (vl::subtype-p t nil)))
+  (is (vl::subtype-p nil nil)))
 
 
 (test test-type-complex
   "Test complex type specifiers."
 
   ;; union types
-  (is (vl:subtype-p 'unsigned-byte '(or unsigned-byte signed-byte)))
-  (is (vl:subtype-p '(unsigned-byte 8) '(or unsigned-byte signed-byte)))
-  (is (vl:subtype-p 'signed-byte '(or unsigned-byte signed-byte)))
-  (is (vl:subtype-p '(signed-byte 8) '(or unsigned-byte signed-byte)))
-  (is (vl:subtype-p '(unsigned-byte 8) '(or (unsigned-byte 16) (unsigned-byte 4))))
-  (is (vl:subtype-p 'bit '(or unsigned-byte signed-byte)))
-  (is (vl:subtype-p 'bit '(or (unsigned-byte 1) signed-byte)))
-  (is (vl:subtype-p '(unsigned-byte 1) '(or bit signed-byte)))
-  (is (not (vl:subtype-p '(unsigned-byte 12) '(or bit (signed-byte 8)))))
-  (is (vl:subtype-p '(unsigned-byte 12) '(or bit (signed-byte 8) t)))
+  (is (vl::subtype-p 'unsigned-byte '(or unsigned-byte signed-byte)))
+  (is (vl::subtype-p '(unsigned-byte 8) '(or unsigned-byte signed-byte)))
+  (is (vl::subtype-p 'signed-byte '(or unsigned-byte signed-byte)))
+  (is (vl::subtype-p '(signed-byte 8) '(or unsigned-byte signed-byte)))
+  (is (vl::subtype-p '(unsigned-byte 8) '(or (unsigned-byte 16) (unsigned-byte 4))))
+  (is (vl::subtype-p 'bit '(or unsigned-byte signed-byte)))
+  (is (vl::subtype-p 'bit '(or (unsigned-byte 1) signed-byte)))
+  (is (vl::subtype-p '(unsigned-byte 1) '(or bit signed-byte)))
+  (is (not (vl::subtype-p '(unsigned-byte 12) '(or bit (signed-byte 8)))))
+  (is (vl::subtype-p '(unsigned-byte 12) '(or bit (signed-byte 8) t)))
 
   ;; intersection types
   ;; TBD
 
   ;; negation types
-  (is (vl:subtype-p '(unsigned-byte 16) '(not (unsigned-byte 8)))))
+  (is (vl::subtype-p '(unsigned-byte 16) '(not (unsigned-byte 8)))))
 
 
 ;; ---------- Least upper-bounds of types ----------
@@ -172,78 +172,78 @@
   "Test we can form LUBs of fixed-with types."
 
   ;; unsigned vs unsigned
-  (is (equal (vl:lub 'unsigned-byte 'unsigned-byte)
+  (is (equal (vl::lub 'unsigned-byte 'unsigned-byte)
 	     'unsigned-byte))
-  (is (equal (vl:lub 'unsigned-byte '(unsigned-byte *))
+  (is (equal (vl::lub 'unsigned-byte '(unsigned-byte *))
 	     'unsigned-byte))
-  (is (equal (vl:lub '(unsigned-byte *) 'unsigned-byte)
+  (is (equal (vl::lub '(unsigned-byte *) 'unsigned-byte)
 	     'unsigned-byte))
-  (is (equal (vl:lub '(unsigned-byte 12) '(unsigned-byte *))
+  (is (equal (vl::lub '(unsigned-byte 12) '(unsigned-byte *))
 	     'unsigned-byte))
-  (is (equal (vl:lub '(unsigned-byte *) '(unsigned-byte 12))
+  (is (equal (vl::lub '(unsigned-byte *) '(unsigned-byte 12))
 	     'unsigned-byte))
-  (is (equal (vl:lub '(unsigned-byte 16) '(unsigned-byte 12))
+  (is (equal (vl::lub '(unsigned-byte 16) '(unsigned-byte 12))
 	     '(unsigned-byte 16)))
 
   ;; signed vs signed
-  (is (equal (vl:lub 'signed-byte 'signed-byte)
+  (is (equal (vl::lub 'signed-byte 'signed-byte)
 	     'signed-byte))
-  (is (equal (vl:lub 'signed-byte '(signed-byte *))
+  (is (equal (vl::lub 'signed-byte '(signed-byte *))
 	     'signed-byte))
-  (is (equal (vl:lub '(signed-byte *) 'signed-byte)
+  (is (equal (vl::lub '(signed-byte *) 'signed-byte)
 	     'signed-byte))
-  (is (equal (vl:lub '(signed-byte 12) '(signed-byte *))
+  (is (equal (vl::lub '(signed-byte 12) '(signed-byte *))
 	     'signed-byte))
-  (is (equal (vl:lub '(signed-byte *) '(signed-byte 12))
+  (is (equal (vl::lub '(signed-byte *) '(signed-byte 12))
 	     'signed-byte))
-  (is (equal (vl:lub '(signed-byte 16) '(signed-byte 12))
+  (is (equal (vl::lub '(signed-byte 16) '(signed-byte 12))
 	     '(signed-byte 16)))
 
   ;; signed vs unsigned
-  (is (equal (vl:lub 'unsigned-byte 'signed-byte)
+  (is (equal (vl::lub 'unsigned-byte 'signed-byte)
 	     'signed-byte))
-  (is (equal (vl:lub '(signed-byte 16) '(unsigned-byte 12))
+  (is (equal (vl::lub '(signed-byte 16) '(unsigned-byte 12))
 	     '(signed-byte 16)))
-  (is (equal (vl:lub '(unsigned-byte 16) '(signed-byte 12))
+  (is (equal (vl::lub '(unsigned-byte 16) '(signed-byte 12))
 	     '(signed-byte 17)))
 
   ;; bits
-  (is (equal (vl:lub 'bit 'unsigned-byte)
+  (is (equal (vl::lub 'bit 'unsigned-byte)
 	     'unsigned-byte))
-  (is (equal (vl:lub 'unsigned-byte 'bit)
+  (is (equal (vl::lub 'unsigned-byte 'bit)
 	     'unsigned-byte))
-  (is (equal (vl:lub '(unsigned-byte 1) 'bit)
+  (is (equal (vl::lub '(unsigned-byte 1) 'bit)
 	     '(unsigned-byte 1)))
-  (is (equal (vl:lub 'bit '(unsigned-byte 1))
+  (is (equal (vl::lub 'bit '(unsigned-byte 1))
 	     '(unsigned-byte 1))))
 
 
 (test test-lub-fold
   "Test we can correctly fold LUB across several types."
-  (is (equal (vl:lub '(unsigned-byte 8)
+  (is (equal (vl::lub '(unsigned-byte 8)
 		     '(unsigned-byte 16)
 		     '(unsigned-byte 32)
 		     '(unsigned-byte 8))
 	     '(unsigned-byte 32)))
-  (is (equal (vl:lub '(unsigned-byte 8)
+  (is (equal (vl::lub '(unsigned-byte 8)
 		     '(unsigned-byte 16)
 		     '(signed-byte 32)
 		     '(unsigned-byte 8))
 	     '(signed-byte 32)))
 
   ;; include the lattice types
-  (is (equal (vl:lub '(unsigned-byte 8)
+  (is (equal (vl::lub '(unsigned-byte 8)
 		     '(unsigned-byte 16)
 		     nil
 		     '(unsigned-byte 8))
 	     '(unsigned-byte 16)))
-  (is (equal (vl:lub '(unsigned-byte 8)
+  (is (equal (vl::lub '(unsigned-byte 8)
 		     '(unsigned-byte 16)
 		     '(unsigned-byte 32)
 		     '(unsigned-byte 8)
 		     t)
 	     t))
-   (is (equal (vl:lub '(unsigned-byte 8)
+   (is (equal (vl::lub '(unsigned-byte 8)
 		     '(unsigned-byte 16)
 		     '(unsigned-byte 32)
 		     nil

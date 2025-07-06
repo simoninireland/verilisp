@@ -23,80 +23,87 @@
 
 (test test-let-single
   "Test we can typecheck an expression."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 1 :width 5))
-						  (+ 1 a))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 1))
+						     (declare (type (unsigned-byte 5) a))
+						     (+ 1 a))))
 		    '(unsigned-byte 6))))
 
 
 (test test-let-at-least-one
   "Test that a variable gets at least a width of one bit."
   (is (equal '(unsigned-byte 1)
-	     (vl:typecheck (vl:expand/vl '(let ((a 0))
+	     (vl::typecheck (vl::expand/vl '(let ((a 0))
 					   a))))))
 
 
 (test test-let-single-infer-width
   "Test we can infer a width."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 1))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 1))
 						  (+ 1 a))))
 		    '(unsigned-byte 2))))
 
 
 (test test-let-double
   "Test we can typecheck an expression with two variables."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 1 :width 8)
-						       (b 6 :width 16))
-						  (+ a b))))
-		    '(unsigned-byte 24))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 1)
+							  (b 6))
+						     (declare (width 8 a)
+						      (width 12 b))
+						     (+ a b))))
+		    '(unsigned-byte 13))))
 
 
 (test test-let-too-narrow
   "Test we pick up too-wide initial values."
-  (signals (vl:type-mismatch)
-    (vl:typecheck (vl:expand/vl '(let ((a 100 :type (unsigned-byte 5)))
-				  (+ 1 a))))))
+  (signals (vl::type-mismatch)
+    (vl::typecheck (vl::expand/vl '(let ((a 100))
+				    (declare (type (unsigned-byte 5) a))
+				    (+ 1 a))))))
 
 
 (test test-let-widen
   "Test we can take the width from a given type."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 5 :type (unsigned-byte 8)))
-						  (setf a (+ 1 a)))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 5))
+						     (declare (type (unsigned-byte 8) a))
+						     (setf a (+ 1 a)))))
 		    '(unsigned-byte 9))))
 
 
 (test test-let-missing-width-type-conflicts
   "Test we pick up an inferred width conflicting with a set type"
-  (signals (vl:type-mismatch)
-    (vl:typecheck (vl:expand/vl '(let ((a 5))
+  (signals (vl::type-mismatch)
+    (vl::typecheck (vl::expand/vl '(let ((a 5))
 				  (setq a 16))))))
 
 
 (test test-let-scope
   "Test we catch variables not declared."
-  (signals (vl:unknown-variable)
-    (vl:typecheck (vl:expand/vl '(let ((a 1))
+  (signals (vl::unknown-variable)
+    (vl::typecheck (vl::expand/vl '(let ((a 1))
 				  (+ 1 b))))))
 
 
 (test test-let-result
   "Test we pick up the right result type."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 99)
-						       (b 100 :width 8))
-						  (+ b 1)
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 99)
+							  (b 100))
+						     (declare (width 8 b))
+						     (+ b 1)
 						  (+ b a b))))
 		    '(unsigned-byte 10))))
 
 
 (test test-let-constant
   "Test we admit constant bindings."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 15 :as :constant))
-						  a)))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 15))
+						     (declare (as constant a))
+						     a)))
 		    '(unsigned-byte 4))))
 
 
 (test test-let-naked
   "Test that we accept "naked" declarations."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 10)
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 10)
 						       b)
 						  (+ a b))))
 		    `(unsigned-byte 5))))
@@ -104,63 +111,70 @@
 
 (test test-binders-conditional
   "Test we can assign to a conditional."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 1)
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 1)
 						       (b 23))
 						  (let ((c (if (= a 0)
 							       23
-							       1)
-							   :as :wire
-							   :type (unsigned-byte 32)))
+							       1)))
+						    (declare (as wire c)
+							     (type (unsigned-byte 32) c))
 						    (setq a c)))))
 		    '(unsigned-byte 32))))
 
 
 (test test-binders-free-variables
   "Test we can extract free variables correctly"
-  (let ((p (vl:expand/vl '(let (b)
+  (let ((p (vl::expand/vl '(let (b)
 			   (let ((a 10))
 			     (+ a b))))))
-    (vl:typecheck p)
-    (is (set-equal (vl:free-variables (caddr p)) ; body of the outer LET
+    (vl::typecheck p)
+    (is (set-equal (vl::free-variables (caddr p)) ; body of the outer LET
 		   '(b))))
 
-  (let ((p (vl:expand/vl '(let ((a 10)
+  (let ((p (vl::expand/vl '(let ((a 10)
 				b)
 			   (+ a b)))))
-    (vl:typecheck p)
-    (is (set-equal (vl:free-variables p)
+    (vl::typecheck p)
+    (is (set-equal (vl::free-variables p)
 		   '()))))
 
 
 (test test-synthesise-binders
   "Test we can synthesise binders."
   ;; as statements
-  (dolist (x '((let ((a 1 :width 8))
+  (dolist (x '((let ((a 1))
+		 (declare (width 8 a))
 		 (setf a (+ a 1)))
-	       (let ((a 1 :width 8)
-		     (b 23 :as :constant)
+	       (let ((a 1)
+		     (b 23)
 		     c)
+		 (declare (width 8 a)
+			  (as constant b))
 		 (setf c (+ a b)))
-	       (let ((a 1 :width 8)
-		     (b 0 :width 16 :as :wire)
+	       (let ((a 1)
+		     (b 0)
 		     c)
+		 (declare (width 8 a)
+			  (width 16 b)
+			  (as wire b))
 		 (setf c (+ a b 1)))))
 
-    (let ((p (vl:expand/vl (copy-tree x))))
-      (vl:typecheck p)
-      (vl:synthesise p))))
+    (let ((p (vl::expand/vl (copy-tree x))))
+      (vl::typecheck p)
+      (vl::synthesise p))))
 
 
 (test test-let-width
   "Test the :width shortcuts works."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 0 :width 12))
-						  a)))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 0))
+						     (declare (width 12 a))
+						     a)))
 		    '(unsigned-byte 12))))
 
 
 (test test-let-float-order
   "Test we maintain the order of declarations when we float LET blocks."
-  (let ((p (vl:expand/vl '(let ((a 1)
+  (let ((p (vl::expand/vl '(let ((a 1)
 				(b 2)
 				c)
 			   (setf c (+ a b))
@@ -170,8 +184,8 @@
 				 g)
 			     (setf e 5))))))
 
-    (vl:typecheck p)
-    (let* ((q-env (vl:float-let-blocks p))
+    (vl::typecheck p)
+    (let* ((q-env (vl::float-let-blocks p))
 	   (q (car q-env))
 	   (env (cadr q-env)))
       (is (equal (vl::get-frame-names env)
@@ -180,43 +194,43 @@
 
 (test test-let-dependencies
   "Test we can extract dependencies properly."
-  (vl:with-new-frame
-    (vl::declare-variable 'a '((:type (unsigned-byte 8))
-			       (:initial-value 12)))
-    (vl::declare-variable 'b '((:type (unsigned-byte 8))
-			       (:initial-value 24)))
-    (vl::declare-variable 'c '((:type (unsigned-byte 8))
-			       (:initial-value 0)))
+  (vl::with-new-frame
+    (vl::declare-variable 'a '((type (unsigned-byte 8))
+			       (initial-value 12)))
+    (vl::declare-variable 'b '((type (unsigned-byte 8))
+			       (initial-value 24)))
+    (vl::declare-variable 'c '((type (unsigned-byte 8))
+			       (initial-value 0)))
 
-    (vl:expand/vl  '(progn
+    (vl::expand/vl  '(progn
 		     (setq a (+ b 19))
 		     (setq c a)))
 
-    (is (set-equal (vl::variable-property 'a :depends-on)
+    (is (set-equal (vl::variable-property 'a 'depends-on)
 		   '(b)))
-    (is (null (vl::variable-property 'b :depends-on)))
-    (is (set-equal (vl::variable-property 'c :depends-on)
+    (is (null (vl::variable-property 'b 'depends-on)))
+    (is (set-equal (vl::variable-property 'c 'depends-on)
 		   '(a)))))
 
 
 (test test-let-declarations
   "Test the detailed behaviour of declarations."
-  (vl:with-new-frame
+  (vl::with-new-frame
     (vl::declare-variable 'a '())
     (vl::declare-variable 'b '())
     (vl::declare-variable 'c '())
 
-    (vl:expand/vl '(declare (type (unsigned-byte 16) a b)
-			    (vl:width 8 c)))
-    (is (vl:subtype-p (vl::get-type 'a) '(unsigned-byte 16)))
-    (is (vl:subtype-p (vl::get-type 'b) '(unsigned-byte 16)))
-    (is (vl:subtype-p (vl::get-type 'c) '(unsigned-byte 8)))
+    (vl::expand/vl '(declare (type (unsigned-byte 16) a b)
+		     (width 8 c)))
+    (is (vl::subtype-p (vl::get-type 'a) '(unsigned-byte 16)))
+    (is (vl::subtype-p (vl::get-type 'b) '(unsigned-byte 16)))
+    (is (vl::subtype-p (vl::get-type 'c) '(unsigned-byte 8)))
 
-    (vl:expand/vl '(declare (vl:as vl:wire a)))
-    (is (eql (vl::get-representation 'a) 'vl:wire))
+    (vl::expand/vl '(declare (as wire a)))
+    (is (eql (vl::get-representation 'a) 'wire))
 
-    (signals (vl:unrecognised-declaration)
-      (vl:expand/vl '(declare (temp a b c))))
+    (signals (vl::unrecognised-declaration)
+      (vl::expand/vl '(declare (temp a b c))))
 
-    (signals (vl:unknown-variable)
-      (vl:expand/vl '(declare (type bit d))))))
+    (signals (vl::unknown-variable)
+      (vl::expand/vl '(declare (type bit d))))))

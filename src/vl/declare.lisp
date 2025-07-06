@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 
 
 (defgeneric declare-annotation (tag args)
@@ -45,11 +45,18 @@ so use in later passes."))
 		  ;; unkown declaration
 		  ;TODO: Might be too wide?
 		  (warn 'unrecognised-declaration :tag tag))))))
-	args))
+	args)
+
+  ;; return form unaltered
+  `(declare ,@args))
 
 
 (defmethod typecheck-sexp ((fun (eql 'declare)) args)
   t)
+
+
+(defmethod dependencies-sexp ((fun (eql 'declare)) args)
+  nil)
 
 
 (defmethod synthesise-sexp ((fun (eql 'declare)) args)
@@ -62,7 +69,7 @@ so use in later passes."))
   (destructuring-bind (ty &rest vars)
       args
     (mapc (lambda (n)
-	    (set-variable-property n :type ty))
+	    (set-variable-property n 'type ty))
 	  vars)))
 
 
@@ -77,17 +84,25 @@ so use in later passes."))
   (destructuring-bind (rep &rest vars)
       args
     (mapc (lambda (n)
-	    (set-variable-property n :as rep))
+	    (set-variable-property n 'as rep))
+	  vars)))
+
+
+(defmethod declare-annotation ((tag (eql 'direction)) args)
+  (destructuring-bind (rep &rest vars)
+      args
+    (mapc (lambda (n)
+	    (set-variable-property n 'direction rep))
 	  vars)))
 
 
 (defmethod declare-annotation ((tag (eql 'ignore)) args)
   (mapc (lambda (n)
-	  (set-variable-property n :ignore t))
+	  (set-variable-property n 'ignore t))
 	args))
 
 
 (defmethod declare-annotation ((tag (eql 'ignorable)) args)
   (mapc (lambda (n)
-	  (set-variable-property n :ignorable t))
+	  (set-variable-property n 'ignorable t))
 	args))

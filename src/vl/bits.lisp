@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 (declaim (optimize debug))
 
 
@@ -120,14 +120,6 @@
 
 	;; width is the nunmber of bits extracted
 	`(unsigned-byte ,l)))))
-
-
-(defmethod free-variables-sexp ((fun (eql 'bref)) args)
-  (declare (optimize debug))
-
-  (destructuring-bind (var start &key end width)
-      args
-    (foldr #'union (mapcar #'free-variables (remove-nulls (list var start end width))) '())))
 
 
 (defmethod synthesise-sexp ((fun (eql 'bref)) args)

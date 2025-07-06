@@ -23,10 +23,10 @@
 
 (test test-make-bitfields-literal
   "Test we can make a bitfield from literals."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(vl:make-bitfields #2r111 #2r100)))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(vl::make-bitfields #2r111 #2r100)))
 		    '(unsigned-byte 6)))
 
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(vl:make-bitfields
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(vl::make-bitfields
 						  #2r111
 						  (the (unsigned-byte 12) 0))))
 		    '(unsigned-byte 15))))
@@ -34,31 +34,31 @@
 
 (test test-make-bitfields-extend
   "Test we can extend bitfields."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(vl:make-bitfields
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(vl::make-bitfields
 						  #2r101
-						  (vl:extend-bits #2r0 5))))
+						  (vl::extend-bits #2r0 5))))
 		    '(unsigned-byte 8)))
 
   ;; repeats must be statically known, but pattern can be variable
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 8))
-						  (vl:make-bitfields (vl:extend-bits a 5)))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 8))
+						  (vl::make-bitfields (vl::extend-bits a 5)))))
 		    '(unsigned-byte 20)))
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(let ((a 8))
-						  (vl:make-bitfields (vl:extend-bits (+ a 9) 5)))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 8))
+						  (vl::make-bitfields (vl::extend-bits (+ a 9) 5)))))
 		    '(unsigned-byte 25)))
-  (signals (vl:not-static)
-    (vl:typecheck (vl:expand/vl '(let ((a 8))
-				  (vl:make-bitfields (vl:extend-bits 0 a)))))))
+  (signals (vl::not-static)
+    (vl::typecheck (vl::expand/vl '(let ((a 8))
+				  (vl::make-bitfields (vl::extend-bits 0 a)))))))
 
 
 (test test-test-synthesise-make-bitfields
   "Test we can synthesise constructed bitfields."
-  (let ((p (vl:expand/vl '(vl:make-bitfields #2r111 #2r100))))
-    (vl:typecheck p)
-    (is (vl:synthesise p)))
+  (let ((p (vl::expand/vl '(vl::make-bitfields #2r111 #2r100))))
+    (vl::typecheck p)
+    (is (vl::synthesise p)))
 
-  (let ((p (vl:expand/vl '(let ((a 1)
+  (let ((p (vl::expand/vl '(let ((a 1)
 				b)
-			   (setq b (vl:make-bitfields (vl:extend-bits a 5)))))))
-    (vl:typecheck p)
-    (vl:synthesise p)))
+			   (setq b (vl::make-bitfields (vl::extend-bits a 5)))))))
+    (vl::typecheck p)
+    (vl::synthesise p)))

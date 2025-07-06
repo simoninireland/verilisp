@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 (declaim (optimize debug))
 
 
@@ -38,9 +38,9 @@
 (deftype representation ()
   "The type of variable representations.
 
-Valid representations in LET forms are :REGISTER, :WIRE, or :CONSTANT.
-(:PARAMETER is also valid from MODULE forms.)"
-  '(member :register :wire :constant))
+Valid representations in LET forms are REGISTER, WIRE, or CONSTANT.
+(PARAMETER is also valid from MODULE forms.)"
+  '(member 'register 'wire 'constant))
 
 
 (defun representation-p (rep)
@@ -53,7 +53,7 @@ Valid representations in LET forms are :REGISTER, :WIRE, or :CONSTANT.
 
 Signal REPRESENTATION-MISMATCH as an error if not."
   (unless (representation-p rep)
-    (error 'representation-mismatch :expected (list :register :wire :constant) :got rep)))
+    (error 'representation-mismatch :expected (list 'register 'wire 'constant) :got rep)))
 
 
 ;; ---------- Local frames ----------
@@ -65,7 +65,8 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 
     ;; return the form
     `(let ,decls
-       ,@(mapcar #'add-frames body))))
+       ,@(with-local-frame decls
+	   (mapcar #'add-frames body)))))
 
 
 ;; ---------- Typechecking ----------
@@ -85,64 +86,46 @@ The name is the first element, whether or not DECL is a list."
     (with-recover-on-error
 	;; on error, return the most general and innocuous result to
 	;; allow us to continue
-	(set-variable-properties (safe-car decl) `((:type (unsigned-byte *default-register-width*))
-						   (:as :register)
-						   (:role :variable)
-						   (:initial-value 0)
-						   (:type-constraints (unsigned-byte *default-register-width*))))
+	(set-variable-properties (safe-car decl) `((type (unsigned-byte ,*default-register-width*))
+						   (as register)
+						   (initial-value 0)
+						   (type-constraints (unsigned-byte ,*default-register-width*))))
 
       (if (listp decl)
 	  ;; full declaration
-	  (destructuring-bind (n v &key
-				     width
-				     type
-				     (role :variable)
-				     (as :register))
+	  (destructuring-bind (n v)
 	      decl
 	    (ensure-variable-declared n)
 
-	    ;; if we have a width, it's a shortcut for unsigned-byte
-	    (if width
-		(let* ((w (eval-in-static-environment width))
-		       (ty `(unsigned-byte ,w)))
+	    (let ((type (variable-property n 'type :default nil)))
+	      ;; initial inferred type
+	      (let ((ity (if type
+			     (expand-type-parameters type)
+
+			     ;; pick the narrowest type so it can be widened as needed
+			     '(unsigned-byte 1))))
+
+		;; typecheck initial value
+		(let ((vty (typecheck v)))
 		  (if type
-		      ;; if we have a type, it should match
-		      (ensure-subtype ty type)
+		      ;; type provided, ensure it works
+		      (ensure-subtype vty type)
 
-		      ;; if not, re-assign is to the shortcut
-		      (setq type ty))))
+		      ;; no type provided, infer from the value
+		      (setq ity vty)))
 
-	    ;; initial inferred type
-	    (let ((ity (if type
-			   (expand-type-parameters type)
-
-			   ;; pick the narrowest type so it can be widened as needed
-			   '(unsigned-byte 1))))
-
-	      ;; typecheck initial value
-	      (let ((vty (typecheck v)))
 		(if type
-		    ;; type provided, ensure it works
-		    (ensure-subtype vty type)
-
-		    ;; no type provided, infer from the value
-		    (setq ity vty)))
-
-	      (set-variable-properties n `((:type ,type)
-					   (:inferred-type ,ity)
-					   (:as ,as)
-					   (:role ,role)
-					   (:initial-value ,v)
-					   (:type-constraints (,ity))))))
+		    (set-variable-property-unless-set n 'type type))
+		(set-variable-properties-unless-set n `((inferred-type ,ity)
+							(as register)
+							(initial-value ,v)
+							(type-constraints (,ity)))))))
 
 	  ;; "naked" declaration
-	  ;; TODO: What is the correct default width? -- 1 means it'll get widened
-	  ;; as needed, so is perhaps correct?
-	  (set-variable-properties decl `((:inferred-type (unsigned-byte 1))
-					  (:type-constraints ((unsigned-byte 1)))
-					  (:as :register)
-					  (:role :variable)
-					  (:initial-value 0)))))))
+	  (set-variable-properties-unless-set decl `((inferred-type (unsigned-byte 1))
+						     (type-constraints ((unsigned-byte 1)))
+						     (as register)
+						     (initial-value 0)))))))
 
 
 (defun typecheck-env (decls)
@@ -163,19 +146,21 @@ The resulting type must be representable."
 
 
 (defun typecheck-infer-decl (decl)
-  "Return the name and properties entry for DECL"
+  "Update the type for DECL.
+
+This matches stated and inferred types, and updates the environment
+with the final type."
   (declare (optimize debug))
 
   ;; resolve type constraints
   (let* ((n (name-in-decl decl))
-	 (constraints (variable-property n :type-constraints))
+	 (constraints (variable-property n 'type-constraints))
 	 (inferred-type (typecheck-constraints constraints)))
 
     ;; check inferred type against any explicit type
     ;; this will signal a problem but not fail the type-checking
     ;; pass, to allow for systems that don't care about precision
-    ;; TODO: Should we allow this, or be tighter?
-    (if-let ((ty (variable-property n :type :default nil)))
+    (if-let ((ty (variable-property n 'type :default nil)))
       (progn
 	(ensure-subtype inferred-type ty)
 
@@ -186,21 +171,12 @@ The resulting type must be representable."
       (warn 'type-inferred :variable n
 			   :inferred inferred-type))
 
-    `(,n ((:initial-value ,(get-initial-value n))
-	  (:type ,inferred-type)
-	  (:as ,(get-representation n))))))
+    (set-variable-property n 'type inferred-type)))
 
 
 (defun typecheck-infer-decls (decls)
-  "Infer types on all DECLS.
-
-This updates the current environment with the new properties."
-  (let ((newdecls (mapcar #'typecheck-infer-decl decls)))
-    (mapc (lambda (vp)
-	    (destructuring-bind (n props)
-		vp
-	      (set-variable-properties n props)))
-	  newdecls)))
+  "Infer types on all DECLS."
+  (mapc #'typecheck-infer-decl decls))
 
 
 (defmethod typecheck-sexp ((fun (eql 'let)) args)
@@ -236,8 +212,8 @@ right-hand side of an assignment."
 		decl
 
 	      (let ((fvs (remove-if #'static-constant-p (free-variables v)))
-		    (depends-on (variable-property n :depends-on :default nil)))
-		(set-variable-property n :dependencies (union depends-on fvs))))))))
+		    (depends-on (variable-property n 'depends-on :default nil)))
+		(set-variable-property n 'depends-on (union depends-on fvs))))))))
 
 
 (defmethod dependencies-sexp ((fun (eql 'let)) args)
@@ -245,7 +221,7 @@ right-hand side of an assignment."
       args
 
     (with-local-frame decls
-      ;; add dependencies for declaraed variables
+      ;; add dependencies for declared variables
       (mapc #'dependencies-decl decls)
 
       ;; process the body in this frame, with these dependencies
@@ -261,7 +237,7 @@ right-hand side of an assignment."
 The free variables are all the variables that appear on the
 right-hand side of an assignment."
   (if (listp decl)
-      (destructuring-bind (n v &key &allow-other-keys)
+      (destructuring-bind (n v)
 	  decl
 	(declare (ignore n))
 
@@ -464,10 +440,11 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
     (let* ((type (get-type n))
 	   (width (if (array-type-p type)
 		      ;; width is the width of the element type
-		      (bitwidth (cadr type))
+		      (apply #'bitwidth-type (deconstruct-type (cadr type)))
 
 		      ;; width is of the type itself
-		      (bitwidth type))))
+		      (apply #'bitwidth-type (deconstruct-type type)))))
+
       (when (or (not (numberp width))
 		(> width 1))
 	;; we have a width (or a width expression)
@@ -492,10 +469,10 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
     (let* ((type (get-type n))
 	   (width (if (array-type-p type)
 		      ;; width is the width of the element type
-		      (bitwidth (cadr type))
+		      (apply #'bitwidth-type (deconstruct-type (cadr type)))
 
 		      ;; width is of the type itself
-		      (bitwidth type))))
+		      (apply #'bitwidth-type (deconstruct-type type)))))
       (as-literal "wire ")
       (when (or (not (numberp width))
 		(> width 1))
@@ -556,11 +533,11 @@ Constants turn into local parameters."
 
 	  ;; otherwise, creating a variable
 	  (case (get-representation n)
-	    (:constant
+	    ('constant
 	     (synthesise-constant n))
-	    (:register
+	    ('register
 	     (synthesise-register n))
-	    (:wire
+	    ('wire
 	     (synthesise-wire n))
 	    (t
 	     (synthesise-register n)))))))
@@ -573,7 +550,6 @@ Constants turn into local parameters."
 	(body (cdr args)))
 
     (with-local-frame decls
-
       ;; synthesise the constants and registers
       (as-block-forms decls :process #'synthesise-decl)
 

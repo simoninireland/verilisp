@@ -21,7 +21,6 @@
 
 (defpackage verilisp/core
   (:documentation "The verilisp core language")
-  (:nicknames :vl)
   (:use :cl :alexandria :verilisp/utils)
   (:import-from :cl-ppcre
 		#:create-scanner
@@ -51,6 +50,7 @@
 
    ;; environments
    #:*global-environment*
+   #:current-frame
    #:empty-environment
    #:add-frames
    #:with-new-frame
@@ -72,9 +72,10 @@
    #:ensure-static
    #:eval-if-static
 
-   ;; extra Verilisp functions, macros, and declarations
+   ;; extra Verilisp functions, macros, values, and annotations
    ;; not present in Common Lisp
    #:module
+   #:module-interface
    #:<<
    #:>>
    #:asserted-p
@@ -88,14 +89,19 @@
    #:register
    #:wire
    #:constant
+   #:parameter
    #:width
    #:as
+   #:type-constraints
+   #:initial-value
+   #:depends-on
+   #:direction
+   #:in
+   #:out
+   #:inout
    #:0=
    #:0/=
    #:2*
-   #:let-wires
-   #:let-registers
-   #:let-constants
 
    ;; DSL functions
    #:add-frames
@@ -149,5 +155,4 @@
    #:state-machine-mismatch
    #:type-inferred
    #:representation-mismatch
-   #:no-local-frame
-   ))
+   #:no-local-frame))

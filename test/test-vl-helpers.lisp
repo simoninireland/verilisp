@@ -34,7 +34,7 @@
 
   ;; passes the Verilisp condition
   (signals (vl::unknown-variable)
-    (vl:expand/vl '(let (a)
+    (vl::expand/vl '(let (a)
 		    (setq b (+ 12 2))))))
 
 
@@ -43,7 +43,7 @@
 (test test-unknown-form
   "Test we can trap unknown forms."
   (signals (vl::unknown-form)
-    (vl:typecheck (vl:expand/vl '(let (a)
+    (vl::typecheck (vl::expand/vl '(let (a)
 				  (blig 34))))))
 
 
@@ -61,7 +61,7 @@
 		  (incf errors)
 
 		  ;; jump back in for the next element
-		  (vl:recover))))
+		  (vl::recover))))
 
       (dolist (i (list 1 2 3 4))
 	(vl::with-recover-on-error
@@ -90,15 +90,15 @@
 				 (incf errors)
 
 				 ;; jump back in for the next element
-				 (vl:recover))))
+				 (vl::recover))))
 
-      (let ((ty (vl:typecheck (vl:expand/vl '(let ((a 45)
+      (let ((ty (vl::typecheck (vl::expand/vl '(let ((a 45)
 						   (b 0)
 						   (c 2))
 					      (setq d 12)
 					      8)))))
 
 	;; the type should be that of 8, where we re-started
-	(is (vl:subtype-p ty '(unsigned-byte 4)))))
+	(is (vl::subtype-p ty '(unsigned-byte 4)))))
 
     (is (= errors 2)))) ;; one from dependencies, one from typecheck

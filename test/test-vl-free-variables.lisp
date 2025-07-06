@@ -23,55 +23,55 @@
 
 (test test-free-let
   "Test we can extract free variables from a LET binding."
-  (let ((p (vl:expand/vl '(let ((a 12))
+  (let ((p (vl::expand/vl '(let ((a 12))
 			   (setq a (+ a 1))))))
 
-    (vl:typecheck p)
-    (null (vl:free-variables p))))
+    (vl::typecheck p)
+    (null (vl::free-variables p))))
 
 
 (test test-free-expression
   "Test we can axtract free variables from expressions."
-  (is (set-equal (vl:free-variables '(+ 1 2 a 4 5))
+  (is (set-equal (vl::free-variables '(+ 1 2 a 4 5))
 		 '(a)))
-  (is (set-equal (vl:free-variables '(+ 1 2 a 4 b))
+  (is (set-equal (vl::free-variables '(+ 1 2 a 4 b))
 		 '(a b)))
-  (is (set-equal (vl:free-variables '(+ 1 2 a (+ 4 b 5)))
+  (is (set-equal (vl::free-variables '(+ 1 2 a (+ 4 b 5)))
 		 '(a b)))
 
-  (is (null (vl:free-variables '(+ 1 2 4 5))))
+  (is (null (vl::free-variables '(+ 1 2 4 5))))
 
-  (is (set-equal (vl:free-variables '(>> 23 a))
+  (is (set-equal (vl::free-variables '(>> 23 a))
 		 '(a)))
 
-  (is (set-equal (vl:free-variables '(logior 23 a))
+  (is (set-equal (vl::free-variables '(logior 23 a))
 		 '(a)))
-  (is (set-equal (vl:free-variables '(logior 23 (make-bitfields (vl:bref b 5))))
+  (is (set-equal (vl::free-variables '(logior 23 (make-bitfields (vl::bref b 5))))
 		 '(b)))
-  (is (set-equal (vl:free-variables '(logior 23 (make-bitfields (vl:bref b 4 :width 3))))
+  (is (set-equal (vl::free-variables '(logior 23 (make-bitfields (vl::bref b 4 :width 3))))
 		 '(b)))
-  (is (set-equal (vl:free-variables '(logior 23 (make-bitfields (vl:bref b 4 :width (+ c 1)))))
+  (is (set-equal (vl::free-variables '(logior 23 (make-bitfields (vl::bref b 4 :width (+ c 1)))))
 		 '(b c)))
 
-  (is (set-equal (vl:free-variables '(setq a (+ b c)))
+  (is (set-equal (vl::free-variables '(setq a (+ b c)))
 		 '(a b c)))
 
-  (is (set-equal (vl:free-variables '(setf (bref b 2) 1))
+  (is (set-equal (vl::free-variables '(setf (bref b 2) 1))
 		 '(b)))
-  (is (set-equal (vl:free-variables '(setf (aref b 2) 33))
+  (is (set-equal (vl::free-variables '(setf (aref b 2) 33))
 		 '(b))))
 
 
 (test test-free-binders
   "Test we get all the free variables regardless of binders."
-  (is (set-equal (vl:free-variables '(setq a (+ b c 1)))
+  (is (set-equal (vl::free-variables '(setq a (+ b c 1)))
 		 '(a b c)))
 
   (let* ((p '(let ((a 12))
 		(setq a (+ b c 1))))
-	 (q (vl:expand/vl `(let (b c)
+	 (q (vl::expand/vl `(let (b c)
 			     ,p))))
 
-    (vl:typecheck q)
-    (is (set-equal (vl:free-variables (caddr q))  ; expanded body of outer LET
+    (vl::typecheck q)
+    (is (set-equal (vl::free-variables (caddr q))  ; expanded body of outer LET
 		   '(b c)))))

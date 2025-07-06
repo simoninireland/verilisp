@@ -111,46 +111,22 @@
 
 (test test-expand-tests
   "Test we can expand the maths tests."
-  (is (equal (vl::expand-macros-in-environment '(vl:0= 45))
+  (is (equal (vl::expand-macros-in-environment '(vl::0= 45))
 	     '(= 45 0)))
-  (is (equal (vl::expand-macros-in-environment '(vl:0/= 45))
+  (is (equal (vl::expand-macros-in-environment '(vl::0/= 45))
 	     '(/= 45 0))))
-
-
-(test test-expand-let-representations
-  "Test we can expand the representation-specific LET variants."
-  (is (equal (vl::expand-macros-in-environment '(vl:let-wires ((a 0 :width 10))
-						 (setq a 12)))
-	     '(let ((a 0 :as :wire :width 10))
-	       (progn
-		 (setq a 12)))))
-  (is (equal (vl::expand-macros-in-environment '(vl:let-registers ((a 0 :width 10))
-						 (setq a 12)))
-	     '(let ((a 0 :as :register :width 10))
-	       (progn
-		 (setq a 12)))))
-  (is (equal (vl::expand-macros-in-environment '(vl:let-constants ((a 0 :width 10))
-						 (setq a 12)))
-	     '(let ((a 0 :as :constant :width 10))
-	       (progn
-		 (setq a 12)))))
-
-  ;; test failure
-  (signals (vl:representation-mismatch)
-    (vl::expand-macros-in-environment '(vl:let-wires ((a 10 :as :constant))
-					(setq a 12)))))
 
 
 (test test-no-macro-synthesis
   "Test we can't synthesise if there are macros left unexpanded."
 
   ;; should catch an unknown form if we typecheck without expanding
-  (let ((p (vl:add-frames (copy-tree '(let ((a 1))
+  (let ((p (vl::add-frames (copy-tree '(let ((a 1))
 				       (incf a))))))
-    (signals (vl:unknown-form)
-      (vl:typecheck p)))
+    (signals (vl::unknown-form)
+      (vl::typecheck p)))
 
   ;; should fail if we try to synthesise
   (let ((p '(when 1 (+ 1 2))))
-    (signals (vl:not-synthesisable)
-      (vl:synthesise p))))
+    (signals (vl::not-synthesisable)
+      (vl::synthesise p))))

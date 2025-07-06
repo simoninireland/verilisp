@@ -31,17 +31,17 @@
 	      (setq b 2)
 	      two
 	      (setq b 0)))
-	 (q (vl:expand/vl `(let (a b)
+	 (q (vl::expand/vl `(let (a b)
 			     ,p))))
 
-    (setq q (vl:expand-macros-in-environment q))
+    (setq q (vl::expand-macros-in-environment q))
     (is (not (null q)))))
 
 
 (test test-go-outside-tagbody
   "Test we can catch a GO out of context."
-  (signals (vl:syntax-error)
-    (vl:expand/vl '(let ((one 1))
+  (signals (vl::syntax-error)
+    (vl::expand/vl '(let ((one 1))
 		    (go one)))))
 
 
@@ -54,33 +54,34 @@
 	      two
 	      (setq b 0)
 	      (go one)))
-	 (q (vl:expand/vl `(let (a b)
+	 (q (vl::expand/vl `(let (a b)
 			     ,p))))
 
-    (vl:typecheck q)
-    (is (vl:synthesise q))))
+    (vl::typecheck q)
+    (is (vl::synthesise q))))
 
 
 (test test-tagbody-float
   "Test we float let blocks successfully when synthesising."
-  (let* ((p (vl:expand/vl '(vl:module test/456 ((clk :direction :in))
-			    (let ((a 0)
-				  (b 0))
-			      (setq a 1)
-			      (setq b 34)
+  (let* ((p (vl::expand/vl '(module test/456 (clk)
+			     (declare (direction in clk))
+			     (let ((a 0)
+				   (b 0))
+			       (setq a 1)
+			       (setq b 34)
 
-			      (vl:@ (vl:posedge a)
-				    (let ((c 0))
-				      (tagbody
-				       one
-					 (setq a 1)
-					 (setq b 2)
-					 (go two)
-				       two
-					 (setq b 0)
-					 (go one)
-				       three
-					 (go two)))))))))
+			       (@ (posedge a)
+				  (let ((c 0))
+				    (tagbody
+				     one
+				       (setq a 1)
+				       (setq b 2)
+				       (go two)
+				     two
+				       (setq b 0)
+				       (go one)
+				     three
+				       (go two)))))))))
 
     (is (vl::elaborate/vl p))))
 
@@ -89,7 +90,7 @@
 
 (test test-tagbody-simple-nested
   "Test we can escape from a nested machine."
-  (let* ((p (vl:expand/vl '(let (a b c)
+  (let* ((p (vl::expand/vl '(let (a b c)
 			    (tagbody
 			     one
 			       (setq a 1)
@@ -110,6 +111,6 @@
 			       (setq b 0)
 			       (go one))))))
 
-    (setq p (vl:expand-macros-in-environment p))
-    (vl:typecheck p)
-    (is (vl:synthesise p))))
+    (setq p (vl::expand-macros-in-environment p))
+    (vl::typecheck p)
+    (is (vl::synthesise p))))

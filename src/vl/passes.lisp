@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 (declaim (optimize debug))
 
 
@@ -312,7 +312,7 @@ dependencies as they can't be updated."
   ;; get the direct dependencies
   (let ((direct (foldr #'union
 		       (mapcar (lambda (n)
-				 (variable-property n :depends-on :default nil))
+				 (variable-property n 'depends-on :default nil))
 			       (if (listp ns)
 				   ns
 				   (list ns)))
@@ -323,7 +323,8 @@ dependencies as they can't be updated."
 			     (if (static-constant-p n)
 				 nil
 				 (union (list n)
-					(variable-property n :depends-on :default nil))))
+					(variable-property n 'depends-on :default nil
+							   ))))
 			   direct)
 	   '())))
 
@@ -432,7 +433,7 @@ this will have *MACRO-ENVIRONMENT* attached to it prior to macro expansion.")
     (with-vl-errors-not-synthesisable
       (if (macro-declared-p fun)
 	;; macro is expandable, replace with real name if there is one
-	(let ((realfun (variable-property fun :real-name)))
+	(let ((realfun (variable-property fun 'real-name)))
 	  (multiple-value-bind (expansion expanded)
 	      (macroexpand-1 (cons realfun args))
 	    (if expanded

@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 
 
 ;; ---------- Environment ----------
@@ -105,27 +105,43 @@ should be handled correctly using WITH-NEW-FRAME. However...."
   (set-environment-property n p v (current-frame)))
 
 
+(defun set-variable-property-unless-set (n p v)
+  "Set the value of property P of N to V unless is already has a value.
+
+This is used when setting defaults."
+  (unless (variable-property n p :default nil)
+    (set-variable-property n p v)))
+
+
 (defun set-variable-properties (n props)
   "Set the values of properties PROPS of variable N in the global environment.
 
 PROPS should be an alist mapping property names to their values."
   (dolist (p props)
-    (set-environment-property n (car p) (cadr p) (current-frame))))
+    (set-variable-property n (car p) (cadr p))))
+
+
+(defun set-variable-properties-unless-set (n props)
+  "Set all unset properties in PROPS of N.
+
+This is used for setting defaults."
+  (dolist (p props)
+    (set-variable-property-unless-set n (car p) (cadr p))))
 
 
 (defun declare-macro (m &optional underlying-name)
   "Declare M as a macro in the global environment.
 
 If UNDERLYING-NAME is provided then M is used as a synonym for it."
-  (declare-variable m `((:name ,m)
-			(:real-name ,(or underlying-name m))
-			(:as :macro))))
+  (declare-variable m `((name ,m)
+			(real-name ,(or underlying-name m))
+			(as macro))))
 
 
 (defun macro-declared-p (m)
   "Test whether M is declared as a macro in the global environment."
   (and (variable-declared-p m)
-       (eql (get-representation m) :macro)))
+       (eql (get-representation m) 'macro)))
 
 
 ;;---------- Common properties ----------
@@ -133,36 +149,31 @@ If UNDERLYING-NAME is provided then M is used as a synonym for it."
 (defun get-type (n)
   "Return the type of N.
 
-The type is the most definite of an inferred type (:INFERRED-TYPE),
-any explicitly-provided type (:TYPE), and the default type (a
-standard-width unsigned integer).
-
-(The logic of this ordering is to allow the same function
-to be used during and after type inferenece.)"
-  (or (variable-property n :inferred-type :default nil)
-      (variable-property n :type :default nil)
-      `(unsigned-byte ,*default-register-width*)))
+This is the assigned type if there is one, or the
+inferred type if not."
+  (or (variable-property n 'type :default nil)
+      (variable-property n 'inferred-type)))
 
 
 (defun get-representation (n)
   "Return the representation of N."
-  (variable-property n :as))
+  (variable-property n 'as))
 
 
 (defun get-initial-value (n)
   "Return the initial value of N."
-  (variable-property n :initial-value :default 0))
+  (variable-property n 'initial-value :default 0))
 
 
 (defun get-constant (n)
   "Return whether N is constant."
   (if-let ((rep (get-representation n)))
-    (eql rep :constant)))
+    (eql rep 'constant)))
 
 
 (defun get-direction (n)
   "Return the direction of N."
-  (variable-property n :direction))
+  (variable-property n 'direction))
 
 
 ;; ---------- Form context ----------

@@ -1,4 +1,4 @@
-;; Top-level package definition
+;; User-level package definition
 ;;
 ;; Copyright (C) 2023--2025 Simon Dobson
 ;;
@@ -19,6 +19,67 @@
 
 (in-package :common-lisp-user)
 
-;; Currently dummy
+
 (defpackage verilisp
-  (:use :cl :alexandria))
+  (:use :cl :alexandria)
+  (:nicknames :vl)
+  (:import-from :verilisp/core
+		;; extra Verilisp functions, macros, values, and
+		;; annotations not present in Common Lisp
+		#:module
+		#:<<
+		#:>>
+		#:asserted-p
+		#:@
+		#:posedge
+		#:negedge
+		#:bref
+		#:with-bitfields
+		#:make-bitfields
+		#:extend-bits
+		#:register
+		#:wire
+		#:constant
+		#:width
+		#:as
+		#:direction
+		#:in
+		#:out
+		#:inout
+		#:0=
+		#:0/=
+		#:2*
+
+		;; top-level interface
+		#:defmodule/vl
+		#:synthesise/vl
+
+		;; conditions
+		#:vl-condition
+		#:vl-error
+		#:vl-warning
+		#:recover
+		#:not-synthesisable
+		#:not-representable
+		#:syntax-error
+		#:unknown-variable
+		#:unknown-module
+		#:unknown-state
+		#:unknown-form
+		#:unrecognised-declaration
+		#:duplicate-variable
+		#:duplicate-module
+		#:duplicate-state
+		#:not-importable
+		#:not-static
+		#:value-mismatch
+		#:direction-mismatch
+		#:type-mismatch
+		#:coercion-mismatch
+		#:precision-mismatch
+		#:bitfield-mismatch
+		#:shape-mismatch
+		#:state-machine-mismatch
+		#:type-inferred
+		#:representation-mismatch
+		#:no-local-frame))

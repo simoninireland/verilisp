@@ -23,7 +23,7 @@
 
 (test test-synthesise-cond
   "Test we can synthesise a COND, which is a macro needing to be expanded first."
-  (let ((p (vl:expand/vl '(let ((a 1)
+  (let ((p (vl::expand/vl '(let ((a 1)
 				 (b 2))
 			    (cond ((< a 1)
 				   (setf b 1))
@@ -32,13 +32,13 @@
 				  (t
 				   (setf b 3)))))))
 
-    (vl:typecheck p)
-    (is (vl:synthesise p))))
+    (vl::typecheck p)
+    (is (vl::synthesise p))))
 
 
 (test test-synthesise-cond-assignment
   "Test we can synthesise a COND in an assignment"
-  (let ((p (vl:expand/vl '(let ((a 1)
+  (let ((p (vl::expand/vl '(let ((a 1)
 				(b 2))
 			   (let ((c (cond ((= b 1)
 					   3)
@@ -48,5 +48,5 @@
 					   6))))
 			     (setq c (+ c 2)))))))
 
-    (vl:typecheck p)
-    (is (vl:synthesise p))))
+    (vl::typecheck p)
+    (is (vl::synthesise p))))

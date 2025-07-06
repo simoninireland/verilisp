@@ -30,15 +30,15 @@
   (let ((env1 (vl::add-frame (vl::empty-environment))))
     (mapc (lambda (decl)
 	    (vl::declare-environment-variable (car decl) (cadr decl) env1))
-	  '((a ((:initial-value 4)))
-	    (b ((:initial-value 23) (:g 34)))
-	    (c ((:initial-value 12)))))
+	  '((a ((initial-value 4)))
+	    (b ((initial-value 23) (g 34)))
+	    (c ((initial-value 12)))))
 
     (let ((env2 (vl::add-frame env1)))
       (mapc (lambda (decl)
 	      (vl::declare-environment-variable (car decl) (cadr decl) env2))
-	    '((a ((:initial-value 5)))
-	      (d ((:initial-value 234) (:g 76)))))
+	    '((a ((initial-value 5)))
+	      (d ((initial-value 234) (g 76)))))
 
       ;; a should be shadowed and appear only once
       (let ((decls (vl::make-environment-alist env2)))
@@ -57,9 +57,9 @@
 (test test-eval-parameter
   "Test that module parameters are static constants."
   (vl::with-new-frame
-    (vl::declare-variable 'a '((:width 5)
-				(:initial-value 12)
-				(:as :parameter)))
+    (vl::declare-variable 'a '((width 5)
+			       (initial-value 12)
+			       (as parameter)))
 
     (is (= (vl::ensure-static 'a)
 	   12))))
@@ -68,9 +68,9 @@
 (test test-eval-constant
   "Test that variables declared as constants are static constants."
   (vl::with-new-frame
-    (vl::declare-variable 'a '((:width 5)
-			       (:initial-value 12)
-			       (:as :constant)))
+    (vl::declare-variable 'a '((width 5)
+			       (initial-value 12)
+			       (as constant)))
 
     (is (= (vl::ensure-static 'a)
 	   12))))
@@ -79,9 +79,9 @@
 (test test-eval-expression
   "Test that expressions involving only constants are static constants."
   (vl::with-new-frame
-    (vl::declare-variable 'a '((:width 5)
-			       (:initial-value 12)
-			       (:as :constant)))
+    (vl::declare-variable 'a '((width 5)
+			       (initial-value 12)
+			       (as constant)))
 
     (is (= (vl::ensure-static '(+ a (+ a 12)))
 	   36))))
@@ -94,14 +94,14 @@
 	    (destructuring-bind (n props)
 		decl
 	      (vl::declare-variable n props)))
-	  '((a ((:width 5)
-		(:initial-value 12)
-		(:as :constant)))
-	    (b ((:width 5)
-		(:initial-value 12)
-		(:as :register)))))
+	  '((a ((width 5)
+		(initial-value 12)
+		(as constant)))
+	    (b ((width 5)
+		(initial-value 12)
+		(as register)))))
 
-    (signals (vl:not-static)
+    (signals (vl::not-static)
       (vl::ensure-static '(+ a b 12)))))
 
 
@@ -112,12 +112,12 @@
 	    (destructuring-bind (n props)
 		decl
 	      (vl::declare-variable n props)))
-	  '((a ((:width 5)
-		(:initial-value 12)
-		(:as :constant)))
-	    (b ((:width 5)
-		(:initial-value 12)
-		(:as :register)))))
+	  '((a ((width 5)
+		(initial-value 12)
+		(as constant)))
+	    (b ((width 5)
+		(initial-value 12)
+		(as register)))))
 
      ;; statis
      (is (= (vl::eval-if-static '(+ a (+ a 12)))
@@ -130,16 +130,16 @@
 (test test-shadowed-variables
   "Test we declare only the shallowest declaration of each variable."
   (vl::with-new-frame
-    (vl::declare-variable 'a '((:width 5)
-				(:initial-value 12)
-				(:as :constant)))
-    (vl::declare-variable 'b '((:width 5)
-				(:initial-value 15)
-				(:as :constant)))
+    (vl::declare-variable 'a '((width 5)
+			       (initial-value 12)
+			       (as constant)))
+    (vl::declare-variable 'b '((width 5)
+			       (initial-value 15)
+			       (as constant)))
 
     (vl::with-new-frame
-      (vl::declare-variable 'b '((:width 5)
-				  (:initial-value 30)
-				  (:as :constant)))
+      (vl::declare-variable 'b '((width 5)
+				 (initial-value 30)
+				 (as constant)))
 
       (is (= (vl::eval-in-static-environment '(+ a b)) 42)))))

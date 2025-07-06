@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 (declaim (optimize debug))
 
 
@@ -106,6 +106,8 @@ the expanded, framed, form.
 
 This function is not usually called directly, but is called as part
 of a larger compilation process."
+  (declare (optimize debug))
+
   (let* ((expanded (expand-macros-in-environment form *macro-environment*))
 	 (framed (add-frames expanded)))
 

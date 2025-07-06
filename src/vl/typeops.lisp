@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 
 
 ;; ---------- Sub-type checking ----------
@@ -248,5 +248,5 @@ which always need to be statically constant.")
   "Constraint N to have type TY.
 
 N must be in scope, but need not be in the shallowest frame of ENV."
-  (let ((constraints (variable-property n :type-constraints :default nil)))
-    (set-variable-property n :type-constraints (cons ty constraints))))
+  (let ((constraints (variable-property n 'type-constraints :default nil)))
+    (set-variable-property n 'type-constraints (cons ty constraints))))

@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 
 ;; ---------- Fixed-width integers ----------
 
@@ -207,3 +207,7 @@
 
 (defmethod bitwidth-type ((tytag (eql 'signed-byte)) tyargs)
   (car tyargs))
+
+
+(defmethod bitwidth-type ((tytag (eql 'bit)) tyargs)
+  1)

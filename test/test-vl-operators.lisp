@@ -25,21 +25,21 @@
 
 (test test-add-widths
   "Test we can determine the widths of additions."
-  (is (vl:subtype-p (vl:typecheck '(+ 1 1))
+  (is (vl::subtype-p (vl::typecheck '(+ 1 1))
 		    '(unsigned-byte 2)))
-  (is (vl:subtype-p (vl:typecheck '(+ 15 2))
+  (is (vl::subtype-p (vl::typecheck '(+ 15 2))
 		    '(unsigned-byte 5)))
-  (is (not (vl:subtype-p (vl:typecheck '(+ 15 -2))
+  (is (not (vl::subtype-p (vl::typecheck '(+ 15 -2))
 			 '(unsigned-byte 5))))
-  (is (vl:subtype-p (vl:typecheck '(+ 15 -2))
+  (is (vl::subtype-p (vl::typecheck '(+ 15 -2))
 		    '(signed-byte 6))))
 
 
 (test test-width-subtractions
   "Test we can extract the widths of subtractions."
-  (is (vl:subtype-p (vl:typecheck '(- 1))
+  (is (vl::subtype-p (vl::typecheck '(- 1))
 		    '(signed-byte 2)))
-  (is (vl:subtype-p (vl:typecheck '(- 2 1))
+  (is (vl::subtype-p (vl::typecheck '(- 2 1))
 		    '(signed-byte 3))))
 
 
@@ -48,48 +48,48 @@
   ;; arithmetic
   (dolist (op '(+ - *))
     ;; conventional two-operand
-    (is (vl:synthesise `(,op 1 2)))
+    (is (vl::synthesise `(,op 1 2)))
 
     ;; Lisp-y multi-operand
-    (is (vl:synthesise `(,op 1 2 3))))
+    (is (vl::synthesise `(,op 1 2 3))))
 
   ;; unary minus
-  (is (vl:synthesise `(- 1))))
+  (is (vl::synthesise `(- 1))))
 
 
 ;; ---------- Shifts ----------
 
 (test test-width-shifts
   "Test we can extract the widths of shifts."
-  (is (vl:subtype-p (vl:typecheck '(vl::<< 1 2))
+  (is (vl::subtype-p (vl::typecheck '(<< 1 2))
 		    '(unsigned-byte 4)))
-  (is (vl:subtype-p (vl:typecheck '(vl::<< 15 15))
+  (is (vl::subtype-p (vl::typecheck '(<< 15 15))
 		    '(unsigned-byte 19)))
 
-  (is (vl:subtype-p (vl:typecheck '(vl::>> 16 4))
+  (is (vl::subtype-p (vl::typecheck '(>> 16 4))
 		    '(unsigned-byte 5)))
 
   ;; wrong number of arguments
-  (dolist (op '(vl::<< vl::>>))
-    (signals (vl:not-synthesisable)
-      (vl:typecheck `(,op 1 2 3)))
-    (signals (vl:not-synthesisable)
-      (vl:typecheck `(,op 3)))))
+  (dolist (op '(<< >>))
+    (signals (vl::not-synthesisable)
+      (vl::typecheck `(,op 1 2 3)))
+    (signals (vl::not-synthesisable)
+      (vl::typecheck `(,op 3)))))
 
 
 (test test-synthesise-shift-operators
   "Test we can synthesise shift operators."
-  (dolist (op '(vl::<< vl::>>))
+  (dolist (op '(<< >>))
     ;; conventional two-operand
-    (is (vl:synthesise `(,op 1 2)))))
+    (is (vl::synthesise `(,op 1 2)))))
 
 
 ;; ---------- Bitwise operators ----------
 
 (test test-typecheck-logop
   "Test we can typecheck the logical operators."
-  (is (vl:subtype-p (vl:typecheck '(logand #2r10110 #2r11110))
+  (is (vl::subtype-p (vl::typecheck '(logand #2r10110 #2r11110))
 		    '(unsigned-byte 5)))
 
-  (is (vl:subtype-p (vl:typecheck '(logand #2r10110 #2r1111110))
+  (is (vl::subtype-p (vl::typecheck '(logand #2r10110 #2r1111110))
 		    '(unsigned-byte 7))))

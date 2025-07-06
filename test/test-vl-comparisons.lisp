@@ -25,25 +25,25 @@
 
 (test test-typecheck-equality
   "Test we can type-check equality."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(= 1 2)))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(= 1 2)))
 		    '(unsigned-byte 1))))
 
 
 (test test-typecheck-inequality
   "Test we can type-check inequality."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(/= 1 2)))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(/= 1 2)))
 		    '(unsigned-byte 1))))
 
 
 (test test-typecheck-gt-lt
   "Test we can type-check greater-than and less-than."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(< 1 2)))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(< 1 2)))
 		    '(unsigned-byte 1)))
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(> 1 2)))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(> 1 2)))
 		    '(unsigned-byte 1))))
 
 
 (test test-typecheck-asserted
   "Test we can type-check assertedness."
-  (is (vl:subtype-p (vl:typecheck (vl:expand/vl '(vl:asserted-p 1)))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(vl::asserted-p 1)))
 		    '(unsigned-byte 1))))

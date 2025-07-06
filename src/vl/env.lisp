@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 
 
 ;; ---------- Defaults ----------
@@ -278,7 +278,7 @@ Signals a DUPLICATE-VARIABLE error if the variable already exists in this frame.
 (defun add-frame-to-environment (f env &optional at-start)
   "Add all entries from F to ENV.
 
-If AT-START is non-nil, add the entrues to the start of ENV; otherwise
+If AT-START is non-nil, add the entries to the start of ENV; otherwise
 (by default) add them to the end. In either case the entries appear in
 ENV in the same order as they appear in F.
 

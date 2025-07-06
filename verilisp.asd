@@ -32,11 +32,13 @@
 	       "read-number")
   :pathname "src/"
   :serial t
-  :components ((:file "package")
+  :components (;; utilities
 	       (:module "utils"
 		:components ((:file "package")
 			     (:file "list-utils")
 			     (:file "string-utils")))
+
+	       ;; core language
 	       (:module "vl"
 		:components ((:file "package")
 			     (:file "helpers")
@@ -69,6 +71,7 @@
 			     (:file "embedding")
 			     (:file "conditions")))
 
+	       ;; higher-level definitions
 	       (:module "def"
 		:components ((:file "package")
 			     (:file "constants")
@@ -77,7 +80,10 @@
 			     ;;(:file "mixins")
 			     ;;(:file "synthesis")
 			     ;;(:file "isa")
-			     (:file "conditions"))))
+			     (:file "conditions")))
+
+	       ;; public package
+	       (:file "package"))
   :in-order-to ((test-op (test-op "verilisp/test"))))
 
 

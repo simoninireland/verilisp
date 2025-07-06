@@ -18,7 +18,7 @@
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/test)
-(in-suite verilisp)
+(in-suite verilisp/utils)
 (declaim (optimize (space 0)))
 
 

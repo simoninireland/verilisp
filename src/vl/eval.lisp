@@ -17,7 +17,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :vl)
+(in-package :verilisp/core)
 (declaim (optimize debug))
 
 
@@ -27,11 +27,11 @@
   "Test whether FORM is a constant.
 
 Constants include literals and constant symbols, but do
-not include module parameters: for that use STATIC-CONSTANT-P)."
+not include module parameters: for that use STATIC-CONSTANT-P."
   (or (integerp form)
       (and (symbolp form)
 	   (variable-declared-p form)
-	   (eql (get-representation form) :constant))))
+	   (eql (get-representation form) 'constant))))
 
 
 (defun static-constant-p (form)
@@ -42,8 +42,8 @@ CONSTANT-P and module parameters."
   (or (integerp form)
       (and (symbolp form)
 	   (variable-declared-p form)
-	   (member (get-representation form) '(:parameter
-					       :constant)))))
+	   (member (get-representation form) '(parameter
+					       constant)))))
 
 
 (defun static-p (form)
@@ -85,7 +85,7 @@ The pairs can be used in LET blocks, or as an alist."
 			     (cons (list n v) rl))))))))
 
     (let ((decls (map-environment (lambda (n env)
-				    (list n (get-frame-property n :initial-value env :default 0)))
+				    (list n (get-frame-property n 'initial-value env :default 0)))
 				  env)))
       (cadr (remove-seen '() decls)))))
 

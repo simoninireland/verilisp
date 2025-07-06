@@ -21,7 +21,7 @@
 ;; versions generating non-synthesisable Lisp. The names of these macros
 ;; are suffixed /vl, and we alias them using ADD-MACRO in the loader.
 
-(in-package :vl)
+(in-package :verilisp/core)
 (declaim (optimize debug))
 
 
@@ -80,55 +80,6 @@ detached again afterwards).")
   `(if (not,cond)
        (progn
 	 ,@body)))
-
-
-;; ---------- Declaring wires, constants, and registers ----------
-
-(defun add-representation-to-decl (rep decl)
-  "Represent DECL as REP.
-
-If DECL already has an :AS key whose value isn't REP, a
-REPRESENTATION-MISMATCH error is signalled."
-  (destructuring-bind (n v &rest keys)
-      decl
-    (if-let ((m (member :as keys)))
-      ;; decl has a representation, check it
-      (if (not (eql (cadr m) rep))
-	  ;; different representation, signal the mismatch
-	  (error 'representation-mismatch :expected rep
-					  :got (cadr m)
-					  :hint "Don't add explicit reepresentations within representation-declaring forms")
-
-	  ;; same representation, return unchanged
-	  decl)
-
-      ;; expand the decl with the representation
-      `(,n ,v :as ,rep ,@keys))))
-
-
-(defun add-representation-to-decls (rep decls)
-  "Add REP as the representation for all DECLS."
-   (mapcar (curry #'add-representation-to-decl rep)
-	   decls))
-
-
-(defmacro/vl let-wires (decls &body body)
-  "Declare all DECLS as wires in BODY."
-  `(let ,(add-representation-to-decls :wire decls)
-     ,@body))
-
-
-(defmacro/vl let-registers (decls &body body)
-  "Declare all DECLS as registers in BODY."
-  `(let ,(add-representation-to-decls :register decls)
-     ,@body))
-
-
-(defmacro/vl let-constants (decls &body body)
-  "Declare all DECLS as constants in BODY."
-  `(let ,(add-representation-to-decls :constant decls)
-     ,@body))
-
 
 
 ;; ---------- Increment and decrement ----------
