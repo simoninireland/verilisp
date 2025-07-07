@@ -20,7 +20,7 @@ forms.
 
 The tests can be totally unrelated to each other, as shown above.
 
-.. note::
+.. warning::
 
    While ``cond`` can be used as an expression (because it expands
    into ``if``), this needs care: each arm would need to return a

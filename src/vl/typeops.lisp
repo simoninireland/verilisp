@@ -37,18 +37,17 @@ it contains the arguments."
 (defun construct-type (tytag tyargs)
   "Construct a type specifier from TYTAG and TYARGS.
 
-This is simply TYTAG is TYARGS is nil, or a list specifier."
+This is simply TYTAG is TYARGS is nil, or a list specifier consisting
+of TYTAG and TYARGS."
   (if (null tyargs)
       tytag
       (cons tytag tyargs)))
 
 
-(defun representable-type-p (ty)
-  "Tests whether TY is representable.
+;TODO: This should probably be generic, like generalised-place-p
 
-Cut-off un-representable types in the type lattice. This includes
-unbounded UNSIGNED-BYTE and SIGNED-BYTE types, and the lattice types T
-and NIL."
+(defun representable-type-p (ty)
+  "Tests whether TY is representable on hardware."
   (destructuring-bind (tytag tyargs)
       (deconstruct-type ty)
 

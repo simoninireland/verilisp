@@ -23,7 +23,7 @@ The ``if`` form works as in Lisp.
       (setq b 1))
 
 As with Lisp, the true arm consists of a single form: wrap multiple
-forms in a ``progn`` if needed (see :ref:`vl-control-flow`). The
+forms in a ``progn`` if needed (see :ref:`core-control-flow`). The
 false arm can consist of multiple forms, although some Lisp
 programmers prefer to treat both arms the same.
 
@@ -65,4 +65,6 @@ expressions: for a more flexible multi-armed conditional see
 Compatibility
 -------------
 
-``if`` and ``case`` behave exactly as in Common Lisp.
+``if`` and ``case`` behave exactly as in Common Lisp, with the proviso
+noted above of only allowing simple bodies when encountered in
+expressions.

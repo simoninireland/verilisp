@@ -95,6 +95,28 @@ sure that methods on this function can handle types in either
 position.
 
 
+Least upper representable bounds
+--------------------------------
+
+The Verilisp type lattice inherits the "top" and "bottom" types, ``t``
+and ``nil``, from Common Lisp. These aren't useful types on hardware,
+which doesn't support polymorphism. Similarly, ``unsigned-byte`` is
+useful as an abstraction but isn't something that can be implemented
+on real hardware.
+
+The LURB function returns the least upper *representable* bound of
+two types by effectively slicing-off those parts of the type lattice
+that can't be represented.
+
+.. cl:function:: representable-type-p
+
+
+.. cl:function:: lurb
+
+
+LURB re-uses the type comparisons encoded by LUB-TYPE, and so needs no
+further programmer support.
+
 Type (de)construction
 ---------------------
 

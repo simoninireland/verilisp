@@ -77,7 +77,7 @@ To access an element of an array use the ``aref`` form:
 	 (b 0))
       (setq b (aref a 0)))
 
-The same form works as a generalised place for :ref:`vl-assignment`:
+The same form works as a generalised place for :ref:`core-assignment`:
 
 .. code-block:: lisp
 

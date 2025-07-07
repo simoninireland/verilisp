@@ -163,7 +163,7 @@ intermediate updates, one per update."
 		      vars tempvars))))))
 
 
-;; ---------- Iteration ----------
+;; ---------- General iteration ----------
 
 (defun generate-do-var (vds var)
   "Generate a declaration and stepper for VAR."
@@ -224,3 +224,23 @@ the increments to the variables being executed every time."
 
 	      ;; return to head of the loop
 	      (go ,loop-head)))))))
+
+
+;; ---------- Structured iteration ----------
+
+(defmacro/vl while (condition &body body)
+  "Run the BODY forms as long as CONDITION is true.
+
+BODY is not run if CONDITION is already true."
+  `(do ()
+       (,condition (return))
+     ,@body))
+
+
+(defmacro/vl until (condition &body body)
+  "Run the BODY forms until CONDITION is true.
+
+BODY is not run if CONDITION is already true."
+  `(do ()
+       ((not ,condition) (return))
+     ,@body))

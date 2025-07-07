@@ -26,6 +26,7 @@ Verilisp leverages Lisp's type system by adding types appropriate for
 hardware synthesis.
 
 .. toctree::
+   :maxdepth: 1
 
    core/fixed-width
 
@@ -39,6 +40,7 @@ capabilities, as well as decomposition of code into modules and checks
 on the types passed to operators.
 
 .. toctree::
+   :maxdepth: 1
 
    core/binders
    core/declarations
@@ -47,20 +49,9 @@ on the types passed to operators.
    core/cond
    core/assignment
    core/control-flow
+   core/iteration
    core/tagbody
    core/arrays
+   core/with-bitfields
    core/coercion-casting
    core/macros
-
-
-Extended forms
---------------
-
-Verilisp is still Lisp and so can use macros to extend the core
-language. This includes using familiar macros that extend the
-language, as well as some that provide features important for hardware
-synthesis that nonetheless don't need to be core language features.
-
-.. toctree::
-
-   core/with-bitfields
