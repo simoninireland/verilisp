@@ -153,9 +153,9 @@ Verilisp, but don't /require/ it."
 	     (subtype-p et1 et2))))))
 
 
-(defmethod free-variables-sexp ((fun (eql 'make-array)) args)
+(defmethod read-written-variables-sexp ((fun (eql 'make-array)) args)
   ;; can't have any free variables (I don't think)
-  nil)
+  '(() ()))
 
 
 (defmethod dependencies-sexp ((fun (eql 'make-array)) args)
@@ -275,25 +275,17 @@ probably should, for those that are statically determined."
       (element-type-of-array ty))))
 
 
-(defmethod free-variables-sexp ((fun (eql 'aref)) args)
-  (destructuring-bind (target &rest indices)
+(defmethod read-written-variables-sexp ((fun (eql 'aref)) args)
+  (destructuring-bind (place &rest indices)
       args
-    (remove-nulls (foldr #'union (mapcar #'free-variables
-					 (cons target indices))
-			 '()))))
+    (let ((place-rws (if (symbolp place)
+			 ;; place targets a variable directly
+			 (list '()  (list place))
 
-
-(defmethod updated-variables-sexp ((fun (eql 'aref)) args)
-  (destructuring-bind (target &rest indices)
-      args
-    (declare (ignore indices))
-
-    (if (symbolp target)
-	;; place targets a variable directly, return that
-	(list target)
-
-	;; place is complex, recurse into it
-	(updated-variables target))))
+			 ;; place is complex, recurse into it
+			 (read-written-variables target)))
+	  (indices-rws (merge-all-variables-as-read (merge-read-written-variables indices))))
+      (union2 place-rws indices-rws))))
 
 
 (defmethod generalised-place-sexp-p ((selector (eql 'aref)) selectorargs)

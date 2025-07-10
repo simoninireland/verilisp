@@ -183,10 +183,13 @@
     (is (set-equal (vl::variable-property 'a 'depends-on)
 		   '(a b c))) ; b from the previous form
 
-    (is (set-equal (vl::updated-variables '(setq (aref a 1) b))
-		   '(a)))
-    (is (set-equal (vl::updated-variables '(setq (aref a 1) (aref a c)))
-		   '(a)))))
+    (let ((rws (vl::read-written-variables '(setq (aref a 1) b))))
+      (is (set-equal (car rws) '(b)))
+      (is (set-equal (cadr rws) '(a))))
+
+	(let ((rws (vl::read-written-variables '(setq (aref a 1) (aref a c)))))
+      (is (set-equal (car rws) '(a c)))
+      (is (set-equal (cadr rws) '(a))))))
 
 
 ;; ---------- Initialisation ----------

@@ -93,3 +93,23 @@
 
   (is (vl::subtype-p (vl::typecheck '(logand #2r10110 #2r1111110))
 		    '(unsigned-byte 7))))
+
+;; ---------- Variable access ----------
+
+(test test-operator-accesses
+  "Test we extract the right variable accesses."
+  (let ((p (vl::read-written-variables 'a)))
+    (is (equal (car p) '(a)))
+    (is (null (cadr p))))
+
+  (let ((p (vl::read-written-variables '(+ 1 2))))
+    (is (null (car p)))
+    (is (null (cadr p))))
+
+  (let ((p (vl::read-written-variables '(+ a 4 b))))
+    (is (set-equal (car p) '(a b)))
+    (is (null (cadr p))))
+
+  (let ((p (vl::read-written-variables '(+ a 4 (- b c) b))))
+    (is (set-equal (car p) '(a b c)))
+    (is (null (cadr p)))))

@@ -29,16 +29,12 @@
   (get-type form))
 
 
-(defmethod free-variables ((form symbol))
-  (list form))
-
-
-(defmethod updated-variables ((form symbol))
-  (list form))
-
-
 (defmethod dependencies ((form symbol))
   nil)
+
+
+(defmethod read-written-variables ((form symbol))
+  (list (list form) '()))
 
 
 (defmethod float-let-blocks ((form symbol))

@@ -211,3 +211,30 @@
     ;; ... and a should also depend on c,after b's later update
     (is (set-equal (vl::traverse-dependencies 'a)
 		   '(b c clk)))))
+
+
+;; ---------- Accesses ----------
+
+(test test-progn-accesses
+  "Test we can extract variable accesses from a PROGN."
+  (let ((p (vl::read-written-variables '(progn
+				  (setf a (+ 1 2 b))
+				  (setf b 23)))))
+    (is (equal (car p) '(b)))
+    (is (set-equal (cadr p) '(a b)))))
+
+
+(test test-at-accesses
+  "Test we can extract variable accesses from an @."
+  (let ((p (vl::read-written-variables '(@ (posedge clk)
+				  (setf a (+ 1 2 b))
+				  (setf b 23)))))
+    (is (set-equal (car p) '(b clk)))
+
+    (is (set-equal (cadr p) '(a b))))
+
+  (let ((p (vl::read-written-variables '(@ (*)
+				  (setf a (+ 1 2 b))
+				  (setf b 23)))))
+    (is (equal (car p) '(b)))
+    (is (set-equal (cadr p) '(a b)))))

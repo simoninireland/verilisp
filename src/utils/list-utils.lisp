@@ -93,7 +93,6 @@ The lists must have equal lengths."
 	 (cons (list (car l1) (car l2))
 	       (zip (cdr l1) (cdr l2))))))
 
-
 (defun zip-without-null (xs ys)
   "Zip lists XS and YS when elements are not null.
 
@@ -127,6 +126,21 @@ is IDENTITY, testing the values themselves."
   (every (lambda (e)
 	   (= (count (funcall key e) s :test test :key key) 1))
 	 s))
+
+
+;; ---------- Pairwise application across several sets ----------
+
+(defun pairwise (f l1 l2)
+  "Apply F pairwise to the elements of L1 and L2.
+
+F should be a function of two variables. L1 and L2 must
+have the same length."
+  (mapcar (curry #'funcall f) l1 l2))
+
+
+(defun union2 (p1 p2)
+  "Take two pairs of sets and return the pair of their union."
+  (pairwise #'union p1 p2))
 
 
 ;; ---------- Repetition ----------

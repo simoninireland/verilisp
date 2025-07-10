@@ -99,16 +99,21 @@
    #:in
    #:out
    #:inout
+   #:read
+   #:written
    #:0=
    #:0/=
+   #:1+
+   #:1-
    #:2*
+   #:2/
 
    ;; DSL functions
    #:add-frames
    #:declare-annotation
    #:typecheck
    #:free-variables
-   #:updated-variables
+   #:read-written-variables
    #:rewrite-variables
    #:float-let-blocks
    #:simplify-progn

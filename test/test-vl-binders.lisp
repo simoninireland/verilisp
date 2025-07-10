@@ -128,7 +128,10 @@
 			   (let ((a 10))
 			     (+ a b))))))
     (vl::typecheck p)
-    (is (set-equal (vl::free-variables (caddr p)) ; body of the outer LET
+    (is (equal (vl::read-written-variables (caddr p)) ; body of the outer LET
+		   '((b) ())))
+
+    (is (set-equal (vl::free-variables (caddr p))
 		   '(b))))
 
   (let ((p (vl::expand/vl '(let ((a 10)
@@ -234,3 +237,27 @@
 
     (signals (vl::unknown-variable)
       (vl::expand/vl '(declare (type bit d))))))
+
+
+;; ---------- Variable accesses ----------
+
+(test test-let-accesses
+  "Test we can extract and update variable accesses in LET."
+  (let ((p (vl::expand/vl '(let (a b c)
+			    (setq a 1)
+			    (setq b (+ a 1))
+			    (setq c (+ a c))))))
+
+    ;; both shuld be null, as no variables are free
+    (let ((vas (vl::read-written-variables p)))
+      (is (null (car vas)))
+      (is (null (cadr vas))))
+
+    (let ((decls (cadr p)))
+      (with-local-frame decls
+	(is (vl::variable-property 'a 'written))
+	(is (vl::variable-property 'a 'read))
+	(is (vl::variable-property 'b 'written))
+	(is (not (vl::variable-property 'b 'read)))
+	(is (vl::variable-property 'c 'written))
+	(is (vl::variable-property 'c 'read))))))

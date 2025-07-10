@@ -33,8 +33,8 @@
 	`(unsigned-byte ,w))))
 
 
-(defmethod free-variables ((form integer))
-  nil)
+(defmethod read-written-variables ((form integer))
+  '(() ()))
 
 
 (defmethod dependencies ((form integer))

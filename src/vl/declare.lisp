@@ -55,6 +55,10 @@ so use in later passes."))
   t)
 
 
+(defmethod read-written-variables-sexp ((fun (eql 'declare)) args)
+  '(() ()))
+
+
 (defmethod dependencies-sexp ((fun (eql 'declare)) args)
   nil)
 

@@ -23,43 +23,57 @@
 
 ;; ---------- Free variables ----------
 
-(defgeneric free-variables (form)
-  (:documentation "Return all free variables in FORM.
-
-A variable is free in a form if it hasn't appeared in a binder
-that binds that variable. Use REWRITE-VARIABLES to re-write
-free instances to new names.")
+(defgeneric read-written-variables (form)
+  (:documentation "Return all variables in FORM that are read from or written to.")
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
-      (free-variables-sexp fun args))))
+      (read-written-variables-sexp fun args))))
 
 
-(defgeneric free-variables-sexp (fun args)
-  (:documentation "Return all variables free in FUN applied to ARGS.")
+(defgeneric read-written-variables-sexp (fun args)
+  (:documentation "Return all variables that are read or written in FUN applied to ARGS.
+
+Methods on this functon should return a pair of sets consisting of the
+variables that could be read and the variables that could be updated
+in the form. The union of these two sets are the free variables in the
+form.
+
+Whether or not variables *are* updated may depend on the context of
+the form. In contexts where there are no writes, use
+MERGE-ALL-VARIABLES-AS-READ to merge read and written.
+
+The default is to combine all the variables in the arguments.")
   (:method (fun args)
-    (foldr #'union (mapcar #'free-variables args) '())))
+    (merge-read-written-variables args)))
 
 
-(defgeneric updated-variables (form)
-  (:documentation "Return all free variables in FORM that are updated.")
-  (:method ((form integer))
-    nil)
-  (:method ((form symbol))
-    nil)
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (updated-variables-sexp fun args))))
+(defun merge-read-written-variables (forms)
+  "Merge the read and written variables in FORMS.
+
+This folds READ-WRITTEN-VARIABLES across FORMS, taking care
+of unioning in the presence of nulls."
+  (foldr #'union2
+	 (remove-nulls (mapcar #'read-written-variables forms))
+	 '(() ())))
 
 
-(defgeneric updated-variables-sexp (fun args)
-  (:documentation "Return all variables free that are updated in FUN applied to ARGS.
+(defun merge-all-variables-as-read (rws)
+  "Merge the read and written variables in RWS to be all written."
+  (destructuring-bind (rs ws)
+      rws
+    (list (union rs ws)
+	  '())))
 
-The default is for no variables to be updated. Methods on this function should
-return any updated variables.")
-  (:method (fun args)
-    nil))
+
+(defun free-variables (form)
+  "Return all free variables in FORM.
+
+The free variables are simply the union of the read and written
+variables as computed by READ-WRITTEN-VARIABLES."
+  (destructuring-bind (read written)
+      (read-written-variables form)
+    (union read written)))
 
 
 ;; ---------- Variable re-writing ----------
@@ -281,7 +295,10 @@ Usually this will only involve examining SELECTOR.")
 (defgeneric dependencies (form)
   (:documentation "Find all the depenencies in FORM.
 
-The :DEPENDS-ON property is set for each variable.")
+The DEPENDS-ON property of a variable takes all the other variables
+whose values affect it. The READ property is set to T if the variable
+ is ever read; the WRITTEN property is set if the variable is ever
+updated over its lifetime. These are used to infer representations.")
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form

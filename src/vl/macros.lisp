@@ -55,7 +55,7 @@ detached again afterwards).")
 	   (declare-macro ',name ',external-name)))))
 
 
-  (defmacro import-macro/vl (name)
+  (defmacro importmacro/vl (name)
     "Import Lisp macro NAME into Verilisp."
     `(with-frame *macro-environment*
        (declare-macro ',name))))
@@ -63,7 +63,7 @@ detached again afterwards).")
 
 ;; ---------- Imported macros ----------
 
-(import-macro/vl cond)
+(importmacro/vl cond)
 
 
 ;; ---------- Single-armed conditionals ----------
@@ -135,13 +135,14 @@ detached again afterwards).")
 (defmacro/vl psetq (&rest var-vals)
   "Update variables to values in parallel.
 
-ALl the values of VAR-VALS are computed, and are only then
-assigned to their respective variables. This ensures that all
-updates use the old values of the variables, making their
-ordeing irrelevant.
+VAR-VALS is a list of alternating variables and values. In performing
+the update, all the values are computed, and are only then assigned to
+their respective variables. This ensures that all updates use the
+same (old) values of the variables, making their ordering irrelevant.
 
-Note that this creates temporary variables to hold the
-intermediate updates, one per update."
+Note that this creates temporary variables to hold the intermediate
+updates. Also note that it only works for variables, not for
+generalised places."
   (declare (optimize debug))
 
   (let* ((var-val-pairs (adjacent-pairs var-vals))
@@ -185,7 +186,7 @@ intermediate updates, one per update."
 
 
 (defun generate-do-vars (vars)
-  "Generate the varable declarations and steppers for VARS."
+  "Generate the varaible declarations and steppers for VARS."
   (foldr #'generate-do-var vars '(() ())))
 
 
@@ -224,6 +225,9 @@ the increments to the variables being executed every time."
 
 	      ;; return to head of the loop
 	      (go ,loop-head)))))))
+
+
+(importmacro/vl dotimes)
 
 
 ;; ---------- Structured iteration ----------

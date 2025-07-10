@@ -237,6 +237,10 @@ of other parameter values."
       (make-module-interface-type decls))))
 
 
+(defmethod read-written-variables-sexp ((fun (eql 'module)) args)
+  '(() ()))
+
+
 (defmethod dependencies-sexp ((fun (eql 'module)) args)
   (destructuring-bind (modname decls &rest body)
       args
@@ -504,15 +508,14 @@ and causes a NOT-IMPORTABLE error if not."
   nil)
 
 
-(defmethod free-variables-sexp ((fun (eql 'make-instance)) args)
+(defmethod read-written-variables-sexp ((fun (eql 'make-instance)) args)
   (destructuring-bind (modname &rest initargs)
       args
 
     ;; for compatability with Common Lisp usage
     (unquote modname)
 
-    (let ((modargs (values-to-arguments modname initargs)))
-      (foldr #'union (mapcar #'free-variables modargs) '()))))
+    (merge-read-written-variables (values-to-arguments modname initargs))))
 
 
 (defmethod rewrite-variables-sexp ((fun (eql 'make-instance)) args rewrites)

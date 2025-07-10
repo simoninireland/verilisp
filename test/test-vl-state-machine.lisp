@@ -21,6 +21,95 @@
 (in-suite verilisp/vl)
 
 
+;; ---------- State extraction ----------
+
+(test test-tagbody-states
+  "Test we can extract state definitions from a TAGBODY."
+  (let ((s0 (vl::extract-tagbody-states '((setq a 1)
+					  pre
+					  first
+					  (setq b 1) (setq s 29)
+					  second (go first)))))
+
+    ;; initial label
+    (is (vl::initial-p s0))
+
+    ;; states, links, and labels
+    (let* ((ss (vl::machine-states s0))
+	   (sls (vl::machine-state-labels s0)))
+      (is (equal (length ss) 4))
+
+      ;; all labels included
+      (dolist (l '(first second pre))
+	(is (member l sls)))
+
+      ;; all labels unique
+      (is (vl::set-p sls))
+
+      ;; all states have one link except the last
+      (let ((all-but-last (remove-if #'(lambda (s)
+					 (eql (vl::label s) 'second))
+				     ss)))
+	(is (every (lambda (s)
+		     (= (length (vl::exit-states s)) 1))
+		   all-but-last)))
+      (is (null (vl::exit-states (find-if #'(lambda (s)
+					      (eql (vl::label s) 'second))
+					  ss)))))))
+
+
+(test test-tagbody-no-labels
+  "Test we can handle a TAGBODY with no state labels at all."
+  (let ((s0 (vl::extract-tagbody-states '((setq a 1)
+					  (if a
+					      (setq b 23)
+					      (setq 4 45))
+					  (setq c 1)))))
+    (is (not (null s0)))
+    (is (not (null (vl::label s0))))))
+
+
+(test test-tagbody-splt-states
+  "Test we can split the states of a machine into single-form states."
+  (let* ((s0 (vl::extract-tagbody-states '((setq a 1)
+					   pre
+					   first
+					   (setq b 1) (setq s 29)
+					   second (go first))))
+	 (s1 (vl::singlify-machine-states s0)))
+
+    ;; returned state preserved, and is still initial
+    (is (eql s0 s1))
+    (is (vl::initial-p s1))
+
+    (let ((ss (vl::machine-states s1))
+	  (sls (vl::machine-state-labels s1)))
+      (is (equal (length ss) 5))
+
+      ;; all labels included
+      (dolist (l '(first second pre))
+	(is (member l sls)))
+
+      ;; all states have one link except the last
+      (let ((all-but-last (remove-if #'(lambda (s)
+					 (eql (vl::label s) 'second))
+				     ss)))
+	(is (every (lambda (s)
+		     (= (length (vl::exit-states s)) 1))
+		   all-but-last)))
+      (is (null (vl::exit-states (find-if #'(lambda (s)
+					      (eql (vl::label s) 'second))
+					  ss)))))))
+
+(let ((s0 (vl::extract-tagbody-states '((setq a 1)
+					(if a
+					    (setq b 23)
+					    (setq 4 45))
+					(setq c 1)))))
+
+s0
+  )
+
 ;; ---------- Basic machines  ----------
 
 (test test-tagbody-compled-form
@@ -32,7 +121,7 @@
 	      two
 	      (setq b 0)))
 	 (q (vl::expand/vl `(let (a b)
-			     ,p))))
+			      ,p))))
 
     (setq q (vl::expand-macros-in-environment q))
     (is (not (null q)))))

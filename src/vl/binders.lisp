@@ -225,50 +225,53 @@ right-hand side of an assignment."
       (mapc #'dependencies-decl decls)
 
       ;; process the body in this frame, with these dependencies
-      (dependencies `(progn ,@body)))))
+      (dependencies (with-implicit-progn body))
 
+
+      ;; mark variables as read or written
+      (destructuring-bind (read written)
+	  (read-written-variables (with-implicit-progn body))
+	(dolist (n read)
+	  (set-variable-property n 'read t))
+	(dolist (n written)
+	  (set-variable-property n 'written t))))))
 
 
 ;; ---------- Free variables ----------
 
-(defun free-variables-decl (decl)
-  "Calculate the free variables for DECL.
+(defun read-written-variables-decl (decl)
+  "Calculate the read and written for DECL.
 
 The free variables are all the variables that appear on the
 right-hand side of an assignment."
   (if (listp decl)
       (destructuring-bind (n v)
 	  decl
-	(declare (ignore n))
+	(destructuring-bind (decl-rs decl-ws)
+	    (read-written-variables v)
 
-	(remove-if #'static-constant-p (free-variables v)))))
+	  (list (remove-if #'static-constant-p decl-rs)
+		decl-ws)))
+
+      '(() ())))
 
 
-(defmethod free-variables-sexp ((fun (eql 'let)) args)
+(defmethod read-written-variables-sexp ((fun (eql 'let)) args)
   (declare (optimize debug))
 
   (destructuring-bind (decls &rest body)
       args
 
     (with-local-frame decls
-      (let ((lns (variables-declared-in-current-frame))
-	    (body-fvs (foldr #'union (mapcar #'free-variables body) '()))
-	    (decl-fvs (foldr #'union (mapcar #'free-variables-decl decls) '())))
+      (let ((lns (variables-declared-in-current-frame)))
 
-	(set-difference (union body-fvs decl-fvs) lns)))))
+	(destructuring-bind (body-rs body-ws)
+	    (merge-read-written-variables body)
+	  (destructuring-bind (decl-rs decl-ws)
+	      (foldr #'union2 (mapcar #'read-written-variables-decl decls) '(() ()))
 
-
-(defmethod updated-sexp ((fun (eql 'let)) args)
-  (declare (optimize debug))
-
-  (destructuring-bind (decls &rest body)
-      args
-
-    (with-local-frame decls
-      (let ((lns (variables-declared-in-current-frame))
-	    (body-fvs (foldr #'union (mapcar #'updated-variables body) '())))
-
-	(set-difference body-fvs lns)))))
+	    (list (set-difference (union body-rs decl-rs) lns)
+		  (set-difference (union body-ws decl-ws) lns))))))))
 
 
 ;; ---------- Variable re-writing ----------
@@ -359,7 +362,7 @@ right-hand side of an assignment."
       args
 
     (destructuring-bind (newbody newenv)
-	(float-let-blocks (with-implict-progn body))
+	(float-let-blocks (with-implicit-progn body))
 
       ;; add our declarations to the environment
       (when (null newenv)

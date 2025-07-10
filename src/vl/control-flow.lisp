@@ -107,16 +107,38 @@ block, and are represented by the symbol *."
     (typecheck `(progn ,@body))))
 
 
-(defmethod free-variables-sexp ((fun (eql '@)) args)
-  (destructuring-bind (sensitivities &rest body)
-      args
-    (union (free-variables sensitivies) (free-variables `(progn ,@body)))))
-
-
 (defmethod dependencies-sexp ((fun (eql '@)) args)
   (destructuring-bind (sensitivities &rest body)
       args
     (dependencies `(progn ,@body))))
+
+
+(defmethod read-written-variables-sexp ((fun (eql '@)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (sensitivities &rest body)
+      args
+    (let ((s-rws (if (listp sensitivities)
+		     (cond ((combinatorial-trigger-p sensitivities)
+			    ;; sensitive to everything
+			    '(() ()))
+
+			   ((edge-trigger-p sensitivities)
+			    ;; a single instance of a trigger operator
+			    (read-written-variables sensitivities))
+
+			   (t
+			    ;; a list of sensitivities
+			    (merge-read-written-variables sensitivities)))
+		     ;; an atom
+		     (read-written-variables sensitivities)))
+	  (v-rws (merge-read-written-variables args)))
+
+      ;; remove any global sensitivity
+      (union2 (list (set-difference (car s-rws)
+				    (list '*))
+		    (cadr s-rws))
+	      v-rws))))
 
 
 (defmethod simplify-progn-sexp ((fun (eql '@)) args)

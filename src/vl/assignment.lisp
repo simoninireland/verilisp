@@ -62,8 +62,8 @@ isn't declared."
       tyval)))
 
 
-(defmethod updated-variables-sexp ((fun (eql 'setq)) args)
-  (updated-variables `(setf ,@args)))
+(defmethod read-written-variables-sexp ((fun (eql 'setq)) args)
+  (read-written-variables `(setf ,@args)))
 
 
 (defmethod dependencies-sexp ((fun (eql 'setq)) args)
@@ -104,15 +104,19 @@ isn't declared."
     tyvar))
 
 
-(defmethod updated-variables-sexp ((fun (eql 'setf)) args)
+(defmethod read-written-variables-sexp ((fun (eql 'setf)) args)
+  (declare (optimize debug))
+
   (destructuring-bind (place v &key &allow-other-keys)
       args
-    (if (symbolp place)
-	;; place targets a variable directly
-	(list place)
+    (let ((place-rws (if (symbolp place)
+			 ;; place targets a variable directly
+			 (list '()  (list place))
 
-	;; place is generalised
-	(updated-variables place))))
+			 ;; place is complex, recurse into it
+			 (read-written-variables place)))
+	  (v-rws (merge-all-variables-as-read (read-written-variables v))))
+      (union2 place-rws v-rws))))
 
 
 (defmethod dependencies-sexp ((fun (eql 'setf)) args)
@@ -125,14 +129,19 @@ isn't declared."
     (destructuring-bind (place v &key &allow-other-keys)
 	args
 
-      (let ((ns (updated-variables place))
-	    (fvs (remove-if #'static-constant-p (free-variables v))))
+      (let* ((rws (if (symbolp place)
+		      ;; shortcut for a symbol
+		      (list () (list place))
 
-	;; set the dependencies for the target
+		      (read-written-variables place)))
+	     (fvs (union (remove-if #'static-constant-p (free-variables v))
+			 (car rws))))
+
+	;; set the dependencies for all written variables
 	(mapc (lambda (n)
 		(let ((depends-on (variable-property n 'depends-on :default nil)))
 		  (set-variable-property n 'depends-on (union depends-on fvs))))
-	      ns)))))
+	      (cadr rws))))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'setf)) args)

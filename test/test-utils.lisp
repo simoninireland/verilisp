@@ -175,6 +175,36 @@
 	 9)))
 
 
+;; ---------- Pairwise applications ----------
+
+(test test-union2-empty
+  "Test we can union empty pairs."
+  (is (equal (union2 '(() ()) '(() ())) '(() ()))))
+
+
+(test test-union2-one-side
+  "Test we can union empty and non-empty pairs."
+  (is (equal (union2 '((1 2) (3)) '(() ())) '((1 2) (3)))))
+
+
+(test test-union2
+  "Test we can union a pair of pairs of sets."
+  (let ((p (union2 '((1 2) (3)) '((4) (5 6)))))
+    (destructuring-bind (p1 p2)
+	p
+      (is (set-equal p1 '(1 2 4)))
+      (is (set-equal p2 '(3 5 6)))))
+
+  ;; no duplicates
+  (let ((p (union2 '((1 2 3) (3)) '((4 3) (5 6)))))
+    (destructuring-bind (p1 p2)
+	p
+      (is (set-p p1))
+      (is (set-p p2))
+      (is (set-equal p1 '(1 2 3 4)))
+      (is (set-equal p2 '(3 5 6))))))
+
+
 ;; ---------- Repetition ----------
 
 (test test-n-copies-atom

@@ -33,6 +33,8 @@
    #:zip-without-null
    #:remove-nulls
    #:set-p
+   #:pairwise
+   #:union2
    #:foldl
    #:foldr
    #:foldr-over-null

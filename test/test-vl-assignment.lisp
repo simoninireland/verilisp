@@ -32,7 +32,7 @@
 
     (signals (vl::not-synthesisable)
       (vl::typecheck (vl::expand/vl '(let ((a 12))
-				      (declare (as :constant a))
+				      (declare (as constant a))
 				      (setq a 9)))))))
 
 
@@ -127,8 +127,9 @@
   (is (set-equal (vl::free-variables '(setq a '(+ 1 c b (* 3 d))))
 		 '(a b c d)))
 
-  (is (set-equal (vl::updated-variables '(setq a '(+ 1 c b (* 3 d))))
-		 '(a))))
+  (let ((rws (vl::read-written-variables '(setq a '(+ 1 c b (* 3 d))))))
+    (is (set-equal (car rws) '(c b d)))
+    (is (set-equal (cadr rws) '(a)))))
 
 
 (test test-setq-dependencies
@@ -182,3 +183,24 @@
 
 ;; Tests of the actual generalised place forms appear in their
 ;; respective test files.
+
+
+;; ---------- Accesses ----------
+
+(test test-setf-accesses
+  "Test we can extract the correct accesses."
+  (let ((p (vl::read-written-variables '(setf a '(+ 1 2 b)))))
+    (is (equal (car p) '(b)))
+    (is (equal (cadr p) '(a))))
+
+  (let ((p (vl::read-written-variables '(setf a '(+ 1 2 a b)))))
+    (is (set-equal (car p) '(b a)))
+    (is (equal (cadr p) '(a))))
+
+  (let ((p (vl::read-written-variables '(setf (aref a 26) '(+ 1 2 b)))))
+      (is (equal (car p) '(b)))
+      (is (equal (cadr p) '(a))))
+
+  (let ((p (vl::read-written-variables '(setf (aref a (aref d 1)) '(+ 1 2 b)))))
+    (is (set-equal (car p) '(b d)))
+    (is (equal (cadr p) '(a)))))

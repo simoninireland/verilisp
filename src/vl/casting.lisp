@@ -34,6 +34,12 @@
       ty)))
 
 
+(defmethod read-written-variables-sexp ((fun (eql 'the)) args)
+  (destructuring-bind (ty val)
+      args
+    (merge-all-variables-as-read (read-written-variables val))))
+
+
 (defmethod synthesise-sexp ((fun (eql 'the)) args)
   (destructuring-bind (ty val)
       args
@@ -58,6 +64,12 @@
 	  ;; can't coerce anything else for now
 	  (error 'coercion-mismatch :expected ty :got vty
 				    :hint "Make sure the two types are coercible.")))))
+
+
+(defmethod read-written-variables-sexp ((fun (eql 'coerce)) args)
+  (destructuring-bind (val ty)
+      args
+    (merge-all-variables-as-read (read-written-variables val))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'coerce)) args)

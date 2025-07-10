@@ -21,6 +21,162 @@
 (declaim (optimize debug))
 
 
+;; ---------- State representation ----------
+
+(defclass state ()
+  ((initial-p
+    :documentation "Flag whether this is the initial state."
+    :initarg :initial-p
+    :initform nil
+    :accessor initial-p)
+   (label
+    :documentation "The state label."
+    :initarg :label
+    :initform nil
+    :accessor label)
+   (body
+    :documentation "The forms in the body of the state."
+    :initarg :body
+    :initform nil
+    :accessor body)
+   (exits
+    :documentation "States that this state can transition to."
+    :initform nil
+    :accessor exit-states))
+  (:documentation "Abstract state in a state machine."))
+
+
+(defmethod initialize-instance :after ((s state) &key label &allow-other-keys)
+  "Add a label if none is provided."
+  (unless label
+    (setf (slot-value s 'label) (gensym))))
+
+
+(defun add-exit-state (s1 s2)
+  "Add S2 as an exit for S1."
+  (setf (exit-states s1) (union (exit-states s1) (list s2))))
+
+
+(defun machine-states (s)
+  "Return all the states in the machine starting at S."
+  (labels ((visit-state (s to-visit visited)
+	     (if (null s)
+		 visited
+
+		 (progn
+		   (if (not (member s visited))
+		       ;; state hasn't been visited, add its exits
+		       (setq to-visit (append to-visit
+					      (exit-states s))))
+
+		   (visit-state (safe-car to-visit)
+				(cdr to-visit)
+				(cons s visited))))))
+
+
+    (visit-state s '() '())))
+
+
+(defun machine-state-labels (s)
+  "Return all the state labels in the machine starting at S."
+  (mapcar #'label (machine-states s)))
+
+
+(defun singlify-state (s)
+  "Split state S into states containing only one form.
+
+This turns a single state into a chain of states, each one
+having as body a single form from the body of S. The states
+are chained together, with the last state existing to the
+same state as the S.
+
+Return a list of states."
+
+  ;; sanity check
+  (unless (<= (length (exit-states s)) 1)
+    (error "Attempting to split a state with multiple exits ~a" (label s)))
+
+  (let ((forms (body s))
+	(exs (exit-states s)))
+
+    (if (<= (length forms) 1)
+	;; already a micro-state, return as-is
+	(list s)
+
+	;; a larger state, split it
+	(let ((other-states (mapcar (lambda (form)
+				      (make-instance 'state :body form))
+				    (cdr forms))))
+	  ;; re-set the body of the initial state to just
+	  ;; the first form
+	  (setf (body s) (car forms))
+
+	  ;; link the states together
+	  (let ((states (cons s other-states)))
+	    (mapc (lambda (s12)
+		    (setf (exit-states (car s12)) (cdr s12)))
+		  (successive-pairs states))
+	    (setf (exit-states (car (last states))) exs)
+
+	    ;; return the chain of states
+	    states)))))
+
+
+(defun singlify-machine-states (s)
+  "Split the states of the machine starting at S.
+
+Return the intial state of the new machine (which will be S)."
+  (foldr #'append (mapcar #'split-state (machine-states s)) '())
+
+  ;; return the starting state, which will have been preserved
+  ;; by the splitting operation
+  s)
+
+
+(defgeneric split-state-sexp (s fun args)
+  (:documentation "Split state S whose body is FUN applied to ARGS.
+
+Return a list of states resulting from the split. The
+default simply returns S as a list.")
+  (:method (s fun args)
+    (list s)))
+
+
+(defmethod split-state-sexp (s (fun (eql 'if)) args)
+  (destructuring-bind (condition then-branch &rest else-branch)
+      args
+
+    (let* ((exs (exit-states s))
+	   (then-state (make-instance 'state :body (list then-branch)))
+	   (then-label (label then-state)))
+
+      (if (null else-branch)
+	  ;; no else branch
+	  (progn
+	    (setf (body s) (list `(if ,condition
+				      (go ,then-state))))
+	    (setf (exit-states then-state) es)
+	    (setf (exit-states s) (list then-state))
+
+	    ;; return the states
+	    (cons s (singlify-state then-state)))
+
+	  ;; else branch
+	  (let* ((else-state (make-instance 'state :body else-branch))
+		 (else-label (label else-state)))
+	    (setf (body s)(list `(if ,condition
+				     (go ,then-state)
+				     (go ,else-state))))
+	    (setf (exit-states then-state) es)
+	    (setf (exit-states else-state) es)
+	    (setf (exit-states s) (list then-state else-state))
+
+	    ;; return the states
+	    (append (list s)
+		    (singlify-state then-state)
+		    (singlify-state else-state)))))))
+
+
 ;; ---------- Compiler state ----------
 
 (defparameter *state-machines* nil
@@ -126,35 +282,43 @@ in STATES or with the states of surrounding machines."
 			      :hint "Ensure the labels don't clash with those in a surrounding TAGBODY"))))
 
 
-;; This representation of states has the advantage that it
-;; exactly matches the clauses of CASE, which is how we
-;; implement the state machines, so they can be used directly.
-
 (defun extract-tagbody-states (forms)
-  "Turn a list of state labels and executable FORMS into a list of states.
+  "Turn a list of state labels and executable FORMS into a state machine.
 
-Each state has is a list headed with the state tag and followed by
-the body of that state. It is legal for the first state in the TAGBODY
-to be unlabelled, in which case a label is synthesised for it. The
-states are returned in lexical order."
+Return the initial state of the machine."
   (flet ((extract-states (states form)
 	   (if (symbolp form)
 	       ;; form is a state label, create a new state
 	       (cons (list form) states)
 
-	       ;; form is a part of the body of a state, append to the current state
+	       ;; form is a part of the body of a state
 	       (let ((state (car states)))
+		 ;; add a label if this is the (possibly unlabelled) initial state
+		 (if (and (= (length states) 1)
+			  (null state))
+		     (let ((initial-state-label (gensym)))
+		       (appendf state (list initial-state-label) (cdr states))))
+
+		 ;; append to the current state
 		 (cons (append state (list form)) (cdr states))))))
 
-    (let ((states (reverse (remove-nulls (foldr #'extract-states forms '(()))))))
-      ;; it is possible that the first state is unlabelled
-      (if (symbolp (caar states))
-	  states
+    (let* ((defs (reverse (remove-nulls (foldr #'extract-states forms '(())))))
+	   (states (mapcar (lambda (def)
+			     (make-instance 'state :label (car def)
+						   :body (cdr def)))
+			   defs)))
 
-	  ;; first state is unlabelled, add a label
-	  (let ((first-state-label (gensym)))
-	    (cons (cons first-state-label (car states))
-		  (cdr states)))))))
+      ;; mark the initial state
+      (setf (initial-p (car states)) t)
+
+      ;; add default exits for all states except the last
+      (if (> (length states) 1)
+	  (mapc (lambda (s12)
+		  (add-exit-state (car s12) (cadr s12)))
+		(successive-pairs states)))
+
+      ;; return the initial state
+      (car states))))
 
 
 (defun state-label-p (label &optional machine)
@@ -165,10 +329,10 @@ machine's labels; otherwise the label may be in the current machine, or
 in any surrounding machine."
   (if machine
       ;; test against specific machine
-      (not (null (member label (state-machine-state-labels machine))))
+      (not (null (member label (machine-state-labels machine))))
 
       ;; test against current and all surrounding machines
-      (not (null (member label (state-machine-all-state-labels))))))
+      (not (null (member label (machine-all-state-labels))))))
 
 
 (defun ensure-state-label (label)

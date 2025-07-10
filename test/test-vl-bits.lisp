@@ -93,8 +93,8 @@
 			       (as constant)))
 
     (vl::expand/vl '(progn
-		    (setq a (+ (vl::bref b d :end 0) 19))
-		    (setq c a)))
+		     (setq a (+ (vl::bref b d :end 0) 19))
+		     (setq c a)))
 
     ;; not (b d) as d is a constant
     (is (set-equal (vl::variable-property 'a 'depends-on)
