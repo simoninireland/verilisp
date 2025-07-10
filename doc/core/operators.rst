@@ -47,3 +47,10 @@ shifts, that take exactly two arguments.
 +---------------+------------------------------+--------------------+
 | ``>>``        + ``(>> b 5)``                 + ``(ash b -5)``     |
 +---------------+------------------------------+--------------------+
+
+
+Additional operators
+--------------------
+
+There are some other :ref:`shortcut operators <core-maths-shortcuts>`
+provided as macros.

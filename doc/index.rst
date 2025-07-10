@@ -27,3 +27,4 @@ to both interpretations, from the same description.
    install
    verilisp
    implementation
+   zbibliography

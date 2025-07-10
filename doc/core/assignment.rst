@@ -40,6 +40,11 @@ Assignment to several slices of bits within a variable:
 ``(setq a 1)`` and ``(setf a 1)`` are equivalent. For the other
 generalised places, see under their appropriate access operators.
 
+There is also a :ref:`parallel assignment <core-psetq>` version of
+``setq``, as well as operators to :ref:`increment/decrement in place
+<core-incf-decf>`.
+
+
 
 Synchronous and asynchronous assignment
 ---------------------------------------

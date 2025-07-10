@@ -22,7 +22,7 @@ synthesisable fragment.
 Types
 -----
 
-Verilisp leverages Lisp's type system by adding types appropriate for
+Verilisp leverages Lisp's type system using types appropriate for
 hardware synthesis.
 
 .. toctree::
@@ -31,13 +31,13 @@ hardware synthesis.
    core/fixed-width
 
 
-Core forms
-----------
+Special forms
+-------------
 
-The core of Verilisp covers all the constructs that can be directly
-synthesised. It includes basic control flow, conditional, and maths
-capabilities, as well as decomposition of code into modules and checks
-on the types passed to operators.
+The Verilisp special forms cover all the constructs that can be
+directly synthesised. They include basic control flow, conditional,
+maths capabilities, and state machines, as well as decomposition of
+code into modules.
 
 .. toctree::
    :maxdepth: 1
@@ -46,12 +46,23 @@ on the types passed to operators.
    core/declarations
    core/operators
    core/conditionals
-   core/cond
    core/assignment
    core/control-flow
-   core/iteration
    core/tagbody
    core/arrays
-   core/with-bitfields
    core/coercion-casting
+
+
+Extra forms
+-----------
+
+The extra forms build on the core language using macros.
+
+.. toctree::
+   :maxdepth: 1
+
    core/macros
+   core/cond
+   core/shortcuts
+   core/iteration
+   core/with-bitfields

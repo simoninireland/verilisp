@@ -26,6 +26,19 @@ turn of the iteration, plus a test for exiting the body.
 The variables list may be empty.
 
 
+``dotimes``
+-----------
+
+The ``dotimes`` macro behaves roughly like a simple "for" loop in
+other languages.
+
+.. code-block:: lisp
+
+   (let ((sum 0))
+     (dotimes (i 10)
+       (incf sum i)))
+
+
 ``while`` and ``until``
 -----------------------
 

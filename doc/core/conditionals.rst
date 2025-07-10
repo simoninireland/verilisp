@@ -25,7 +25,9 @@ The ``if`` form works as in Lisp.
 As with Lisp, the true arm consists of a single form: wrap multiple
 forms in a ``progn`` if needed (see :ref:`core-control-flow`). The
 false arm can consist of multiple forms, although some Lisp
-programmers prefer to treat both arms the same.
+programmers prefer to treat both arms the same. There are also
+:ref:`single-armed conditionals <core-when-unless>` for the special
+cases where the other arm is empty.
 
 ``if`` can also appear as an expression, for example:
 
