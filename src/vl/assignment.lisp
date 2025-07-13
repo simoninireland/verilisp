@@ -74,6 +74,40 @@ isn't declared."
   (synthesise `(setf ,@args)))
 
 
+;; ---------- Parallel SETQ ----------
+
+(defmacro/vl psetq (&rest var-vals)
+  "Update variables to values in parallel.
+
+VAR-VALS is a list of alternating variables and values. In performing
+the update, all the values are computed, and are only then assigned to
+their respective variables. This ensures that all updates use the
+same (old) values of the variables, making their ordering irrelevant.
+
+Note that this creates temporary variables to hold the intermediate
+updates. Also note that it only works for variables, not for
+generalised places."
+  (declare (optimize debug))
+
+  (let* ((var-val-pairs (adjacent-pairs var-vals))
+	 (vars (mapcar #'car var-val-pairs))
+	 (vals (mapcar #'cadr var-val-pairs))
+	 (tempvars (mapcar #'gensym (mapcar #'symbol-name vars))))
+
+    (with-gensyms (temps reals)
+      `(let ,tempvars
+	 (tagbody
+	  ,temps
+	    ,@(mapcar (lambda (tempvar val)
+			`(setq ,tempvar ,val))
+		      tempvars vals)
+
+	  ,reals
+	    ,@(mapcar (lambda (var tempvar)
+			`(setq ,var ,tempvar))
+		      vars tempvars))))))
+
+
 ;; ---------- setf (generalised places) ----------
 
 (defun ensure-generalised-place (form)
