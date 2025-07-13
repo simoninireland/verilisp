@@ -3,9 +3,12 @@
 Implementing state machines
 ===========================
 
-Verilisp uses the Common Lisp ``tagbody`` / ``go`` forms to implement
-state machines -- but with slightly different semantics as required
-for hardware synthesis.
+Verilisp's ``tagbody`` / ``go`` forms attempt to provide exactly the
+semantics expected from Common Lisp. By and large they do so, but with
+a couple of subtleties arising from the implementation. In
+applications that require precise control of timing, or when
+optimising code, understanding the implementation of state machines
+may be useful.
 
 
 A review of the Lisp forms
@@ -54,10 +57,11 @@ State machines in hardware
 
 In Verilog and other hardware description languages, state machines
 are used to add synchronisation to what are otherwise asynchronous
-hardware constructions. Usually (but not necessarily) this means that
-a state machine is "clocked" using a clock wire, and the machine
-"turns" and executes the behaviour of its current state at each tick
-of the clock.
+hardware constructions. Usually this means that a state machine is
+*synchronous*, typically transitioning on edges on the clock wire, and
+the machine "turns" and executes the behaviour of its current state at
+each tick of the clock. (In some cases state machines may be clocked
+by non-clock wires.)
 
 There are several ways to accomplish this. Staying in Verilisp, one
 way is to define the state machine as a conditional that switches
@@ -70,54 +74,40 @@ variable to keep track of the state.
      (let ((start 0)                  ; state labels
 	   (increment 1)
 	   (count 2))
+       (declare (as constant start increment count))
 
        (let ((state start))           ; current state variable
 	 (case state
 	   (start
-	    (setq state increment)    ; fall-through default
-	    (when (= a 0)
-	      (setq state start)))
+	    (if (= a 0)
+	      (setq state increment)  ; drop-through
+	      (setq state start))
 
 	   (increment
-	    (setq state count)        ; fall-through default
-	    (incf a))
+	    (incf a)
+	    (setq state count))
 
 	   (count
-	    (setq state start)        ; fall-through default
 	    (if (= a 10)
 		(setq state start)
 		(setq state increment)))))))
 
 Comparing this to the machine above, the translation is hopefully
 quite clear. We replace ``go`` with ``setq`` of the state variable,
-where the state labels have been defined as variables (they can
-actually be constants) containing a unique state number. Otherwise the
-main body of each state is copied from the ``tagbody`` form, being
-enclosed in a ``case`` form to jump to the correct state on entry.
+where the state labels have been defined as constants containing a
+unique state number. Otherwise the main body of each state is copied
+from the ``tagbody`` form, being enclosed in a ``case`` form to jump
+to the correct state on entry.
 
-One other thing that needs mentioning. At the head of each state (each
-arm of the ``case`` form) we have a ``setq`` that sets the state of
-the machine to the next state in order. This is to match the semantics
-of ``tagbody`` in Common Lisp, where control falls-through between
-states unless there's an explicit ``go`` to jump somewhere else.
+The only detail concerns moving between adjacent states, for example
+from "start" to "increment". The implementation requires that we set
+the state variable explicitly to identify the state the machine should
+be in at the next "turn".
 
-.. note::
-
-   This approach is a bit inelegant, and can waste some silicon by
-   introducing unnecessary updates of the state variable that will be
-   undone later by an explicit ``go``. A cleaner alternative would be
-   to trace all the control paths in a state and only add the default
-   jump if one of them fell-through.
-
-   The approach is safe, however, in that the value of the state
-   variable is invisible to user code, so it doesn't matter where the
-   change occurs (as long as it does).
-
-The Verilisp ``tagbody`` and ``go`` macros simply perform the
-translation needed to generate this state machine form, together with
-synthesising new names for state variables and ensuring that, for
-example, all ``go`` targets are valid state labels in the current
-state machine.
+The Verilisp ``tagbody`` and ``go`` compile to this translation
+needed, including synthesising new names for state variables and
+ensuring that, for example, all ``go`` targets are valid state labels
+in the current state machine.
 
 To run this machine we need to repeatedly execute its body, which we
 can do by placing it inside an ``@`` block to be run at each rising
@@ -128,6 +118,18 @@ clock edge.
    (@ (posedge clk)
      (let ((a 0))
        (tagbody ... )))
+
+
+Nested state machine
+--------------------
+
+Verilisp has no iteration constructs amongst the special forms.
+Instead, iteration is built using iterative macros such as ``do`` and
+``dotimes`` that generate state machines.
+
+It is perfectly fine to nest these constructs within each other, or
+within explicit state machines. This means that iteration behaves
+exactly as one would expect from Lisp.
 
 
 .. _implementation-tagbody-differences-with-verilog:
@@ -153,107 +155,62 @@ both advantages in terms of code clarity.
 Differences between Verilisp and Common Lisp state machines
 -----------------------------------------------------------
 
-There are two important differences between the behaviour of state
-machines in the two languages, one relating to the behaviour of ``go``
-and one relating to the behaviour of falling-through from the final
-state.
+We have already discussed the differences in timing execution of
+Verilisp state machines: one state executes per "turn" of the machine.
 
-In Common Lisp, ``go`` jumps immediately to the target state, meaning
-that any code appearing after it in the current state is skipped (and
-may in fact be entirely unreachable).
+A second distinction that concerns the behaviour of top-level machines
+that "drop through" to the surrounding code. In Verilisp a top-level
+state machine -- that is, one that is not embedded within another --
+has a silent "passivating" state at the end that it can drop into when
+it exits. This is necessary to avoid awkward interactions between
+state-based and non-state-based code.
 
-In Verilisp by contrast, the jump to the target state occurs only
-after the current state's behaviour has completed. In other words,
-``go`` specifies the behaviour of the machine *at its next turn*, but
-completes the behaviour of the *current* turn first.
-
-The second difference is potentially more significant. In Common Lisp,
-if we reach the end of the final state, control falls-through to the
-surrounding code. In Verilisp, control reverts to the *first* state of
-the machine. The reason for this choice is that state machines in
-hardware are usually required to not terminate, so having the default
-behaviour run indefinitely seems sensible. If you *don't* want this to
-happen, add a passivating state.
-
-These changes in behaviour are both deliberate, better to match the
-ways in which hardware state machines are used -- but may be
-problematic for algorithms translated directly from Common Lisp that
-rely on behaviour being skipped, or terminating by default.
+A third distinction, related to the second, concerns the number of
+states. In Common Lisp a ``tagbody`` form has exactly the number of
+states suggested by the code. Verilisp, by contrast, may introduce
+extra "hidden" states to handle the control flow. This is invisible to
+the programmer at the level of computational behaviour, but is visible
+in the timing of computations, since state machines may consume more
+clock ticks than might be apparent.
 
 
-Nested state machines
----------------------
+.. _implementation-tagbody-compilation:
 
-What if we want one of the states to *itself* be a state machine? This
-can be useful, especially for generated code -- but also for
-programmers wanting to define behaviour separately.
+How state machines are compiled
+-------------------------------
 
-A nested machine might look like this:
+If timing is an issue -- for example when interfacing with
+timing-sensitive hardware, or to get the best performance -- it may be
+worth understanding the translation process for ``tagbody``.
 
-.. code-block:: lisp
+A ``tagbody`` is basically a ``progn`` with labels. Verilisp traverses
+the body of the ``tagbody`` and creates a new state corresponding to
+each labelled state (plus one for the initial code, which may not have
+a label given explicitly). The forms within each state are added to
+the state's body, and eventually end up in the arms of a ``case`` form.
 
-   (@ (posedge clk)
-     (let ((a 0))
-       (tagbody
-	start
-	  (when (= a 0)
-	    (go increment))
+Most forms are simply added to the state body. For ``if`` and ``case``
+forms, new state machines are created for each arm of the conditional,
+and a simpler conditional is added to the current state body that
+jumps to these machines according to the condition. This means that
+each ``if`` or ``case`` introduces an extra "turn" of the machine when
+it selects the correct arm. Another state is introduced for the code
+following the ``if`` or ``case`` form -- so one new state for each
+arm, plus one state.
 
-	increment
-	  (let ((b 5))
-	    (tagbody
-	     delay                    ; delay loop
-	       (decf b)
-	       (if (= b 0)
-		   (progn
-		     (incf a)
-		     (go count))      ; jump to an
-				      ; outer-machine state
-		   (go delay))))      ; go round again
+A ``go`` form changes the machine's state directly, and ends the
+current state. Any code after the ``go`` is inaccessible unless it is
+in a labelled state, and a warning will be raised if code is skipped.
+This means ``go`` never creates a hidden state, but will always
+cause a wait until the next "turn" selects the targeted state.
 
-	count
-	  (if (= a 10)
-	      (go start)
-	      (go increment)))))
-
-where the inner state machine introduces five clock ticks of delay.
-before updating ``a`` as before.
-
-There are a couple of points to consider. Firstly, two nested machines
-would suggest that we need two state variables to track them.
-Secondly, we need some way to get out of the inner machine and change
-the state of the *outer* machine. We do this with the ``(go count)``
-jump, which refers to a state in the outer machine, *not* in its own
-machine. This is entirely legal for Common Lisp, where we can ``go``
-to any label that's lexically in scope: it's legal in Verilisp too,
-but we need to consider what happens to the state of the inner
-machine when we jump out of it.
-
-It would be nice if we could unroll the inner machine's states into
-those of the outer, and thereby save a state variable. Unfortunately
-this fails in cases where the inner machine appears inside (for
-example) a ``let`` form that defines it some state. We therefore need
-to generate a full inner machine.
-
-The inner machine can jump to any of its own states and any of the
-states of its surrounding machine. If it jumps into the outer machine,
-the inner machine stops and control will resume (at the next turn) in
-the targeted state of the outer machine. The inner machine's state is
-automatically resent to its initial state, so that when it is
-re-entered it starts in a predictable state.
-
-There is a subtle interaction between nested state machines and the
-fact noted :ref:`above <implementation-tagbody-differences-with-cl>`
-where falling-through from the final state of a machine returns
-control to the initial state of that machine. This means that a nested
-machine *must* contain a ``go`` to a state in the outer machine if it
-is *ever* to exit and allow the outer machine to continue.
-
-
-.. warning::
-
-   This behaviour implies that there's no point putting any behaviour
-   in the outer machine's state after the nested machine's
-   ``tagbody``, because it will never receive control: the inner
-   machine will always jump to a new outer state and itself be reset
-   to its own initial state.
+A ``tagbody`` form encountered within a ``tagbody`` form generates a
+nested state machine which is called from the surrounding machine. The
+transition from the outer to the inner machine involves waiting a
+"turn" (there is an implicit ``go``). However, the nested machine's
+states become part of the outer machine's states, so the inner machine
+does not need its own state variable. This can save a little space:
+for example, if the outer machine has 7 states (needing a 3-bit state
+variable), and the inner machine has 7 states too, the overall machine
+will have 14 states and so need a 4-bit state variable, rather than
+needing 6 bits of we'd used one state variable per machine.
