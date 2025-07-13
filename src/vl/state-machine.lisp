@@ -24,399 +24,329 @@
 ;; ---------- State representation ----------
 
 (defclass state ()
-  ((initial-p
-    :documentation "Flag whether this is the initial state."
-    :initarg :initial-p
-    :initform nil
-    :accessor initial-p)
-   (label
+  ((label
     :documentation "The state label."
     :initarg :label
     :initform nil
-    :accessor label)
+    :reader label)
    (body
     :documentation "The forms in the body of the state."
     :initarg :body
     :initform nil
-    :accessor body)
-   (exits
-    :documentation "States that this state can transition to."
-    :initform nil
-    :accessor exit-states))
+    :accessor body))
   (:documentation "Abstract state in a state machine."))
 
 
 (defmethod initialize-instance :after ((s state) &key label &allow-other-keys)
-  "Add a label if none is provided."
   (unless label
     (setf (slot-value s 'label) (gensym))))
 
 
-(defun add-exit-state (s1 s2)
-  "Add S2 as an exit for S1."
-  (setf (exit-states s1) (union (exit-states s1) (list s2))))
+;; ---------- TAGBODY ----------
+
+(defun state-marker-p (form)
+  "Test whether FORM is a new state marker.
+
+This simply tests whether FORM is a symbol."
+  (symbolp form))
 
 
-(defun machine-states (s)
-  "Return all the states in the machine starting at S."
-  (labels ((visit-state (s to-visit visited)
-	     (if (null s)
-		 visited
+(defun extract-states (forms)
+  "Extract the states from FORMS.
 
-		 (progn
-		   (if (not (member s visited))
-		       ;; state hasn't been visited, add its exits
-		       (setq to-visit (append to-visit
-					      (exit-states s))))
+Return a list of lists, each element being a state label and the state body."
+  (flet ((extract-state (states form)
+	   (if (state-marker-p form)
+	       ;; new state
+	       (cons (list form) states)
 
-		   (visit-state (safe-car to-visit)
-				(cdr to-visit)
-				(cons s visited))))))
+	       (progn
+		 ;; check whether we have an unlabelled initial state
+		 (when (null states)
+		   ;; construct a new state
+		   (setq states (list (list (gensym)))))
 
+		 ;; add form to current state
+		 (let* ((current-state (car states))
+			(current-body (cadr current-state)))
+		   (if (null current-body)
+		       (setf (cdr current-state) (list (list form)))
+		       (setf (cdr current-body) (list form)))
+		   states)))))
 
-    (visit-state s '() '())))
-
-
-(defun machine-state-labels (s)
-  "Return all the state labels in the machine starting at S."
-  (mapcar #'label (machine-states s)))
-
-
-(defun singlify-state (s)
-  "Split state S into states containing only one form.
-
-This turns a single state into a chain of states, each one
-having as body a single form from the body of S. The states
-are chained together, with the last state existing to the
-same state as the S.
-
-Return a list of states."
-
-  ;; sanity check
-  (unless (<= (length (exit-states s)) 1)
-    (error "Attempting to split a state with multiple exits ~a" (label s)))
-
-  (let ((forms (body s))
-	(exs (exit-states s)))
-
-    (if (<= (length forms) 1)
-	;; already a micro-state, return as-is
-	(list s)
-
-	;; a larger state, split it
-	(let ((other-states (mapcar (lambda (form)
-				      (make-instance 'state :body form))
-				    (cdr forms))))
-	  ;; re-set the body of the initial state to just
-	  ;; the first form
-	  (setf (body s) (car forms))
-
-	  ;; link the states together
-	  (let ((states (cons s other-states)))
-	    (mapc (lambda (s12)
-		    (setf (exit-states (car s12)) (cdr s12)))
-		  (successive-pairs states))
-	    (setf (exit-states (car (last states))) exs)
-
-	    ;; return the chain of states
-	    states)))))
+    (reverse (foldr #'extract-state forms '()))))
 
 
-(defun singlify-machine-states (s)
-  "Split the states of the machine starting at S.
+(defmethod typecheck-sexp ((fun (eql 'tagbody)) args)
+  (let* ((states (extract-states args))
+	 (state-labels (mapcar #'car states))
+	 (state-bodies (mapcar #'cadr states)))
 
-Return the intial state of the new machine (which will be S)."
-  (foldr #'append (mapcar #'split-state (machine-states s)) '())
+    (with-new-frame
+      ;; add labels to frame
+      (dolist (n state-labels)
+	(declare-variable n '((as label)
+			      (ignorable t))))
 
-  ;; return the starting state, which will have been preserved
-  ;; by the splitting operation
-  s)
+      ;; typecheck the bodies
+      (dolist (b state-bodies)
+	(typecheck (with-implicit-progn b)))
 
-
-(defgeneric split-state-sexp (s fun args)
-  (:documentation "Split state S whose body is FUN applied to ARGS.
-
-Return a list of states resulting from the split. The
-default simply returns S as a list.")
-  (:method (s fun args)
-    (list s)))
+      ;; tagbody doesn't return a value (yet)
+      nil)))
 
 
-(defmethod split-state-sexp (s (fun (eql 'if)) args)
+(defmethod dependencies-sexp ((fun (eql 'tagbody)) args)
+  (foldr (lambda (deps form)
+	   (if (symbolp form)
+	       deps
+	       (union deps (dependencies form))))
+	 args'()))
+
+
+(defmethod read-written-variables-sexp ((fun (eql 'tagbody)) args)
+  (foldr (lambda (deps form)
+	   (if (symbolp form)
+	       deps
+	       (union2 deps (read-written-variables form))))
+	 args '(() ())))
+
+
+(defgeneric parse-tagbody-forms-sexp (fun args forms current-state exit-state)
+  (:documentation "Parse FUN applied to ARGS.
+
+Methods on this function should construct a state machine for
+FUN applied to ARGS, integrate it into CURRENT-STATE, and then
+proceed to parse FORMS (typically by calling PARSE-TAGBODY-FORMS).
+
+EXIT-STATE is the 'fall-through' state that the form may use.
+
+Returns a list consisting of a list of the states created, with
+the entry state first, and a boolean indicating whether the
+form fell-through and should therefore continue to EXIT-STATE.")
+  (:method (fun args forms current-state exit-state)
+    ;; "normal" form, add to body of current state
+    (appendf (body current-state) (list (cons fun args)))
+    (parse-tagbody-forms forms current-state exit-state)))
+
+
+(defmethod parse-tagbody-forms-sexp ((fun (eql 'tagbody)) args forms current-state exit-state)
+  ;; nested machine, start a new state for this machine
+  (let* ((trailing-states (parse-tagbody-forms forms nil))
+	 (trailing-state (if trailing-states
+			     (car trailing-states)
+			     exit-state))
+	 (nested-body args)
+	 (nested-states (parse-tagbody-forms nested-body nil trailing-state)))
+
+    (append (list current-state)
+	    nested-states
+	    trailing-states)))
+
+
+(defmethod parse-tagbody-forms-sexp ((fun (eql 'if)) args forms current-state exit-state)
   (destructuring-bind (condition then-branch &rest else-branch)
       args
 
-    (let* ((exs (exit-states s))
-	   (then-state (make-instance 'state :body (list then-branch)))
-	   (then-label (label then-state)))
+    (let* ((trailing-states (parse-tagbody-forms forms
+						 nil exit-state))
+	   (trailing-state (if trailing-states
+			       (car trailing-states)
+			       exit-state))
+	   (then-states (parse-tagbody-forms (list then-branch)
+					     nil trailing-state))
+	   (then-state (car then-states))
+	   (then-label (label then-state))
+	   (else-states (if else-branch
+			    (parse-tagbody-forms else-branch
+						 nil trailing-state)))
+	   (else-state (if else-states
+			   (car else-states)))
+	   (else-label (if else-states
+			   (label else-state))))
 
-      (if (null else-branch)
-	  ;; no else branch
-	  (progn
-	    (setf (body s) (list `(if ,condition
-				      (go ,then-state))))
-	    (setf (exit-states then-state) es)
-	    (setf (exit-states s) (list then-state))
+      ;; add the condition to the current state
+      (let ((cform (if else-states
+		       ;; two arms
+		       `(if ,condition
+			    (go ,then-label)
+			    (go ,else-label))
 
-	    ;; return the states
-	    (cons s (singlify-state then-state)))
+		       ;; one arm, jump to the trailing state on false
+		       `(if ,condition
+			    (go ,then-label)
+			    (go ,(label trailing-state))))))
+	(appendf (body current-state) (list cform)))
 
-	  ;; else branch
-	  (let* ((else-state (make-instance 'state :body else-branch))
-		 (else-label (label else-state)))
-	    (setf (body s)(list `(if ,condition
-				     (go ,then-state)
-				     (go ,else-state))))
-	    (setf (exit-states then-state) es)
-	    (setf (exit-states else-state) es)
-	    (setf (exit-states s) (list then-state else-state))
-
-	    ;; return the states
-	    (append (list s)
-		    (singlify-state then-state)
-		    (singlify-state else-state)))))))
+      (append (list current-state)
+	      then-states
+	      else-states
+	      trailing-states))))
 
 
-;; ---------- Compiler state ----------
+(defmethod parse-tagbody-forms-sexp ((fun (eql 'case)) args forms current-state exit-state)
+  (destructuring-bind (condition &rest cases)
+      args
 
-(defparameter *state-machines* nil
-  "Stack of state machines.")
+    (let* ((trailing-states (parse-tagbody-forms forms nil exit-state))
+	   (trailing-state (if trailing-states
+			       (car trailing-states)
+			       exit-state))
+	   (arms (mapcar (lambda (form)
+			   (destructuring-bind (val &rest arm-body)
+			       form
+			     (list val (parse-tagbody-forms arm-body nil trailing-state))))
+			 cases))
+	   (arm-states (apply #'append (mapcar #'cadr arms)))
+	   (new-arms (mapcar (lambda (arm)
+			       (destructuring-bind (val nested-states)
+				   arm
+				 (let* ((nested-state (car nested-states))
+					(nested-label (label nested-state)))
+				   `(,val (go ,nested-label)))))
+			     arms)))
+
+      ;; add new case to current state
+      (let ((cform `(case ,condition
+		      ,@new-arms)))
+	(appendf (body current-state) (list cform)))
+
+      (append (list current-state)
+	      arm-states
+	      trailing-states))))
 
 
-(defmacro with-state-machine ((state-variable states) &body body)
-  "Enter a machine with the given STATES."
-  `(unwind-protect
+(defmethod parse-tagbody-forms-sexp ((fun (eql 'go)) args forms current-state exit-state)
+  (let ((label (car args)))
+    ;; add form to current state
+    (appendf (body current-state) (list (cons fun args)))
+
+    ;; check whether there is unreachable code on this path
+    (if (not (or (null forms)
+		 (state-marker-p (car forms))))
 	(progn
-	  (push (list ,state-variable
-		      (initial-state-label ,states)
-		      (state-labels ,states))
-		*state-machines*)
-	  ,@body)
+	  ;; next form does not start a new state
+	  (warn 'unreachable-code :hint "Check the logic")
 
-     (pop *state-machines*)))
+	  ;; skip to the next state marker
+	  (do ()
+	      ((or (null forms)
+		   (state-marker-p (car forms)))
+	       forms)
+	    (setq forms (cdr forms)))))
 
-
-(defun state-machine-context-p ()
-  "Test whether we're in a state machine."
-  (> (length *state-machines*) 0))
-
-
-(defun nested-state-machine-context-p ()
-  "Test whether we're in a nested state machine."
-  (> (length *state-machines*) 1))
-
-
-(defun ensure-state-machine-context (fun)
-  "Test whether FUN appears within a state machine.
-
-A SYNTAX-ERROR error is signalled if not."
-  (unless (state-machine-context-p)
-    (error 'syntax-error :form fun
-			 :hint (format nil "Make sure ~a appears inside a TAGBODY" fun))))
+    (let ((trailing-states (if (not (null forms))
+			       (parse-tagbody-forms forms
+						    (make-instance 'state)
+						    exit-state))))
+      (if trailing-states
+	  (cons current-state
+		trailing-states)
+	  (list current-state)))))
 
 
-(defun current-state-machine ()
-  "Return the current state machine's data structure."
-  (car *state-machines*))
+(defun parse-tagbody-forms (forms current-state exit-state)
+  "Parse FORMS as the body of a TAGBODY, returning a state machine.
+
+The FORMS are built into CURRENT-STATE until there is a state
+change. If a state falls-through, it lands in EXIT-STATE.
+
+Return a list of states created, initial state (of the path) first."
+  (declare (optimize debug))
+
+  (if (null forms)
+      ;; finished this path
+      (when current-state
+	(when exit-state
+	  ;; add transition to exit state
+	  (appendf (body current-state) (list `(go ,(label exit-state)))))
+
+	(list current-state))
+
+      ;; path continues with more forms
+      (let ((form (car forms)))
+	(if (state-marker-p form)
+	    ;; new state
+	    (let ((trailing-states (parse-tagbody-forms (cdr forms)
+							(make-instance 'state :label form)
+							exit-state)))
+	      (if current-state
+		  (when trailing-states
+		    ;; add jump to next state to current state
+		    (appendf (body current-state) (list `(go ,(label (car trailing-states)))))
+
+		    ;; prepend current state
+		    (cons current-state
+			  trailing-states))
+
+		  ;; initial state, nothing to prepend
+		  trailing-states))
+
+	    ;; otherwise, part of the current state's body
+	    (progn
+	      (if (null current-state)
+		  ;; this is the body of an unlabelled initial state, so
+		  ;; create the state to hold it
+		  (setq current-state (make-instance 'state)))
+
+	      ;; parse form
+	      (if (listp form)
+		  (destructuring-bind (fun &rest args)
+		      form
+		    (parse-tagbody-forms-sexp fun args
+					      (cdr forms)
+					      current-state exit-state))
+
+		  (progn
+		    (appendf (body current-state) (list form))
+		    (parse-tagbody-forms (cdr forms)
+					 current-state exit-state))))))))
 
 
-(defun state-machine-state-variable (&optional (machine (current-state-machine)))
-  "Return the state variable of MACHINE.
+(defun build-state-machine (forms)
+  "Parse FORMS as the body of a TAGBODY, building a state machine."
+  (declare (optimize debug))
 
-Defaults to the current state machine."
-  (car machine))
+  (let* ((passive-state (make-instance 'state))
+	 (states (parse-tagbody-forms forms nil passive-state)))
 
-
-(defun state-machine-initial-state (&optional (machine (current-state-machine)))
-  "Return the initial state of MACHINE.
-
-Defaults to the current state machine."
-  (cadr machine))
+    ;; return all the states, passivating state last
+    (append states (list passive-state))))
 
 
-(defun state-machine-state-labels (&optional (machine (current-state-machine)))
-  "Return the state labels of MACHINE.
-
-Defaults to the current state machine."
-  (caddr machine))
-
-
-(defun state-machine-all-state-labels ()
-  "Return the state labels in this and any surrounding state machines."
-  (foldr #'union (mapcar #'caddr *state-machines*) '()))
-
-
-;; ---------- TAGBODY ----------
-
-(defun state-labels (states)
-  "Extract the labels of STATES."
-  (mapcar #'car states))
-
-
-(defun state-bodies (states)
-  "Extract the bodies of STATES."
-  (mapcar #'cdr states))
-
-
-(defun initial-state-label (states)
-  "Return the label of the first state in STATES."
-  (caar states))
-
-
-(defun ensure-unique-state-labels (states)
-  "Ensure that the labels on STATES are unique.
-
-A DUPLICATE-STATE error is signalled if there are duplicates, either
-in STATES or with the states of surrounding machines."
-  (let ((sls (state-labels states)))
-    ;; check all labels in the crrent machine are unique
-    (unless (set-p sls)
-      (error 'duplicate-state :states sls
-			      :hint "Ensure the labels are unique within a TAGBODY"))
-
-    ;; check for uniqueness against containing machines
-    (when (some (lambda (labels)
-		  (not (null (intersection sls labels))))
-		(mapcar #'state-labels (cdr *state-machines*)))
-      (error 'duplicate-state :states sls
-			      :hint "Ensure the labels don't clash with those in a surrounding TAGBODY"))))
-
-
-(defun extract-tagbody-states (forms)
-  "Turn a list of state labels and executable FORMS into a state machine.
-
-Return the initial state of the machine."
-  (flet ((extract-states (states form)
+(defmethod dependencies-sexp ((fun (eql 'tagbody)) args)
+  (foldr (lambda (deps form)
 	   (if (symbolp form)
-	       ;; form is a state label, create a new state
-	       (cons (list form) states)
-
-	       ;; form is a part of the body of a state
-	       (let ((state (car states)))
-		 ;; add a label if this is the (possibly unlabelled) initial state
-		 (if (and (= (length states) 1)
-			  (null state))
-		     (let ((initial-state-label (gensym)))
-		       (appendf state (list initial-state-label) (cdr states))))
-
-		 ;; append to the current state
-		 (cons (append state (list form)) (cdr states))))))
-
-    (let* ((defs (reverse (remove-nulls (foldr #'extract-states forms '(())))))
-	   (states (mapcar (lambda (def)
-			     (make-instance 'state :label (car def)
-						   :body (cdr def)))
-			   defs)))
-
-      ;; mark the initial state
-      (setf (initial-p (car states)) t)
-
-      ;; add default exits for all states except the last
-      (if (> (length states) 1)
-	  (mapc (lambda (s12)
-		  (add-exit-state (car s12) (cadr s12)))
-		(successive-pairs states)))
-
-      ;; return the initial state
-      (car states))))
+	       deps
+	       (union deps (dependencies form))))
+	 args'()))
 
 
-(defun state-label-p (label &optional machine)
-  "Test that LABEL is a valid state label.
-
-If MACHINE is supplied, the label is tested against that
-machine's labels; otherwise the label may be in the current machine, or
-in any surrounding machine."
-  (if machine
-      ;; test against specific machine
-      (not (null (member label (machine-state-labels machine))))
-
-      ;; test against current and all surrounding machines
-      (not (null (member label (machine-all-state-labels))))))
-
-
-(defun ensure-state-label (label)
-  "Ensure that LABEL is a valid state label in the current context.
-
-An UNKNOWN-STATE error is signalled for an unrecognised state."
-  (unless (state-label-p label)
-    (error 'unknown-state :state label
-			  :hint "Make sure the label is valid in the current state machine.")))
-
-
-(defun compile-state-machine (state-variable states)
-  "Return the compiled form of the machine for STATES.
-
-The current state is stored in STATE-VARIABLE, which should be a
-unique variable name."
-  (let* ((decls (let ((i 0))
-		  (mapcar (lambda (label)
-			    (prog1
-				`(,label ,i)
-			      (incf i)))
-			  (state-labels states))))
-	 (declarations `(declare (as constant ,@(state-labels states))))
-
-	 ;; prepend a state change to fall-through to the following state,
-	 ;; rotating to the initial state if we fall out of the bottom
-	 (states-with-fall-through (mapcar (lambda (state next)
-					     (cons (car state)
-						   (cons `(go ,next)
-							 (cdr state))))
-					   states
-					   (rotate (state-labels states) -1)))
-
-	 (new-states (mapcar (lambda (state)
-			       (let ((label (car state))
-				     (body (cdr state)))
-				 (cons label (mapcar #'expand-macros body))))
-			     states-with-fall-through)))
-
-    ;; This compiled form works because we know we're going to float
-    ;; the let blocks later, meaning that the state variable won't be
-    ;; reset at each turn of the machine. If we stopped doing that for
-    ;; any reason we'd need something different.
-    `(let ,decls
-       ,declarations
-       (let ((,state-variable ,(initial-state-label states)))
-	 (case ,state-variable
-	   ,@new-states)))))
-
-
-(defmacro/vl tagbody (&body body)
-  "Compile a state machine consisting of STATES."
-  (let ((states (extract-tagbody-states body)))
-    (ensure-unique-state-labels states)
-
-    (with-gensyms (state-variable)
-      (with-state-machine (state-variable states)
-	(compile-state-machine state-variable states)))))
+(defmethod read-written-variables-sexp ((fun (eql 'tagbody)) args)
+  (foldr (lambda (deps form)
+	   (if (symbolp form)
+	       deps
+	       (union2 deps (read-written-variables form))))
+	 args'(() ())))
 
 
 ;; ---------- GO ----------
 
-(defmacro/vl go (label)
-  "Change state to LABEL."
-  (ensure-state-machine-context 'go)
-  (ensure-state-label label)
+(defmethod typecheck-sexp ((fun (eql 'go)) args)
+  (let ((label (car args)))
+    ;; ensure label is in scope
+    (unless (variable-declared-p label)
+      (error 'unknown-state :state label))
+    (unless (eql (get-representation label) 'label)
+      (error 'unknown-state :state label))
+    (break)
+    ;; GO doesn't really have a type
+    t))
 
-  (let ((code '()))
-    (dolist (machine *state-machines*)
-      (if (state-label-p label machine)
-	  ;; jump to a local state, do the jump and return
-	  (let ((state-variable (state-machine-state-variable machine)))
-	    (if (null code)
-		(setq code (list `(setf ,state-variable ,label)))
-		(appendf code (list `(setf ,state-variable ,label))))
 
-	    ;; wrap multiple jumps in a PROGN
-	    (return (if (= (length code) 1)
-			(car code)
-			`(progn ,@code))))
+(defmethod dependencies-sexp ((fun (eql 'go)) args)
+  nil)
 
-	  ;; jump to a surrounding state, reset this state and continue
-	  (let ((state-variable (state-machine-state-variable machine))
-		(initial-state (state-machine-initial-state machine)))
-	    (if (null code)
-		(setq code (list `(setf ,state-variable ,initial-state)))
-		(appendf code (list `(setf ,state-variable ,initial-state)))))))))
+
+(defmethod read-written-variables-sexp ((fun (eql 'go)) args)
+  '(() ()))

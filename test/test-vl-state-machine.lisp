@@ -21,185 +21,251 @@
 (in-suite verilisp/vl)
 
 
-;; ---------- State extraction ----------
+;; ---------- State machine construction ----------
 
-(test test-tagbody-states
-  "Test we can extract state definitions from a TAGBODY."
-  (let ((s0 (vl::extract-tagbody-states '((setq a 1)
+(test test-tagbody-simple
+  "Test we can create a simple TAGBODY."
+  (let ((states (vl::build-state-machine (cdr '(tagbody
+						init
+						(setq a 10))))))
+    (is (= (length states) 2))
+    (let ((to-passive (car (last (vl::body (car states))))))
+      ;; first state jumps to second
+      (is (eql (car to-passive) 'go))
+      (is (eql (cadr to-passive) (vl::label (cadr states))))
+
+      ;; second is passivating
+      (is (null (vl::body (cadr states)))))))
+
+
+(test test-tagbody-spin
+  "Test we can create a spinning state machine."
+  (let ((states (vl::build-state-machine (cdr '(tagbody
+						init)))))
+
+    ;; last state is passivating
+    (is (null (vl::body (car (last states)))))))
+
+
+(test test-tagbody-empty
+  "Test we can create an empty (also spinning) state machine."
+  (let ((states (vl::build-state-machine (cdr '(tagbody)))))
+
+    ;; last state is passivating
+    (is (null (vl::body (car (last states)))))))
+
+
+(test test-tagbody-jumps
+  "Test we can create a TAGBODY with jumps."
+  (let ((states (vl::build-state-machine (cdr '(tagbody
+						init
+						(setq a 10)
+						pre
+						(setq b 20)
+						(go init))))))
+
+    (is (= (length states) 3))
+
+    ;; first state jumps to second
+    (let ((j0 (car (last (vl::body (elt states 0))))))
+      (is (eql (car j0) 'go))
+      (is (eql (cadr j0) (vl::label (elt states 1)))))
+
+    ;; second state jumps to first
+    (let ((j1 (car (last (vl::body (elt states 1))))))
+      (is (eql (car j1) 'go))
+      (is (eql (cadr j1) (vl::label (elt states 0)))))
+
+    ;; last state is passivating
+    (is (null (vl::body (elt states 2))))))
+
+
+(test test-tagbody-unreachable
+  "Test we signal unreachable code."
+  (signals (vl:unreachable-code)
+    (vl::build-state-machine (cdr '(tagbody
+				    init
+				      (setq a 10)
+				    pre
+				      (setq b 20)
+				      (go init)
+
+				      ;; this code is unreachable
+				      (setq a 0))))))
+
+
+(test test-tagbody-if-two-arms-following
+  "Test we can generate an IF with two arms and following code."
+  (let ((states (vl::build-state-machine (cdr '(tagbody
+					  init
+					    (setq a 10)
+					    (if b
+					      (setq b 32)
+					      (setq b 0))
+					    (setq d 45)
 					  pre
-					  first
-					  (setq b 1) (setq s 29)
-					  second (go first)))))
+					    (setq b 20))))))
 
-    ;; initial label
-    (is (vl::initial-p s0))
+    (is (= (length states) 6))
 
-    ;; states, links, and labels
-    (let* ((ss (vl::machine-states s0))
-	   (sls (vl::machine-state-labels s0)))
-      (is (equal (length ss) 4))
+    ;; first state ends in an if
+    (let ((j0 (car (last (vl::body (elt states 0))))))
+      (is (eql (car j0) 'if))
+      (is (eql (cadr (elt j0 2)) (vl::label (elt states 1))))
+      (is (eql (cadr (elt j0 3)) (vl::label (elt states 2)))))
 
-      ;; all labels included
-      (dolist (l '(first second pre))
-	(is (member l sls)))
+    ;; second and third states jump to fourth
+    (let ((j1 (car (last (vl::body (elt states 1))))))
+      (is (eql (car j1) 'go))
+      (is (eql (cadr j1) (vl::label (elt states 3)))))
+    (let ((j2 (car (last (vl::body (elt states 2))))))
+      (is (eql (car j2) 'go))
+      (is (eql (cadr j2) (vl::label (elt states 3)))))
 
-      ;; all labels unique
-      (is (vl::set-p sls))
-
-      ;; all states have one link except the last
-      (let ((all-but-last (remove-if #'(lambda (s)
-					 (eql (vl::label s) 'second))
-				     ss)))
-	(is (every (lambda (s)
-		     (= (length (vl::exit-states s)) 1))
-		   all-but-last)))
-      (is (null (vl::exit-states (find-if #'(lambda (s)
-					      (eql (vl::label s) 'second))
-					  ss)))))))
+    ;; last state is passivating
+    (is (null (vl::body (elt states 5))))))
 
 
-(test test-tagbody-no-labels
-  "Test we can handle a TAGBODY with no state labels at all."
-  (let ((s0 (vl::extract-tagbody-states '((setq a 1)
-					  (if a
-					      (setq b 23)
-					      (setq 4 45))
-					  (setq c 1)))))
-    (is (not (null s0)))
-    (is (not (null (vl::label s0))))))
+(test test-tagbody-if-one-arm-following
+  "Test we can handle IFs with a single arm"
+  (let ((states (vl::build-state-machine (cdr '(tagbody
+					  (if b
+					      (setq b 32))
+					  (setq b 0))))))
+
+    (is (= (length states) 4))
+
+    ;; first state links to arm and trailing
+    (let ((j0 (car (last (vl::body (elt states 0))))))
+      (is (eql (car j0) 'if))
+      (is (eql (cadr (elt j0 2)) (vl::label (elt states 1))))
+      (is (eql (cadr (elt j0 3)) (vl::label (elt states 2)))))
+
+    ;; arm also links to trailing
+    (let ((j1 (car (last (vl::body (elt states 1))))))
+      (is (eql (car j1) 'go))
+      (is (eql (cadr j1) (vl::label (elt states 2)))))
+
+    ;; last state is passivating
+    (is (null (vl::body (elt states 3))))))
 
 
-(test test-tagbody-splt-states
-  "Test we can split the states of a machine into single-form states."
-  (let* ((s0 (vl::extract-tagbody-states '((setq a 1)
-					   pre
-					   first
-					   (setq b 1) (setq s 29)
-					   second (go first))))
-	 (s1 (vl::singlify-machine-states s0)))
+(test test-tagbody-if-one-arm-no following
+  "Test we can handle IFs with a single arm"
+  (let ((states (vl::build-state-machine (cdr '(tagbody
+						(if b
+						    (setq b 32)))))))
 
-    ;; returned state preserved, and is still initial
-    (is (eql s0 s1))
-    (is (vl::initial-p s1))
+    (is (= (length states) 3))
 
-    (let ((ss (vl::machine-states s1))
-	  (sls (vl::machine-state-labels s1)))
-      (is (equal (length ss) 5))
+    ;; first state links to arm and trailing
+    (let ((j0 (car (last (vl::body (elt states 0))))))
+      (is (eql (car j0) 'if))
+      (is (eql (cadr (elt j0 2)) (vl::label (elt states 1))))
+      (is (eql (cadr (elt j0 3)) (vl::label (elt states 2)))))
 
-      ;; all labels included
-      (dolist (l '(first second pre))
-	(is (member l sls)))
+    ;; arm also links to trailing
+    (let ((j1 (car (last (vl::body (elt states 1))))))
+      (is (eql (car j1) 'go))
+      (is (eql (cadr j1) (vl::label (elt states 2)))))
 
-      ;; all states have one link except the last
-      (let ((all-but-last (remove-if #'(lambda (s)
-					 (eql (vl::label s) 'second))
-				     ss)))
-	(is (every (lambda (s)
-		     (= (length (vl::exit-states s)) 1))
-		   all-but-last)))
-      (is (null (vl::exit-states (find-if #'(lambda (s)
-					      (eql (vl::label s) 'second))
-					  ss)))))))
-
-(let ((s0 (vl::extract-tagbody-states '((setq a 1)
-					(if a
-					    (setq b 23)
-					    (setq 4 45))
-					(setq c 1)))))
-
-s0
-  )
-
-;; ---------- Basic machines  ----------
-
-(test test-tagbody-compled-form
-  "Test we can construct a compiled form of TAGBODY."
-  (let* ((p '(tagbody
-	      one
-	      (setq a 1)
-	      (setq b 2)
-	      two
-	      (setq b 0)))
-	 (q (vl::expand/vl `(let (a b)
-			      ,p))))
-
-    (setq q (vl::expand-macros-in-environment q))
-    (is (not (null q)))))
+    ;; last state is passivating
+    (is (null (vl::body (elt states 2))))))
 
 
-(test test-go-outside-tagbody
-  "Test we can catch a GO out of context."
-  (signals (vl::syntax-error)
-    (vl::expand/vl '(let ((one 1))
-		    (go one)))))
+(test test-tagbody-nested-if
+  "Test we can construct nested IFs."
+  (let ((states (vl::build-state-machine (cdr '(tagbody
+						(if b
+						    (setq b 32)
+						    (if (> c 12)
+							(progn
+							  (setq a 0)
+							  (setq b 1))
+							(setq c 0)))
+						(setq b 0))))))
+    (is (= (length states) 7))
+
+    ;; first state links to arm and trailing
+    (let ((j0 (car (last (vl::body (elt states 0))))))
+      (is (eql (car j0) 'if))
+      (is (eql (cadr (elt j0 2)) (vl::label (elt states 1))))
+      (is (eql (cadr (elt j0 3)) (vl::label (elt states 2)))))
+
+    ;; third state links to arm and trailing
+    (let ((j2 (car (last (vl::body (elt states 2))))))
+      (is (eql (car j2) 'if))
+      (is (eql (cadr (elt j2 2)) (vl::label (elt states 3))))
+      (is (eql (cadr (elt j2 3)) (vl::label (elt states 4)))))
+
+    ;; last state is passivating
+    (is (null (vl::body (elt states 6))))))
 
 
-(test test-synthesise-tagbody
-  "Teat we can synthesise a TAGBODY."
-  (let* ((p '(tagbody
-	      one
-	      (setq a 1)
-	      (setq b 2)
-	      two
-	      (setq b 0)
-	      (go one)))
-	 (q (vl::expand/vl `(let (a b)
-			     ,p))))
+(test test-tagbody-case
+  "Test we can handle CASE."
+  (let ((states (vl::build-state-machine (cdr '(tagbody
+					    (case b
+					      (1
+					       (setq c 1)
+					       (setq d 12))
 
-    (vl::typecheck q)
-    (is (vl::synthesise q))))
+					      (2
+					       (setq c 2))
+
+					      (3
+					       (setq c 4)
+					       (go skip)))
+
+					    (setq b 0)
+					  skip
+					    (setq d 999))))))
+
+    (is (= (length states) 7))
+
+    ;; first state links to arms
+    (let ((j0 (car (last (vl::body (elt states 0))))))
+      (is (= (length j0) 5))
+      (is (eql (car j0) 'case))
+      (is (eql (cadadr (elt j0 2)) (vl::label (elt states 1))))
+      (is (eql (cadadr (elt j0 3)) (vl::label (elt states 2))))
+      (is (eql (cadadr (elt j0 4)) (vl::label (elt states 3)))))
+
+    ;; second state links to trailing
+    (let ((j2 (car (last (vl::body (elt states 1))))))
+      (is (eql (car j2) 'go))
+      (is (eql (cadr j2) (vl::label (elt states 4)))))
+
+    ;; fourth state links to sixth
+    (let ((j3 (car (last (vl::body (elt states 3))))))
+      (is (eql (car j3) 'go))
+      (is (eql (cadr j3) (vl::label (elt states 5)))))
+
+    ;; last state is passivating
+    (is (null (vl::body (elt states 6))))))
 
 
-(test test-tagbody-float
-  "Test we float let blocks successfully when synthesising."
-  (let* ((p (vl::expand/vl '(module test/456 (clk)
-			     (declare (direction in clk))
-			     (let ((a 0)
-				   (b 0))
-			       (setq a 1)
-			       (setq b 34)
+;; ---------- Typechecking ----------
 
-			       (@ (posedge a)
-				  (let ((c 0))
-				    (tagbody
-				     one
-				       (setq a 1)
-				       (setq b 2)
-				       (go two)
-				     two
-				       (setq b 0)
-				       (go one)
-				     three
-				       (go two)))))))))
+(test test-tagbody-type
+  "Test we can typecheck a TAGBODY."
+  (let ((p (vl:expand/vl
+	    '(let (b c d)
+	      (tagbody
+		 (case b
+		   (1
+		    (setq c 1)
+		    (setq d 12))
 
-    (is (vl::elaborate/vl p))))
+		   (2
+		    (setq c 2))
 
+		   (3
+		    (setq c 4)
+		    (go skip)))
 
-;; ---------- Nested machines ----------
+		 (setq b 0)
+	       skip
+		 (setq d 999))))))
 
-(test test-tagbody-simple-nested
-  "Test we can escape from a nested machine."
-  (let* ((p (vl::expand/vl '(let (a b c)
-			    (tagbody
-			     one
-			       (setq a 1)
-			       (setq b 2)
-			     two
-			       (let (d)
-				 (tagbody
-				  inner-one
-				    (setq d 10)
-
-				  inner-two
-				    (decf d)
-				    (if (= d 0)
-					(go three)
-					(go inner-two))))
-
-			     three
-			       (setq b 0)
-			       (go one))))))
-
-    (setq p (vl::expand-macros-in-environment p))
-    (vl::typecheck p)
-    (is (vl::synthesise p))))
+    (is (vl:typecheck p))))
