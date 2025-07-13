@@ -114,6 +114,7 @@
    #:typecheck
    #:free-variables
    #:read-written-variables
+   #:infer-representation
    #:rewrite-variables
    #:float-let-blocks
    #:simplify-progn
@@ -150,6 +151,8 @@
    #:duplicate-state
    #:not-importable
    #:not-static
+   #:unused-variable
+   #:used-variable
    #:value-mismatch
    #:direction-mismatch
    #:type-mismatch
@@ -158,6 +161,7 @@
    #:bitfield-mismatch
    #:shape-mismatch
    #:state-machine-mismatch
+   #:unreachable-code
    #:type-inferred
    #:representation-mismatch
    #:no-local-frame))

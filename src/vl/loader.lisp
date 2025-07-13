@@ -114,6 +114,9 @@ of a larger compilation process."
     ;; add dataflow dependencies to the tree
     (dependencies framed)
 
+    ;; infer representations on the tree
+    (infer-representation framed)
+
     framed))
 
 

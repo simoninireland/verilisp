@@ -27,7 +27,8 @@
   (labels ((typecheck-forms (forms)
 	     (let ((ty (with-recover-on-error
 			   t
-			 (typecheck (car forms)))))
+			 (with-current-form (car forms)
+			   (typecheck (car forms))))))
 
 	       (if (null (cdr forms))
 		   ;; if we're the last form, return the type
@@ -38,6 +39,7 @@
 
     (when (= (length args) 0)
       (error 'not-synthesisable :hint "Make sure body is not empty"))
+
     (typecheck-forms args)))
 
 
@@ -56,7 +58,7 @@
   (destructuring-bind (&rest body)
       args
     (let ((newbody (mapcar #'simplify-progn body)))
-      `(progn ,@(simplify-progn-body newbody)))))
+      (with-implicit-progn (simplify-progn-body newbody)))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'progn)) args)
@@ -104,13 +106,13 @@ block, and are represented by the symbol *."
 	(typecheck sensitivities))
 
     ;; check the body in the outer environment
-    (typecheck `(progn ,@body))))
+    (typecheck (with-implicit-progn body))))
 
 
 (defmethod dependencies-sexp ((fun (eql '@)) args)
   (destructuring-bind (sensitivities &rest body)
       args
-    (dependencies `(progn ,@body))))
+    (dependencies (with-implicit-progn body))))
 
 
 (defmethod read-written-variables-sexp ((fun (eql '@)) args)

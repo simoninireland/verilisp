@@ -191,13 +191,13 @@ been defined or not having been imported."))
 
 
 (define-condition unknown-state (vl-error)
-  ((state
+  ((label
     :documentation "The state label."
-    :initarg :state
-    :reader state))
+    :initarg :label
+    :reader label))
   (:report (lambda (c str)
 	     (format-condition-context (format nil "Unknown state label ~a"
-					       (state c))
+					       (label c))
 				       c str)))
   (:documentation "Condition signalled when an unknown state label is used as a GO target.
 
@@ -416,6 +416,19 @@ This usualy happens when a state is targeted as the next state (using the
 NEXT macro) that isn't defined in the surrounding state machine."))
 
 
+(define-condition unreachable-code (vl-warning)
+  ()
+  (:report (lambda (c str)
+	     (format-condition-context "Uneachable code" c str)))
+  (:documentation "Condition signalled when some code is unreachable.
+
+This usually happens in state machines, where a GO form is followed
+by code in the same state, whcih can't then be reached. This may be
+a mistake in the logic of the program, requiring the unreachable code
+to be moved before the GO, or to be placed in a new state that then
+can be reached."))
+
+
 (define-condition unrecognised-declaration (vl-warning)
   ((tag
     :documentation "The declared annotation tag."
@@ -451,6 +464,35 @@ This is almost always a warning, signalled when the compiler infers the
 type of a variable that doesn't have an explicit type provided. If may
 cause downstream errors if the inferred type is incorrect, but that will
 only happen when the types are being used inconsistently."))
+
+
+(define-condition unused-variable (vl-warning)
+  ((var
+    :documentation "The variable."
+    :initarg :variable
+    :reader unused-variable))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Variable ~a was declared but never used"
+					       (unused-variable c))
+				       c str)))
+  (:documentation "Condition signalled when a variable is declared and not used.
+
+This is probably a user mistake. It does no harm, but can result in
+wasted silicon."))
+
+
+(define-condition used-variable (vl-warning)
+  ((var
+    :documentation "The variable."
+    :initarg :variable
+    :reader used-variable))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Variable ~a was declared to be 'ignored' but was then used"
+					       (used-variable c))
+				       c str)))
+  (:documentation "Condition signalled when a variable is annoataed to be ignored and is then used.
+
+This is probably a user mistake. It does no harm, ut might indicate that there's something unexpected in the code."))
 
 
 (define-condition representation-mismatch (vl-warning)

@@ -289,19 +289,21 @@ probably should, for those that are statically determined."
 
 
 (defmethod generalised-place-sexp-p ((selector (eql 'aref)) selectorargs)
-  t)
+  (destructuring-bind (place &rest indices)
+      selectorargs
+    (generalised-place-p place)))
 
 
 (defmethod synthesise-sexp ((fun (eql 'aref)) args)
-  (destructuring-bind (var &rest indices)
+  (destructuring-bind (place &rest indices)
       args
-    (synthesise var)
+    (synthesise place)
     (as-literal "[ ")
     (as-list indices)
     (as-literal " ]")))
 
 
 (defmethod lispify-sexp ((fun (eql 'aref)) args)
-  (destructuring-bind (var &rest indices)
+  (destructuring-bind (place &rest indices)
       args
-    `(aref ,var ,@indices)))
+    `(aref ,place ,@indices)))

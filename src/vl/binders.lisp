@@ -79,17 +79,18 @@ The name is the first element, whether or not DECL is a list."
 
 
 (defun typecheck-decl (decl)
-  "Extend ENV with the variable declared in DECL."
+  "Extend global environment with the variable declared in DECL."
   (declare (optimize debug))
 
   (with-current-form decl
     (with-recover-on-error
 	;; on error, return the most general and innocuous result to
 	;; allow us to continue
-	(set-variable-properties (safe-car decl) `((type (unsigned-byte ,*default-register-width*))
-						   (as register)
-						   (initial-value 0)
-						   (type-constraints (unsigned-byte ,*default-register-width*))))
+	(set-variable-properties (safe-car decl)
+				 `((type (unsigned-byte ,*default-register-width*))
+				   (as register)
+				   (initial-value 0)
+				   (type-constraints (unsigned-byte ,*default-register-width*))))
 
       (if (listp decl)
 	  ;; full declaration
@@ -117,14 +118,12 @@ The name is the first element, whether or not DECL is a list."
 		(if type
 		    (set-variable-property-unless-set n 'type type))
 		(set-variable-properties-unless-set n `((inferred-type ,ity)
-							(as register)
 							(initial-value ,v)
 							(type-constraints (,ity)))))))
 
 	  ;; "naked" declaration
 	  (set-variable-properties-unless-set decl `((inferred-type (unsigned-byte 1))
 						     (type-constraints ((unsigned-byte 1)))
-						     (as register)
 						     (initial-value 0)))))))
 
 
@@ -235,6 +234,60 @@ right-hand side of an assignment."
 	  (set-variable-property n 'read t))
 	(dolist (n written)
 	  (set-variable-property n 'written t))))))
+
+
+;; ---------- Representations ----------
+
+(defmethod infer-representation-sexp ((fun (eql 'let)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (decls &rest body)
+      args
+
+    (with-local-frame decls
+      ;; do representation inference in body
+      (infer-representation (with-implicit-progn body))
+
+      ;; do representation inference on local variables
+      (dolist (n (variables-declared-in-current-frame))
+	(let ((read (variable-property n 'read))
+	      (written (variable-property n 'written))
+	      (ignored (variable-property n 'ignored))
+	      (ignorable (variable-property n 'ignorable)))
+
+	  (let ((rep (if written
+			 ;; variable is updated, must be a register
+			 'register
+
+			 (if read
+			     ;; variable isn'read and not updated,
+			     ;; a wire
+			     'wire
+
+			     ;; variable is unused
+			     (progn
+			       (if (not (or ignored ignorable))
+				   ;; not marked as ignored/able
+				   (warn 'unused-variable :variable n
+							  :hint "Make sure variable is needed"))
+
+			       ;; represent as a wire
+			       'wire)))))
+	    (if (and (or read written)
+		     ignored)
+		;; variable is used despire being marked as ignored
+		(warn 'used-variable :variable n
+				     :hint "Why is the variable used when marked as ignored?"))
+
+	    ;; check consistency with assigned representation
+	    (if-let ((given (get-representation n)))
+	      (when (not (eql rep given))
+		(warn 'representation-mismatch :got given
+					       :expected rep
+					       :hint "Make sure the explicitly-assigned representation is appropriate"))
+
+	      ;; update representation if none given
+	      (set-variable-property n 'as rep))))))))
 
 
 ;; ---------- Free variables ----------

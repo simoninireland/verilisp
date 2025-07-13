@@ -268,13 +268,13 @@ different selectors to be used as generalised places."))
   (:documentation "Test whether FORM is a generalised place.
 
 Generalised places can appear as the target of SETF forms. (In other
-languages they are sometimes referred to as /lvalues/.) This is
+languages they are sometimes referred to as *lvalues*.) This is
 separate, but related to, their type: a generalised place has a type,
 but is also SETF-able.")
   (:method ((form integer))
     nil)
   (:method ((form symbol))
-    (not (get-constant form)))
+    (writeable-p form))
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
@@ -344,6 +344,29 @@ dependencies as they can't be updated."
 							   ))))
 			   direct)
 	   '())))
+
+
+;; ---------- Representation inference ----------
+
+(defgeneric infer-representation (form)
+  (:documentation "Infer the representations of variables in FORM.")
+  (:method (form)
+    nil)
+  (:method ((form list))
+    (destructuring-bind (fun &rest args)
+	form
+      (infer-representation-sexp fun args))))
+
+
+(defgeneric infer-representation-sexp (fun args)
+  (:documentation "Infer the representations of variables in FUN applied to ARGS.
+
+Methods on this function should annotate the variables with
+appropriate representations (the AS property). This will generally
+only happen in binders.")
+  (:method (fun args)
+    (mapc #'infer-representation args)))
+
 
 
 ;; ---------- Let block coalescence ----------

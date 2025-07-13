@@ -101,7 +101,7 @@
   (signals (vl::not-synthesisable)
     (vl::with-new-frame
       (vl::typecheck (vl::expand/vl '(let ((a 10))
-				      (declare (as :constant a))
+				      (declare (as constant a))
 				      (setq a 12)))))))
 
 

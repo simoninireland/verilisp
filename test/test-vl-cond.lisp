@@ -33,9 +33,7 @@
 				   (setf b 3)))))))
 
     (vl::typecheck p)
-    ;;(is (vl::synthesise p))
-
-    ))
+    (is (vl::synthesise p))))
 
 
 (test test-synthesise-cond-assignment

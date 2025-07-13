@@ -165,12 +165,6 @@ inferred type if not."
   (variable-property n 'initial-value :default 0))
 
 
-(defun get-constant (n)
-  "Return whether N is constant."
-  (if-let ((rep (get-representation n)))
-    (eql rep 'constant)))
-
-
 (defun get-direction (n)
   "Return the direction of N."
   (variable-property n 'direction))

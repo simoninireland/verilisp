@@ -66,7 +66,9 @@
 
 
 (defmethod generalised-place-sexp-p ((selector (eql 'bref)) selectorargs)
-  t)
+  (destructuring-bind (place start &key end width)
+      selectorargs
+    (generalised-place-p place)))
 
 
 (defmethod typecheck-sexp ((fun (eql 'bref)) args)

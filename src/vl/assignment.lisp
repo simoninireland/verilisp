@@ -27,9 +27,8 @@
 To be writeable a variable must be a register or wire, not a constant,
 and not an input argument."
   (and (variable-declared-p n)
-       (not (get-constant n))
-       (not (eql (get-representation n) :constant))
-       (not (eql (get-direction n) :in))))
+       (not (eql (get-representation n) 'constant))
+       (not (eql (get-direction n) 'in))))
 
 
 (defun ensure-writeable (n)
@@ -42,7 +41,8 @@ isn't declared."
     (error 'unknown-variable :variable n
 			     :hint "Make sure the variable is in scope"))
   (unless (writeable-p n)
-    (error 'not-synthesisable :hint "Ensure target is writeable")))
+    (error 'not-synthesisable :variable n
+			      :hint "Ensure target is writeable")))
 
 
 ;; ---------- setq ----------
@@ -111,7 +111,7 @@ isn't declared."
       args
     (let ((place-rws (if (symbolp place)
 			 ;; place targets a variable directly
-			 (list '()  (list place))
+			 (list '() (list place))
 
 			 ;; place is complex, recurse into it
 			 (read-written-variables place)))
