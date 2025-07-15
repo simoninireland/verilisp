@@ -260,9 +260,17 @@ right-hand side of an assignment."
 			 'register
 
 			 (if read
-			     ;; variable isn'read and not updated,
-			     ;; a wire
-			     'wire
+			     ;; variable is read and not updated
+			     (if-let ((v (get-initial-value n)))
+			       (if (static-p v)
+				   ;; static constant, a constant
+				   'constant
+
+				   ;; not constant, a wire
+				   'wire)
+
+			       ;; no initial value, assume a wire
+			       'wire)
 
 			     ;; variable is unused
 			     (progn

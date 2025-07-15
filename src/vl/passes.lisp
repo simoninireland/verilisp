@@ -195,7 +195,7 @@ been added to the end destructively."
 		      (declare-environment-variable n `((initial-value ,v)) f))
 
 		    ;; declare just name
-		    (declare-environment-variable n `() f)))
+		    (declare-environment-variable decl '() f)))
 	      decls)
 
 	(setf (cdr (last decls)) (list (list 'local-frame f)))))
@@ -241,6 +241,8 @@ removed."
 	    (,cached-frame (car ,f-decls)))
        (with-frame ,cached-frame
 	 (let ((,decls (cadr ,f-decls)))
+	   (declare (ignorable ,decls))
+
 	   ,@body)))))
 
 

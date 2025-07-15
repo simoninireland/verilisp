@@ -244,7 +244,6 @@
   (let* ((p (expand/vl `(let ((a 23)
 			      (b (* 56 17))
 			      (c 0))
-			  (declare (as constant b))
 			  (setq a (+ c b))
 			  (let ((d (+ a b)))
 			    (setq c (bref d 2 :end 0)))))))
@@ -252,10 +251,11 @@
     (let ((decls (cadr p)))  ; outer LET
       (with-local-frame decls
 	(is (eql (vl::variable-property 'a 'as) 'register))
-	(is (eql (vl::variable-property 'b 'as) 'wire))
+	(is (eql (vl::variable-property 'b 'as) 'constant))
 	(is (eql (vl::variable-property 'a 'as) 'register))))
 
-    (let ((decls (cadr (elt (elt p 2) 3))))  ; inner LET
+    (let ((decls (cadr (elt (elt p 2) 2))))  ; inner LET
+      (format t "~a" decls)
       (with-local-frame decls
 	(is (eql (vl::variable-property 'd 'as) 'wire))))))
 
