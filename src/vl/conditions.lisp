@@ -376,8 +376,7 @@ it faithfully."))
     :initarg :pattern
     :reader pattern))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Can't interpret bitfield pattern~a: ~a"
-					       (format-hint c)
+	     (format-condition-context (format nil "Can't match bitfield pattern ~a"
 					       (pattern c))
 				       c str)))
   (:documentation "Condition signalled when a bitfield pattern can't be parsed.
