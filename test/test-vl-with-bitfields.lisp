@@ -36,6 +36,28 @@
 	     '((a 6 4) (b 3 3) (a 2 1) (c 0 0)))))
 
 
+(test test-extract-runs-explicit
+  "Test we can extract explicit-length runs."
+  (is (equal (vl::extract-runs '((a 3)))
+	     '((a 2 0))))
+  (is (equal (vl::extract-runs '((a 3) b))
+	     '((a 3 1) (b 0 0))))
+  (is (equal (vl::extract-runs '(b (a 3)))
+	     '((b 3 3) (a 2 0))))
+  (is (equal (vl::extract-runs '(b b (a 3)))
+	     '((b 4 3) (a 2 0))))
+  (is (equal (vl::extract-runs '((b 5) (a 3)))
+	     '((b 7 3) (a 2 0))))
+
+  ;; check we catch malformed explicit-length runs
+  (signals (syntax-error)
+    (vl::extract-runs '((b) (a 1) c)))
+  (signals (syntax-error)
+    (vl::extract-runs '((b 3) (a 1 2) c)))
+  (signals (syntax-error)
+    (vl::extract-runs '((a 1) c ()))))
+
+
 ;; Should this function be in utils?
 (test test-duplicate-keys
   "Test we can detect duplicate keys in alists."
@@ -60,16 +82,16 @@
 (test test-with-bitfields-simple
   "Test we can extract bitfields."
   (let ((p (vl::expand/vl '(let ((a #2r1001011010))
-			   (vl::with-bitfields (a a a b b b c)
-			       a
-			     (setf a (+ b c)))))))
+			    (vl::with-bitfields (a a a b b b c)
+				a
+			      (setf a (+ b c)))))))
     (is (vl::subtype-p (vl::typecheck p)
-		      '(unsigned-byte 10)))))
+		       '(unsigned-byte 10)))))
 
 
 (test test-with-bitfields-typo
   "Test we catch the typo of forgetting the matching value."
-  (signals (vl::not-synthesisable)
+  (signals (vl::syntax-error)
     (vl::expand-macros-in-environment '(vl::with-bitfields (a b c)
 				       ;; no argument to match against,
 				       ;; just a one-form body

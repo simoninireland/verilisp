@@ -21,50 +21,76 @@
 (declaim (optimize debug))
 
 
-;; We do these with a macro that re-writes variables in the body.
-;; TODO: Decide what we do if patterns don't match because of
-;; incorrect 0s and 1s. My current idea is don't execute the body,
-;; but that'd be a silent failure on the hardware (although it could
-;; be checked in simulation)
-;;
-;; A better idea is to refator and have IF-LET-BITFIELDS with a failure
-;; branch.
-;;
-;; Might also want to expand the pattern language to allow, for example,
-;; (a a a (b 3) c c) as an alternative to (a a a b b b c c). The count
-;; would need to be statically known.
-
 (defun extract-runs (pattern)
   "Extract consecutive runs of a symbol from PATTERN.
 
-Detection happens regardless of repetition.
+A run consists of either a sequence of one or more instances of the
+same variable name, 0 or 1 bits, or the - ignore bit; or a list
+consisting of a variable name, 0 or 1 bits, or the - ignore bit,
+followed by the length of the run.
 
 Return an alist mapping symbol to start and end positions,
 with the rightmost position being 0."
+  (declare (optimize debug))
+
   (labels ((extract (pat i currentrun)
 	     (let ((s (car pat)))
 	       (cond ((< i 0)
+		      ;; end of pattern, done
 		      (list currentrun))
 
+		     ((listp s)
+		      ;; new run with explicit length
+		      (destructuring-bind (var len)
+			  s
+			(let ((end (- i len)))
+			  (if (null currentrun)
+			      ;; first run
+			      (extract (cdr pat)
+				       end
+				       (list var i (1+ end)))
+
+			      ;; new run
+			      (cons currentrun
+				    (extract (cdr pat)
+					     end
+					     (list var i (1+ end))))))))
+
 		     ((null currentrun)
+		      ;; first character, create first run
 		      (extract (cdr pat)
 			       (1- i)
 			       (list s i i)))
 
 		     ((equal s (car currentrun))
+		      ;; same character, continuing current run
 		      (extract (cdr pat)
 			       (1- i)
 			       (list s (cadr currentrun) i)))
 
 		     (t
+		      ;; different character, starting a new run
 		      (cons currentrun
 			    (extract (cdr pat)
 				     (1- i)
-				     (list s i i))))))))
+				     (list s i i)))))))
+
+	   (pattern-length (pat)
+	     (foldr (lambda (l s)
+		      (if (listp s)
+			  (destructuring-bind (var len)
+			      s
+			    (+ l len))
+			  (1+ l)))
+		    pat 0)))
 
     (if (null pattern)
 	nil
-	(extract pattern (1- (length pattern)) nil))))
+
+	(handler-bind
+	    ((error (lambda (c)
+		      (error 'syntax-error :hint "Explicit-width fields should consist of a symbol and a width "))))
+	  (extract pattern (1- (pattern-length pattern)) nil)))))
 
 
 (defun duplicate-keys-p (l)
@@ -93,7 +119,7 @@ The bitfields also include any 0, 1, and - symbols."
 			       runs)))
       (when (duplicate-keys-p bindings)
 	(error 'bitfield-mismatch :pattern pattern
-				  :hint "Pattern has non-consecutive runs"))
+				  :hint "Bits going into a variable have to be consecutive"))
 
       runs)))
 
@@ -105,11 +131,24 @@ Fixed bits are constant 0s or 1s."
   (member b '(0 1)))
 
 
-(defun bitfield-contains-fixed-bits-p (runs)
-  "Test whether RUNS includes fixed bits."
-  (not (null (find-if (lambda (run)
-			(bitfield-fixed-bit-p (car run)))
-		      runs))))
+(defun bitfield-fixed-bit-or-ignored-p (b)
+  "Test whether B is a fixed bit or being ignored."
+  (or (bitfield-fixed-bit-p b)
+      (eql b '-)))
+
+
+(defun bitfield-fixed-bit-runs (runs)
+  "Extract fixed-bit runs from RUNS."
+  (remove-if (lambda (run)
+	       (not (bitfield-fixed-bit-p (car run))))
+	     runs))
+
+
+(defun bitfield-variable-runs (runs)
+  "Extract variable (non-fixed-bit) runs from RUNS."
+  (remove-if (lambda (run)
+	       (bitfield-fixed-bit-or-ignored-p (car run)))
+	     runs))
 
 
 (defun run-to-decl (arg run)
@@ -118,14 +157,32 @@ Fixed bits are constant 0s or 1s."
       run
     (if (= start end)
 	;; single bit
-	`(,s (bref ,arg ,start) :width 1)
+	`(,s (bref ,arg ,start))
 
 	;; several bits
-	`(,s (bref ,arg ,start :end ,end) :width ,(1+ (- start end))))))
+	`(,s (bref ,arg ,start :end ,end)))))
 
 
-(defmacro/vl with-bitfields (pattern arg &body body)
-  "Create variables matching the bitfield PATTERN applied to ARG in BODY.
+(defun run-to-test (arg run)
+  "Return a test of the bits of RUN against ARG."
+  (destructuring-bind (s start end)
+      run
+    (if (= start end)
+	;; single bit
+	`(= (bref ,arg ,start) ,s)
+
+	;; several bits
+	(if (= s 0)
+	    ;; zero bit
+	    `(= (bref ,arg ,start :end ,end) 0)
+
+	    ;; one bit
+	    (let ((val (1- (ash 1 (1+ (- start end))))))
+	      `(= (bref ,arg ,start :end ,end) ,val))))))
+
+
+(defmacro/vl if-let-bitfields (pattern arg &body body)
+   "Create variables matching the bitfield PATTERN applied to ARG.
 
 The pattern consists of a list of variable names, with each
 entry corresponding to a bit position. The rightmost bit is
@@ -138,26 +195,111 @@ ignored bits.
 
 For example:
 
-(with-bitfields (o o o a a a a 0)
-   opcode
-...)
+(if-let-bitfields (o o o a a a a 0)
+    opcode
 
-would declare variables o and a in the body, with the values
-extracted from bits 7 to 5 and 4 to 1 respectively, and
-the lowest-order bit being 0.
+  ;; executed when patten matches
+  (setq reg a)
 
-If the fixed bits do not match, BODY is not evaluated."
+  ;; executed when pattern doesn't match
+  (setq reg 0)))
+
+would declare variables o and a in the body, with the values extracted
+from bits 7 to 5 and 4 to 1 respectively, and the lowest-order bit
+being 0.
+
+If the bitfields can be matched, the first form of BODY is
+evaluated with all the variables declared in the pattern in scope and
+bound to the appropriate values from the bitfield; if not, the rest of
+forms in BODY is evaluated with none of the variables declared.
+
+Variables are declared as generalised places, meaning that calls to
+SETF will update the appropriate positons in ARG."
 
   ;; catch the common error of forgetting the value
   ;; to match against with a one-form body
   (when (< (length body) 1)
-    (error 'not-synthesisable :hint "No value to match against?"))
+    (error 'syntax-error :form arg
+			 :hint "No value to match against?"))
 
-  (let ((runs (extract-bitfields pattern)))
-    (if (bitfield-contains-fixed-bits-p runs)
-	(error 'not-synthesisable :hint "Fixed bits not yet implemented")
+  ;; extract else branch if body is longer than one form
+  (let* ((then-branch (car body))
+	 (else-branch (if (> (length body) 1)
+			  (cdr body))))
 
-	;; no fixed bits, don't synthesise tests
-	(let* ((decls (mapcar (curry #'run-to-decl arg) runs))
-	       (newbody (rewrite-variables `(progn ,@body) decls)))
-	  newbody))))
+    (with-gensyms (condition)
+      (let* ((runs (extract-bitfields pattern))
+	     (fixed-bit-runs (bitfield-fixed-bit-runs runs))
+	     (variable-runs (bitfield-variable-runs runs))
+
+	     (tests (if fixed-bit-runs
+			(mapcar (curry #'run-to-test condition) fixed-bit-runs)))
+	     (decls (if variable-runs
+			(mapcar (curry #'run-to-decl condition) variable-runs)))
+	     (vars (mapcar #'car decls)))
+
+	(if tests
+	    (if decls
+		;; tests and declarations
+		(if else-branch
+		    ;; two-armed conditional
+		    `(let ((,condition ,arg))
+		       (if (and ,@tests)
+			   (let ,decls
+			     ,then-branch)
+
+			   (progn
+			     ,@else-branch)))
+
+		    ;; one-armed conditional
+		    `(let ((,condition ,arg))
+		       (if (and ,@tests)
+			   (let ,decls
+			     ,then-branch))))
+
+		;; tests, no decls
+		(if else-branch
+		    ;; two-armed conditional
+		    `(let ((,condition ,arg))
+		       (if (and ,@tests)
+			   ,then-branch
+
+			   (progn
+			     ,@else-branch)))
+
+		    ;; one-armed conditional
+		    `(let ((,condition ,arg))
+		       (if (and ,@tests)
+			   ,then-branch))))
+
+	    (if decls
+		;; decls, no tests
+		(progn
+		  (unless (null else-branch)
+		    (warn 'unreachable-code :hint "Should there be fixed bits to test?"))
+
+		  `(let ((,condition ,arg))
+		     (let ,decls
+		       ,then-branch)))
+
+		(progn
+		  ;; no decls or tests
+		  (warn 'unreachable-code :hint "Why is this assignment here?")
+		  nil)))))))
+
+
+(defmacro/vl with-bitfields (pattern arg &body body)
+  "Create variables matching the bitfield PATTERN applied to ARG in BODY.
+
+The patterns are as in IF-LET-BITFIELDS. If the fixed bits do not
+match, BODY is not evaluated."
+
+  ;; catch the common error of forgetting the value
+  ;; to match against with a one-form body
+  (when (< (length body) 1)
+    (error 'syntax-error :form arg
+			 :hint "No value to match against?"))
+
+  `(if-let-bitfields ,pattern
+       ,arg
+     (progn ,@body)))
