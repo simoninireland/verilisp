@@ -110,3 +110,9 @@ BODY is not run if CONDITION is already true."
   `(do ()
        ((not ,condition) (return))
      ,@body))
+
+
+(defmacro/vl forever (&body body)
+  "Run BODY forever."
+  `(while 1
+     ,@body))
