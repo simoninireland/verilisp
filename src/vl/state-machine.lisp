@@ -339,7 +339,7 @@ Return a list of states created, initial state (of the path) first."
       (error 'unknown-state :state label))
     (unless (eql (get-representation label) 'label)
       (error 'unknown-state :state label))
-    (break)
+
     ;; GO doesn't really have a type
     t))
 
