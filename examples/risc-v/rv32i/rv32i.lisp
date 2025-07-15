@@ -22,8 +22,8 @@
 
 ;; RAM
 (defmodule/vl ram (addr rd/wr write-mask data
-		   &key
-		   (words 256))
+			&key
+			(words 256))
   (declare (type (unsigned-byte 32) addr data)
 	   (type bit rd/wr)
 	   (type (unsigned-byte 4) write-mask)
@@ -166,15 +166,15 @@
     (declare (type (unsigned-byte 32) pc instr rs1 rs2 write-back-data next-pc))
 
     ;; wiring
-    (let-wires (a b c compare
-		  (op      0)
-		  (add/sub 0)
+    (let (a b c compare
+	    (op      0)
+	    (add/sub 0)
 
-		  ;; memory access
-		  (addr       0)
-		  (data       0)
-		  (rd/wr      0)
-		  (write-mask 0))
+	    ;; memory access
+	    (addr       0)
+	    (data       0)
+	    (rd/wr      0)
+	    (write-mask 0))
       (declare (type (unsigned-byte 32) a b c addr data)
 	       (type (unsigned-byte 3) op)
 	       (type (unsigned-byte 4) write-mask)
@@ -192,26 +192,26 @@
 	(with-bitfields ((funct7 7) (rs2id 5) (rs1id 5) (funct3 3) (rdid 5) (opcode 7))
 	    instr
 
-	  (let-wires ((Uimm (coerce (the '(signed-byte 12) (bref instr 31 :end 12))
-				    '(signed-byte 32)))
-		      (Iimm (coerce (the '(signed-byte 12) (bref instr 31 :end 20))
-				    '(signed-byte 32)))
-		      (Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
-									   (bref instr 30 :end 25)
-									   (bref instr 11 :end 7)))
-				    '(signed-byte 32)))
-		      (Bimm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
-									   (bref instr 7)
-									   (bref instr 30 :end 25)
-									   (bref instr 11 :end 8)
-									   0))
-				    '(signed-byte 32)))
-		      (Jimm (coerce (the '(signed-byte 22) (make-bitfields (bref instr 31)
-									   (bref instr 19 :end 12)
-									   (bref instr 20)
-									   (bref instr 30 :end 21)
-									   0))
-				    '(signed-byte 32))))
+	  (let ((Uimm (coerce (the '(signed-byte 12) (bref instr 31 :end 12))
+			      '(signed-byte 32)))
+		(Iimm (coerce (the '(signed-byte 12) (bref instr 31 :end 20))
+			      '(signed-byte 32)))
+		(Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
+								     (bref instr 30 :end 25)
+								     (bref instr 11 :end 7)))
+			      '(signed-byte 32)))
+		(Bimm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
+								     (bref instr 7)
+								     (bref instr 30 :end 25)
+								     (bref instr 11 :end 8)
+								     0))
+			      '(signed-byte 32)))
+		(Jimm (coerce (the '(signed-byte 22) (make-bitfields (bref instr 31)
+								     (bref instr 19 :end 12)
+								     (bref instr 20)
+								     (bref instr 30 :end 21)
+								     0))
+			      '(signed-byte 32))))
 
 	    ;; state machine
 	    (@ (posedge clk)
@@ -287,8 +287,8 @@
 
 			;; load relative to register (L)
 			(#2r0000011
-			 (let* ((read-type (bref funct3 1 :width 2))
-				(sign-extending (= (bref funct3 2) 1)))
+			 (let ((read-type (bref funct3 1 :width 2))
+			       (sign-extending (= (bref funct3 2) 1)))
 
 			   ;; load data
 			   (setq addr (+ rs1 Iimm))
