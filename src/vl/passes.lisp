@@ -184,14 +184,20 @@ been added to the end destructively."
       ;; no decls, return a new list
       (setf decls (list (list 'local-frame f)))
 
-      ;; existing decls, append the frame
-      (let ((names (remove-if (lambda (n)
-				(or (keywordp n)
-				    (member n '(&key &allow-other-keys &rest &optional))))
-			      (mapcar #'name-in-decl decls))))
-	(mapc (lambda (n)
-		(declare-environment-variable n '() f))
-	      names)
+      (progn
+	;; existing decls, append the frame with initial
+	;; value if there is one
+	(mapc (lambda (decl)
+		(if (listp decl)
+		    ;; declare name and initial value
+		    (destructuring-bind (n v)
+			decl
+		      (declare-environment-variable n `((initial-value ,v)) f))
+
+		    ;; declare just name
+		    (declare-environment-variable n `() f)))
+	      decls)
+
 	(setf (cdr (last decls)) (list (list 'local-frame f)))))
 
   ;; return the decls
