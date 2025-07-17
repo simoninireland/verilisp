@@ -41,20 +41,10 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
     (dolist (ty tys)
       (ensure-fixed-width ty))
 
-    ;; form the LUB of the arguments, increasing the width by one
-    ;; for each term added
-    (foldr (lambda (oldlubty ty)
-	     (let ((lubty (lub oldlubty ty)))
-	       (destructuring-bind (tytag tyargs)
-		   (deconstruct-type lubty)
-		 (if-let ((w (fixed-width-type-bound tyargs)))
-		   ;; bounded LUB, increment the bound
-		   `(,tytag ,(1+ w))
-
-		   ;; unbounded, leave as-is
-		   lubty))))
-	   (cdr tys)
-	   (car tys))))
+    ;; find the LUB and then widen it appropriately
+    (let ((lubty (apply #'lub tys))
+	  (w (1- (length args))))
+      `(widen ,lubty ,w))))
 
 
 (defun fold-constant-expressions-addition (fun args)
@@ -80,7 +70,6 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 	  (if (= total 0)
 	      `(,fun ,@remaining)
 	      `(,fun ,total ,@remaining ))))))
-
 
 (defmethod typecheck-sexp ((fun (eql '+)) args)
   (typecheck-addition args))

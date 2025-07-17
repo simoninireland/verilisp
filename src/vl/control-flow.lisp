@@ -24,7 +24,11 @@
 ;; ---------- PROGN ----------
 
 (defmethod typecheck-sexp ((fun (eql 'progn)) args)
+  (declare (optimize debug))
+
   (labels ((typecheck-forms (forms)
+	     (declare (optimize debug))
+
 	     (let ((ty (with-recover-on-error
 			   t
 			 (with-current-form (car forms)

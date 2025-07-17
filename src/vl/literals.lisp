@@ -22,12 +22,8 @@
 
 ;; ---------- Integers ----------
 
-(defmethod bitwidth ((val integer))
-  (bits-for-integer val))
-
-
 (defmethod typecheck ((form integer))
-  (let ((w (bitwidth form)))
+  (let ((w (bits-for-integer form)))
     (if (< form 0)
 	`(signed-byte ,w)
 	`(unsigned-byte ,w))))
@@ -39,10 +35,6 @@
 
 (defmethod dependencies ((form integer))
   nil)
-
-
-(defmethod widthcheck ((form integer))
-  form)
 
 
 (defmethod float-let-blocks ((form integer))

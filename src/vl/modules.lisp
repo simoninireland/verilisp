@@ -53,10 +53,6 @@ frame they form."
   (cadddr ty))
 
 
-(defmethod expand-type-parameters-type ((ty (eql 'module-interface)) args)
-  `(module-interface ,@args))
-
-
 ;; ---------- Module late initialisation ----------
 
 (defvar *module-late-initialisation* nil

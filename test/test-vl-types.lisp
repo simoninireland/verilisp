@@ -56,13 +56,14 @@
 
 (test test-bitwidths-integer-constants
   "Test we can extract bit widths of integer constants."
-  (is (= (vl::bitwidth 0) 1))
-  (is (= (vl::bitwidth 1) 1))
-  (is (= (vl::bitwidth 2) 2))
-  (is (= (vl::bitwidth 127) 7))
+  (is (= (vl::bits-for-integer 0) 1))
+  (is (= (vl::bits-for-integer 1) 1))
+  (is (= (vl::bits-for-integer 2) 2))
+  (is (= (vl::bits-for-integer 127) 7))
 
-  (is (= (vl::bitwidth -127) 8))
-  (is (= (vl::bitwidth -1) 2)))
+  (is (= (vl::bits-for-integer -127) 8))
+  (is (= (vl::bits-for-integer -128) 9))
+  (is (= (vl::bits-for-integer -1) 2)))
 
 
 ;; ---------- Sub-typing ----------
@@ -158,12 +159,17 @@
   (is (vl::subtype-p '(unsigned-byte 1) '(or bit signed-byte)))
   (is (not (vl::subtype-p '(unsigned-byte 12) '(or bit (signed-byte 8)))))
   (is (vl::subtype-p '(unsigned-byte 12) '(or bit (signed-byte 8) t)))
+  (is (vl::subtype-p '(or unsigned-byte signed-byte) 'signed-byte))
+  (is (vl::subtype-p '(or (unsigned-byte 8) (unsigned-byte 12)) '(unsigned-byte 16)))
+  (is (vl::subtype-p '(or bit (unsigned-byte 8)) '(unsigned-byte 12)))
 
   ;; intersection types
-  ;; TBD
-
-  ;; negation types
-  (is (vl::subtype-p '(unsigned-byte 16) '(not (unsigned-byte 8)))))
+  (is (vl::subtype-p 'unsigned-byte '(and unsigned-byte signed-byte)))
+  (is (not (vl::subtype-p 'signed-byte '(and unsigned-byte signed-byte))))
+  (is (not (vl::subtype-p '(signed-byte 8) '(and bit (signed-byte 8)))))
+  (is (vl::subtype-p 'bit '(and bit (signed-byte 8))))
+  (is (vl::subtype-p 'bit '(and bit (unsigned-byte 8))))
+  (is (vl::subtype-p '(and (unsigned-byte 8) (signed-byte 8)) '(signed-byte 9))))
 
 
 ;; ---------- Least upper-bounds of types ----------

@@ -20,13 +20,8 @@
 (in-package :verilisp/core)
 
 
-(defmethod bitwidth ((val symbol))
-  (let ((tys (safe-car-cdr (get-type val))))
-    (bitwidth-type (car tys) (cadr tys))))
-
-
 (defmethod typecheck ((form symbol))
-  (get-type form))
+  `(type-of ,form))
 
 
 (defmethod dependencies ((form symbol))

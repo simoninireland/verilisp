@@ -56,9 +56,9 @@ isn't declared."
 
     (let ((tyvar (typecheck n))
 	  (tyval (typecheck v)))
-      (ensure-subtype tyval tyvar)
+      ;;(ensure-subtype tyval tyvar)
       (ensure-writeable n)
-      (add-type-constraint n tyval)
+      ;;(add-type-constraint n tyval)
       tyval)))
 
 

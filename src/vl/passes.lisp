@@ -143,10 +143,9 @@ calculations that can be done early.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
-      (with-vl-errors-not-synthesisable
-	(with-unknown-forms
-	  (with-current-form form
-	    (add-frames-sexp fun args)))))))
+      (with-unknown-forms
+	(with-current-form form
+	  (add-frames-sexp fun args))))))
 
 
 (defgeneric add-frames-sexp (fun args)
@@ -246,17 +245,36 @@ removed."
 	   ,@body)))))
 
 
-;; ---------- Type and width checking and inference ----------
+;; ---------- Type checking and inference ----------
+
+(defgeneric apply-type-constraints (form)
+  (:documentation "Evaluate type constraints to constraining variables in FORM.")
+  (:method (form)
+    nil)
+
+  (:method ((form list))
+    (destructuring-bind (fun &rest args)
+	form
+      (apply-type-constraints-sexp fun args))))
+
+
+(defgeneric apply-type-constraints-sexp (fun args)
+  (:documentation "Apply type constraints in FUN applied to ARGS.
+
+Methods on this function should apply any type constraints they place
+upon FUN.")
+  (:method (fun args)
+    (mapc #'apply-type-constraints args)))
+
 
 (defgeneric typecheck (form)
   (:documentation "Type-check FORM in the current global environment.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
-      (with-vl-errors-not-synthesisable
-	(with-unknown-forms
-	  (with-current-form form
-	    (expand-type-parameters (typecheck-sexp fun args))))))))
+      (with-unknown-forms
+	(with-current-form form
+	  (typecheck-sexp fun args))))))
 
 
 (defgeneric typecheck-sexp (fun args)
@@ -310,10 +328,9 @@ updated over its lifetime. These are used to infer representations.")
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
-      (with-vl-errors-not-synthesisable
-	(with-unknown-forms
-	  (with-current-form form
-	    (dependencies-sexp fun args)))))))
+      (with-unknown-forms
+	(with-current-form form
+	  (dependencies-sexp fun args))))))
 
 
 (defgeneric dependencies-sexp (fun args)
@@ -386,8 +403,7 @@ Return a list consisting of the new form and any declarations floated.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
-      (with-vl-errors-not-synthesisable
-	(float-let-blocks-sexp fun args)))))
+      (float-let-blocks-sexp fun args))))
 
 
 (defun float-merge (forms)
@@ -432,8 +448,7 @@ well as PROGNs nested inside other PROGNs.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
-      (with-vl-errors-not-synthesisable
-	(simplify-progn-sexp fun args)))))
+      (simplify-progn-sexp fun args))))
 
 
 (defgeneric simplify-progn-sexp (fun args)
@@ -477,9 +492,7 @@ This attaches the frame F before calling EXPAND-MACROS. If F is omitted
 The macros available are taken from the global environment. Usually
 this will have *MACRO-ENVIRONMENT* attached to it prior to macro expansion.")
   (:method (fun args)
-    (declare (optimize debug))
-    (with-vl-errors-not-synthesisable
-      (if (macro-declared-p fun)
+    (if (macro-declared-p fun)
 	;; macro is expandable, replace with real name if there is one
 	(let ((realfun (variable-property fun 'real-name)))
 	  (multiple-value-bind (expansion expanded)
@@ -492,7 +505,7 @@ this will have *MACRO-ENVIRONMENT* attached to it prior to macro expansion.")
 		(expand-descend fun args))))
 
 	;; macro is not expandable, descend into the form
-	(expand-descend fun args)))))
+	(expand-descend fun args))))
 
 
 ;; ---------- Synthesis ----------
@@ -502,10 +515,9 @@ this will have *MACRO-ENVIRONMENT* attached to it prior to macro expansion.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
-      (with-vl-errors-not-synthesisable
-	(with-current-form form
-	  (synthesise-sexp fun args)
-	  t)))))
+      (with-current-form form
+	(synthesise-sexp fun args)
+	t))))
 
 
 (defgeneric synthesise-sexp (fun args)
@@ -519,8 +531,7 @@ this will have *MACRO-ENVIRONMENT* attached to it prior to macro expansion.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
-      (with-vl-errors-not-synthesisable
-	(lispify-sexp fun args)))))
+      (lispify-sexp fun args))))
 
 
 (defgeneric lispify-sexp (fun args)

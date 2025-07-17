@@ -20,7 +20,7 @@
 (in-package :verilisp/core)
 
 
-;; ---------- Sub-type checking ----------
+;; ---------- Type manipulation ----------
 
 (defun deconstruct-type (ty)
   "Deconstruct the type specifier TY into tag and arguments.
@@ -44,18 +44,7 @@ of TYTAG and TYARGS."
       (cons tytag tyargs)))
 
 
-;TODO: This should probably be generic, like generalised-place-p
-
-(defun representable-type-p (ty)
-  "Tests whether TY is representable on hardware."
-  (destructuring-bind (tytag tyargs)
-      (deconstruct-type ty)
-
-    (not (or (null tytag)
-	     (eql tytag t)
-	     (and (member tytag '(unsigned-byte signed-byte))
-		  (null tyargs))))))
-
+;; ---------- Type algebra ----------
 
 ;; The builtin SUBTYPEP is sometimes either too aggressive or too
 ;; demanding in what it requires. So we provide a generic version
@@ -65,32 +54,61 @@ of TYTAG and TYARGS."
   (:documentation "Test whether one type is a sub-type of another.
 
 Methods on this function should specialise on the type tags and
-be a generally admitting as possible, for example by not examining
-tyer arguments when not needed.")
+be as generally admitting as possible, for example by not examining
+the arguments when not needed.
 
+By default there is no relationship between a pair of types.")
+  (:method (ty1tag ty1args ty2tag ty2args)
+    nil)
+
+  ;; union types
   (:method (ty1tag ty1args (ty2tag (eql 'or)) ty2args)
-    ;; union type, one of the types matches
+    ;; C < A or B if C < A or C < B
     (some (curry #'subtype-p (construct-type ty1tag ty1args)) ty2args))
 
+  (:method ((ty1tag (eql 'or)) ty1args ty2tag ty2args)
+    ;; A or B < C if A < C and B < C
+    (every (rcurry #'subtype-p (construct-type ty2tag ty2args)) ty1args))
+
+  ;; intersection types
   (:method (ty1tag ty1args (ty2tag (eql 'and)) ty2args)
-    ;; intersection type, all of the types matches
+    ;; C < A and B if C < A and C < B
     (every (curry #'subtype-p (construct-type ty1tag ty1args)) ty2args))
 
-  (:method (ty1tag ty1args (ty2tag (eql 'not)) ty2args)
-    ;; negation type, must not match
-    (not (subtype-p (construct-type ty1tag ty1args) (car ty2args))))
+  (:method ((ty1tag (eql 'and)) ty1args ty2tag ty2args)
+    ;; A and B < C if A < C or B < C
+    (some (rcurry #'subtype-p (construct-type ty2tag ty2args)) ty1args))
 
-					;TODO: Extend to handle complex type specifiers on the left as well
-  ;; as on the right
-  )
+  ;; types of variables
+  (:method (ty1tag ty1args (ty2tag (eql 'type-of)) ty2args)
+    (subtype-p (construct-type ty1tag ty1args) (get-type (car ty2args))))
+
+  (:method ((ty1tag (eql 'type-of)) ty1args ty2tag ty2args)
+    (subtype-p (get-type (car ty1args)) (construct-type ty2tag ty2args)))
+
+  ;; widened types
+  (:method (ty1tag ty1args (ty2tag (eql 'widen)) ty2args)
+    (subtype-p (construct-type ty1tag ty1args)
+	       (apply #'widen ty2args)))
+
+  (:method ((ty1tag (eql 'widen)) ty1args ty2tag ty2args)
+    (subtype-p (apply #'widen ty1args)
+	       (construct-type ty2tag ty2args))))
+
+
+(defun disjointtype-p (ty1 ty2)
+  "Test whether TY1 and TY2 are disjoint types."
+  (and (not (subtype-p ty1 ty2))
+       (not (subtype-p ty2 ty1))))
 
 
 (defun subtype-p (ty1 ty2)
   "Determine whether TY1 is a sub-type of TY2.
 
-Some complex type specifiers are supported for TY2, currently OR, AND,
-and NOT types. The 'lattice' types of top (T) and bottom (NIL) are
-also supported
+Some complex type specifiers are supported, currently OR and AND
+types. The 'lattice' types of top (T) and bottom (NIL) are also
+supported. The TYPE-OF type retrieves the type of a variable from the
+current enviroment. Other relationships are defined by SUBTYPE-TYPE.
 
 This function should be used in preference to the built-in SUBTYPEP
 when comparing Verilisp types."
@@ -115,15 +133,9 @@ when comparing Verilisp types."
 	(t
 	 (destructuring-bind (ty1tag ty1args)
 	     (deconstruct-type ty1)
-
 	   (destructuring-bind (ty2tag ty2args)
 	       (deconstruct-type ty2)
-
-	     (handler-case
-		 (subtype-type ty1tag ty1args ty2tag ty2args)
-
-	       ;; if there is no comparison provided, the test fails
-	       (error nil)))))))
+	     (subtype-type ty1tag ty1args ty2tag ty2args))))))
 
 
 ;; ---------- Type checking ----------
@@ -131,31 +143,55 @@ when comparing Verilisp types."
 (defun ensure-subtype (ty1 ty2)
   "Ensure TY1 is a sub-type of TY2 in the current enironment.
 
-Signals TYPE-MISMATCH is the types are not compatible. This
+Signals a TYPE-MISMATCH warning if the types are not compatible. This
 can be ignored for systems not concerned with loss of precision."
-  (let ((ety1 (expand-type-parameters ty1))
-	(ety2 (expand-type-parameters ty2)))
-    (when (not (subtype-p ety1 ety2))
-      (warn 'type-mismatch :expected ty2 :got ty1))))
+  (when (not (subtype-p ty1 ty2))
+    (warn 'type-mismatch :expected ty2 :got ty1)))
 
 
 ;; ---------- Bit widths ----------
 
-(defgeneric bitwidth (v)
-  (:documentation "Return the bits required to represent V.
-
-A list V is assumed to be a type specifier, which is passed to
-BITWIDTH-TYPE.")
-  ;; TODO: I'm not entirely sure about this as a design
-  (:method ((v list))
-    (let ((tys (safe-car-cdr v)))
-      (bitwidth-type (car tys) (cadr tys)))))
-
-
 (defgeneric bitwidth-type (tytag tyargs)
   (:documentation "Return the width need for values of a type.
 
-The type is tagged TYTAG with arguments TYARGS."))
+The type is tagged TYTAG with arguments TYARGS.")
+  (:method (tytag tyargs)
+    nil)
+
+  ;; union and intersection types
+  (:method ((tytag (eql 'or)) tyargs)
+    (max (mapcar #'bitwidth tyargs)))
+  (:method ((tytag (eql 'and)) tyargs)
+    (max (mapcar #'bitwidth tyargs)))
+
+  ;; types of variables
+  (:method ((tytag (eql 'type-of)) tyargs)
+    (bitwidth (get-type (car tyargs)))))
+
+
+(defun bitwidth (ty)
+  "Return the bits required to represent type TY."
+  (apply #'bitwidth-type (deconstruct-type ty)))
+
+
+(defgeneric widen-type (tytag tyargs n)
+  (:documentation "Widen a type by N bits.
+
+Methods on this function should widen the type accordingly. The default
+is for types not to be wideneable, which signals a TYPE-MISMATCH warning.")
+  (:method (tytag tyargs n)
+    (let ((ty (construct-type tytag tyargs)))
+      (error 'type-mismatch :expected '(unsigned-byte signed-byte bit)
+			    :got ty
+			    :hint "Can only widen fixed-width types"))
+
+    ;; return the type as-is
+    ty))
+
+
+(defun widen (ty n)
+  "Widen type TY by N bits."
+  (apply #'widen-type (append (deconstruct-type ty) (list n))))
 
 
 ;; ---------- Least upper-bounds ----------
@@ -163,39 +199,74 @@ The type is tagged TYTAG with arguments TYARGS."))
 (defgeneric lub-type (ty1tag ty1args ty2tag ty2args)
   (:documentation "Return the least upper-bound of two types in the current environment.
 
-The types are tagged TY1TAG and TY2TAG, with specialising arguments
-TY1ARGS and TY2ARGS respectively (both of which can be nil).
-
-The default LUB of two types is T, the top type.")
+The default LUB of two types is their union type.")
   (:method (ty1tag ty1args ty2tag ty2args)
-    t)
+    `(or ,(construct-type ty1tag ty1args) ,(construct-type ty2tag ty2args)))
 
-  ;TODO: Extend to handle complex type specifiers
-  )
+  ;; union types
+  (:method  (ty1tag ty1args (ty2tag (eql 'or)) ty2args)
+    (apply #'lub (cons (construct-type ty1tag ty1args) ty2args)))
+
+  (:method ((ty1tag (eql 'or)) ty1args ty2tag ty2args)
+    (lub (construct-type ty2tag ty2args) (construct-type ty1tag ty1args)))
+
+  ;; intersection types
+  (:method (ty1tag ty1args (ty2tag (eql 'and)) ty2args)
+    (lub (construct-type ty1tag ty1args) `(or ,ty2args)))
+
+  (:method ((ty1tag (eql 'and)) ty1args ty2tag ty2args)
+    (lub (construct-type ty2tag ty2args) (construct-type ty1tag ty1args)))
+
+  ;; types of variables
+  (:method (ty1tag ty1args (ty2tag (eql 'type-of)) ty2args)
+    (lub (construct-type ty1tag ty1args) (get-type (car ty2args))))
+
+  (:method (ty1tag ty1args (ty2tag (eql 'type-of)) ty2args)
+    (lub (construct-type ty2tag ty2args) (construct-type ty1tag ty1args)))
+
+  ;; widened types
+  (:method (ty1tag ty1args (ty2tag (eql 'widen)) ty2args)
+    (lub (construct-type ty1tag ty1args) (apply #'widen ty2args)))
+
+  (:method ((ty1tag (eql 'widen)) ty1args ty2tag ty2args)
+    (lub (construct-type ty2tag ty2args) (construct-type ty1tag ty1args))))
 
 
 (defun lub (ty &rest tys)
   "Return the least upper-bound of types TY and any further types in TYS.
 
-By default the upper bound is T, and if either is null the
-upper bound is the other. For other combinations the type tag
-is extracted and used in a call to LUB-TYPE.
-
-Type parameters are not expanded by default."
+By default the upper bound is T, and if either is null the upper bound
+is the other. All other combinations make a call to LUB-TYPE."
   (flet ((lubtype (ty1 ty2)
 	   (cond ((null ty1)
 		  ty2)
+
 		 ((null ty2)
 		  ty1)
+
+		 ((or (eql ty1 t)
+		      (eql ty2 t))
+		  t)
+
 		 (t
 		  (destructuring-bind (ty1tag ty1args)
 		      (deconstruct-type ty1)
 		    (destructuring-bind (ty2tag ty2args)
 			(deconstruct-type ty2)
-
 		      (lub-type ty1tag ty1args ty2tag ty2args)))))))
 
     (foldr #'lubtype tys ty)))
+
+
+(defun representable-type-p (ty)
+  "Tests whether TY is representable on hardware."
+  (destructuring-bind (tytag tyargs)
+      (deconstruct-type ty)
+
+    (not (or (null tytag)
+	     (eql tytag t)
+	     (and (member tytag '(unsigned-byte signed-byte))
+		  (null tyargs))))))
 
 
 (defun lurb (ty &rest tys)
@@ -222,30 +293,3 @@ upper bound."
 
 	  (error 'not-representable :type lurb
 				    :hint "Make sure types are representable")))))
-
-
-;; ---------- Type parameter expansion ----------
-
-(defgeneric expand-type-parameters (ty)
-  (:documentation "Expand any parameters in the type TY in the current environment.
-
-This expands constants that appear within type declarations,
-which always need to be statically constant.")
-  (:method (ty)
-    ty)
-  (:method ((ty list))
-    (expand-type-parameters-type (car ty) (cdr ty))))
-
-
-(defgeneric expand-type-parameters-type (ty args)
-  (:documentation "Expand any parameters in the type tag TY applied to ARGS."))
-
-
-;; ---------- Type constraints in environments ----------
-
-(defun add-type-constraint (n ty)
-  "Constraint N to have type TY.
-
-N must be in scope, but need not be in the shallowest frame of ENV."
-  (let ((constraints (variable-property n 'type-constraints :default nil)))
-    (set-variable-property n 'type-constraints (cons ty constraints))))

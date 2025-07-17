@@ -122,21 +122,62 @@
 		    '(unsigned-byte 32))))
 
 
+
+
+(defmethod resolve-type-constraints-sexp ((fun (eql 'let)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (decls &rest body)
+      args
+    (with-local-frame decls
+      (dolist (n (vl::variables-declared-in-current-frame))
+	(let* ((constraints (vl::variable-property n 'type-constraints))
+	       (lubty (apply #'lub constraints)))
+	  (break)
+
+	  (vl::set-variable-property n 'type lubty)))
+
+      (resolve-type-constraints (vl::with-implicit-progn body)))))
+
+
+(test test-let-two-arms
+  "Test we can unify types where constraints need to propagate down the tree."
+  (let ((p (vl::expand/vl '(let (a)
+			    (let (c)
+			      (setq c (+ a 2)))
+			    (setq a 23)))))
+    (vl::typecheck p)
+    (resolve-type-constraints p)
+
+    (let ((outer (elt p 1))                  ; outer LET's decls
+	  (inner (elt (elt (elt p 2) 1) 1))) ; inner LET's decls
+      (vl::with-local-frame inner
+	(verilisp/core::current-frame)
+
+	)
+
+      )
+
+
+    )
+
+  )
+
 (test test-binders-free-variables
   "Test we can extract free variables correctly"
   (let ((p (vl::expand/vl '(let (b)
-			   (let ((a 10))
-			     (+ a b))))))
+			    (let ((a 10))
+			      (+ a b))))))
     (vl::typecheck p)
     (is (equal (vl::read-written-variables (caddr p)) ; body of the outer LET
-		   '((b) ())))
+	       '((b) ())))
 
     (is (set-equal (vl::free-variables (caddr p))
 		   '(b))))
 
   (let ((p (vl::expand/vl '(let ((a 10)
-				b)
-			   (+ a b)))))
+				 b)
+			    (+ a b)))))
     (vl::typecheck p)
     (is (set-equal (vl::free-variables p)
 		   '()))))

@@ -48,7 +48,8 @@
 		    '(unsigned-byte 25)))
   (signals (vl::not-static)
     (vl::typecheck (vl::expand/vl '(let ((a 8))
-				  (vl::make-bitfields (vl::extend-bits 0 a)))))))
+				    (setq a 8)
+				    (vl::make-bitfields (vl::extend-bits 0 a)))))))
 
 
 (test test-test-synthesise-make-bitfields

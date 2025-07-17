@@ -110,13 +110,10 @@
 	  ;; signal to allow this to be picked up
 	  (warn 'type-mismatch :expected vw
 			       :got l
-			       :hint "Width greater than base variable")
+			       :hint "Width greater than base variable"))
 
-	  ;; add a constraint
-	  (add-type-constraint var `(unsigned-byte ,l)))
-
-	;; width is the nunmber of bits extracted
-	`(unsigned-byte ,l)))))
+	;; width is the number of bits extracted
+	`(or ,tyvar (unsigned-byte ,l))))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'bref)) args)

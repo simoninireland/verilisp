@@ -89,8 +89,7 @@ The name is the first element, whether or not DECL is a list."
 	(set-variable-properties (safe-car decl)
 				 `((type (unsigned-byte ,*default-register-width*))
 				   (as register)
-				   (initial-value 0)
-				   (type-constraints (unsigned-byte ,*default-register-width*))))
+				   (initial-value 0)))
 
       (if (listp decl)
 	  ;; full declaration
@@ -100,8 +99,7 @@ The name is the first element, whether or not DECL is a list."
 
 	    (let ((type (variable-property n 'type :default nil)))
 	      ;; initial inferred type
-	      (let ((ity (if type
-			     (expand-type-parameters type)
+	      (let ((ity (or type
 
 			     ;; pick the narrowest type so it can be widened as needed
 			     '(unsigned-byte 1))))
@@ -115,15 +113,11 @@ The name is the first element, whether or not DECL is a list."
 		      ;; no type provided, infer from the value
 		      (setq ity vty)))
 
-		(if type
-		    (set-variable-property-unless-set n 'type type))
 		(set-variable-properties-unless-set n `((inferred-type ,ity)
-							(initial-value ,v)
-							(type-constraints (,ity)))))))
+							(initial-value ,v))))))
 
 	  ;; "naked" declaration
 	  (set-variable-properties-unless-set decl `((inferred-type (unsigned-byte 1))
-						     (type-constraints ((unsigned-byte 1)))
 						     (initial-value 0)))))))
 
 

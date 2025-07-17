@@ -67,19 +67,6 @@ Verilisp, but don't /require/ it."
        (setq ,place (cadr ,place))))
 
 
-(defmethod expand-type-parameters-type ((ty (eql 'array)) args)
-  (if (null args)
-      ty
-      (destructuring-bind (element-type shape)
-	  args
-
-	;; expand the embedded type parts
-	(setq element-type (expand-type-parameters element-type))
-	(setq shape (mapcar #'eval-in-static-environment shape))
-
-	`(array ,element-type ,shape))))
-
-
 (defun array-element-width (form)
   "Return the width of the elements of array constructor FORM."
   (if-let ((m (member :element-type (cdr form))))
