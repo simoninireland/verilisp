@@ -110,10 +110,15 @@
 	  ;; signal to allow this to be picked up
 	  (warn 'type-mismatch :expected vw
 			       :got l
-			       :hint "Width greater than base variable"))
+			       :hint "Width greater than base variable")
+
+	  ;; constraint the written variable to have at least L bits
+	  (destructuring-bind (read written)
+	      (read-written-variables tyvar)
+	    (add-type-constraint (car written) `(unsigned-byte ,l))))
 
 	;; width is the number of bits extracted
-	`(or ,tyvar (unsigned-byte ,l))))))
+	`(unsigned-byte ,l)))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'bref)) args)

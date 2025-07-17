@@ -78,6 +78,25 @@ The name is the first element, whether or not DECL is a list."
   (safe-car decl))
 
 
+(defmethod apply-type-constraints-sexp ((fun (eql 'let)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (decls &rest body)
+      args
+    (with-local-frame decls
+      (dolist (n (variables-declared-in-current-frame))
+
+	;; constrain the variable's type (which must be representable)
+	(let* ((constraints (get-type-constraints n))
+	       (lurbty (apply #'lurb constraints)))
+
+	  ;; update the type with the constrained type
+	  (set-variable-property n 'type lurbty)))
+
+      ;; cascade into the body
+      (apply-type-constraints (with-implicit-progn body)))))
+
+
 (defun typecheck-decl (decl)
   "Extend global environment with the variable declared in DECL."
   (declare (optimize debug))
@@ -87,7 +106,7 @@ The name is the first element, whether or not DECL is a list."
 	;; on error, return the most general and innocuous result to
 	;; allow us to continue
 	(set-variable-properties (safe-car decl)
-				 `((type (unsigned-byte ,*default-register-width*))
+				 '((type (unsigned-byte 1))
 				   (as register)
 				   (initial-value 0)))
 
@@ -126,52 +145,6 @@ The name is the first element, whether or not DECL is a list."
   (mapc #'typecheck-decl decls))
 
 
-(defun typecheck-constraints (constraints)
-  "Return the type satifying CONSTRAINTS.
-
-Each constraint is a type needed by some operation in the scope of a
-variable. The inferred type is the widest type (least upper-bound)
-that can accommodate all these constraints, assuming that there is
-one.
-
-The resulting type must be representable."
-  (foldr #'lurb constraints nil))
-
-
-(defun typecheck-infer-decl (decl)
-  "Update the type for DECL.
-
-This matches stated and inferred types, and updates the environment
-with the final type."
-  (declare (optimize debug))
-
-  ;; resolve type constraints
-  (let* ((n (name-in-decl decl))
-	 (constraints (variable-property n 'type-constraints))
-	 (inferred-type (typecheck-constraints constraints)))
-
-    ;; check inferred type against any explicit type
-    ;; this will signal a problem but not fail the type-checking
-    ;; pass, to allow for systems that don't care about precision
-    (if-let ((ty (variable-property n 'type :default nil)))
-      (progn
-	(ensure-subtype inferred-type ty)
-
-	;; the type we use is the one supplied
-	(setq inferred-type ty))
-
-      ;; no type provided, note that we inferred it
-      (warn 'type-inferred :variable n
-			   :inferred inferred-type))
-
-    (set-variable-property n 'type inferred-type)))
-
-
-(defun typecheck-infer-decls (decls)
-  "Infer types on all DECLS."
-  (mapc #'typecheck-infer-decl decls))
-
-
 (defmethod typecheck-sexp ((fun (eql 'let)) args)
   (declare (optimize debug))
   (let ((decls (car args))
@@ -182,10 +155,7 @@ with the final type."
 
       ;; typecheck the body
       (prog1
-	  (typecheck `(progn ,@body))
-
-	;; infer any types based on constraints
-	(typecheck-infer-decls decls)))))
+	  (typecheck `(progn ,@body))))))
 
 
 ;; ---------- Dependencies ----------

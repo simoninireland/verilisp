@@ -38,13 +38,9 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
   (declare (optimize debug))
 
   (let ((tys (mapcar #'typecheck args)))
-    (dolist (ty tys)
-      (ensure-fixed-width ty))
-
-    ;; find the LUB and then widen it appropriately
-    (let ((lubty (apply #'lub tys))
-	  (w (1- (length args))))
-      `(widen ,lubty ,w))))
+    ;; return a widen type
+    (let ((w (1- (length args))))
+      `(widen (or ,@tys) ,w))))
 
 
 (defun fold-constant-expressions-addition (fun args)
@@ -70,6 +66,12 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 	  (if (= total 0)
 	      `(,fun ,@remaining)
 	      `(,fun ,total ,@remaining ))))))
+
+
+(defmethod apply-type-constraints ((fun (eql '+)) args)
+  (dolist (ty tys)
+    (ensure-fixed-width ty)))
+
 
 (defmethod typecheck-sexp ((fun (eql '+)) args)
   (typecheck-addition args))

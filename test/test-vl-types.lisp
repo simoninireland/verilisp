@@ -162,14 +162,14 @@
   (is (vl::subtype-p '(or unsigned-byte signed-byte) 'signed-byte))
   (is (vl::subtype-p '(or (unsigned-byte 8) (unsigned-byte 12)) '(unsigned-byte 16)))
   (is (vl::subtype-p '(or bit (unsigned-byte 8)) '(unsigned-byte 12)))
+  (is (not (vl::subtype-p '(or (unsigned-byte 12) (unsigned-byte 8)) 'bit)))
 
-  ;; intersection types
-  (is (vl::subtype-p 'unsigned-byte '(and unsigned-byte signed-byte)))
-  (is (not (vl::subtype-p 'signed-byte '(and unsigned-byte signed-byte))))
-  (is (not (vl::subtype-p '(signed-byte 8) '(and bit (signed-byte 8)))))
-  (is (vl::subtype-p 'bit '(and bit (signed-byte 8))))
-  (is (vl::subtype-p 'bit '(and bit (unsigned-byte 8))))
-  (is (vl::subtype-p '(and (unsigned-byte 8) (signed-byte 8)) '(signed-byte 9))))
+  ;; type-of types
+  ;TODO:
+
+  ;; widen types
+  ;TODO:
+  )
 
 
 ;; ---------- Least upper-bounds of types ----------

@@ -56,10 +56,18 @@ isn't declared."
 
     (let ((tyvar (typecheck n))
 	  (tyval (typecheck v)))
-      ;;(ensure-subtype tyval tyvar)
-      (ensure-writeable n)
-      ;;(add-type-constraint n tyval)
+      (add-type-constraint n tyval)
       tyval)))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'setq)) args)
+  (destructuring-bind (n v &key sync)
+      args
+    (ensure-writeable n)
+
+    (let ((tyvar (typecheck n))
+	  (tyval (typecheck v)))
+      (ensure-subtype tyval tyvar))))
 
 
 (defmethod read-written-variables-sexp ((fun (eql 'setq)) args)
