@@ -8,14 +8,7 @@ Top-level compiler functions
 
 The compiler exposes four top-level functions:
 
-
 .. cl:function:: expand/vl
-
-
-.. cl:function:: typecheck/vl
-
-
-.. cl:function:: restructure/vl
 
 
 .. cl:function:: synthesise/vl
