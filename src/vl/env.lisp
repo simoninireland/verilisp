@@ -195,6 +195,16 @@ An UNKNOWN-VARIABLE error is signalled if N is undefined."
 	(error 'unknown-variable :variable n))))
 
 
+(defun forget-frame-variable (n env)
+  "Forget the declaration of NAME in the shallowest frame of ENV."
+  (unless (variable-declared-in-frame-p n env)
+    (error 'unknown-variable :variable n))
+
+  (setf (decls env) (remove-if (lambda (m)
+				 (eql (car m) n))
+			       (decls env))))
+
+
 ;; ---------- Environments ----------
 
 (defun get-environment-properties (n env)
@@ -275,6 +285,11 @@ Signals a DUPLICATE-VARIABLE error if the variable already exists in this frame.
   env)
 
 
+(defun forget-environment-variable (name env)
+  "Forget the definition of NAME in ENV."
+  (forget-frame-variable name (get-frame-declaring name env)))
+
+
 (defun add-frame-to-environment (f env &optional at-start)
   "Add all entries from F to ENV.
 
@@ -294,6 +309,22 @@ Return ENV."
   env)
 
 
+(defun filter-frame (pred env)
+  "Return a frame  containing all entries in the shallowest frame of ENV matching PRED.
+
+PRED should be a predicate taking a name and the environment with the
+frame containing that name."
+  (let ((retained (remove-if-not (lambda (n)
+				   (funcall pred n env))
+				 (get-frame-names env)))
+	(fenv (make-frame)))
+
+    (dolist (n retained)
+      (declare-environment-variable n (get-frame-properties n env) fenv))
+
+    fenv))
+
+
 (defun filter-environment (pred env)
   "Return an environment containing all the entries of ENV matching PRED.
 
@@ -304,13 +335,9 @@ will return the correct value for that variable at that depth)."
 	     (if (null l)
 		 nil
 
-		 (let ((retained (remove-if-not (lambda (n)
-						  (funcall pred n l))
-						(get-frame-names l)))
-		       (fenv (make-instance 'frame :parent (descend-env (parent-frame l)))))
-		   (mapc (lambda (n)
-			   (declare-environment-variable n (get-frame-properties n l) fenv))
-			 retained)
+		 (let ((fenv (filter-frame pred l))
+		       (penv (descend-env (parent-frame l))))
+		   (setf (parent-frame fenv) penv)
 		   fenv))))
 
     (descend-env env)))

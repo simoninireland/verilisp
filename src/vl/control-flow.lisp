@@ -23,28 +23,36 @@
 
 ;; ---------- PROGN ----------
 
-(defmethod typecheck-sexp ((fun (eql 'progn)) args)
+(defmethod compute-type-sexp ((fun (eql 'progn)) args)
   (declare (optimize debug))
 
-  (labels ((typecheck-forms (forms)
+  (labels ((compute-type-forms (forms)
 	     (declare (optimize debug))
 
 	     (let ((ty (with-recover-on-error
 			   t
 			 (with-current-form (car forms)
-			   (typecheck (car forms))))))
+			   (compute-type (car forms))))))
 
 	       (if (null (cdr forms))
 		   ;; if we're the last form, return the type
 		   ty
 
 		   ;; otherwise proceed to the next forms
-		   (typecheck-forms (cdr forms))))))
+		   (compute-type-forms (cdr forms))))))
 
     (when (= (length args) 0)
       (error 'not-synthesisable :hint "Make sure body is not empty"))
 
-    (typecheck-forms args)))
+    (compute-type-forms args)))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'progn)) args)
+  (dolist (form args)
+    (with-recover-on-error
+	;; ignore any errors
+	t
+      (apply-type-constraints form))))
 
 
 (defun simplify-progn-body (body)
@@ -81,7 +89,7 @@ block, and are represented by the symbol *."
        (eql (car form) '*)))
 
 
-(defmethod typecheck-sexp ((fun (eql '@)) args)
+(defmethod compute-type-sexp ((fun (eql '@)) args)
   (destructuring-bind (sensitivities &rest body)
       args
     ;; We accept single variables or lists of variables as senasitivity,
@@ -91,7 +99,7 @@ block, and are represented by the symbol *."
     ;;
     ;; These checks actually need to be slightly different, to make
     ;; sure we identify something with wires and not just a value.
-    ;; That's not quite "typechecking" in the sense we use it.
+    ;; That's not quite "compute-type-ing" in the sense we use it.
     (if (listp sensitivities)
 	(cond ((combinatorial-trigger-p sensitivities)
 	       ;; sensitive to everything
@@ -99,27 +107,21 @@ block, and are represented by the symbol *."
 
 	      ((edge-trigger-p sensitivities)
 	       ;; a single instance of a trigger operator
-	       (typecheck sensitivities))
+	       (compute-type sensitivities))
 
 	      (t
 	       ;; a list of sensitivities
 	       (dolist (s sensitivities)
-		 (typecheck s))))
+		 (compute-type s))))
 
 	;; an atom
-	(typecheck sensitivities))
+	(compute-type sensitivities))
 
     ;; check the body in the outer environment
-    (typecheck (with-implicit-progn body))))
+    (compute-type (with-implicit-progn body))))
 
 
-(defmethod dependencies-sexp ((fun (eql '@)) args)
-  (destructuring-bind (sensitivities &rest body)
-      args
-    (dependencies (with-implicit-progn body))))
-
-
-(defmethod read-written-variables-sexp ((fun (eql '@)) args)
+(defmethod read-variables-sexp ((fun (eql '@)) args)
   (declare (optimize debug))
 
   (destructuring-bind (sensitivities &rest body)
@@ -127,24 +129,22 @@ block, and are represented by the symbol *."
     (let ((s-rws (if (listp sensitivities)
 		     (cond ((combinatorial-trigger-p sensitivities)
 			    ;; sensitive to everything
-			    '(() ()))
+			    '())
 
 			   ((edge-trigger-p sensitivities)
 			    ;; a single instance of a trigger operator
-			    (read-written-variables sensitivities))
+			    (read-variables sensitivities))
 
 			   (t
 			    ;; a list of sensitivities
-			    (merge-read-written-variables sensitivities)))
+			    (foldr #'union (mapcar #'read-variables sensitivities) '())))
+
 		     ;; an atom
-		     (read-written-variables sensitivities)))
-	  (v-rws (merge-read-written-variables args)))
+		     (read-variables sensitivities)))
+	  (v-rws (read-variables (with-implicit-tagbody body))))
 
       ;; remove any global sensitivity
-      (union2 (list (set-difference (car s-rws)
-				    (list '*))
-		    (cadr s-rws))
-	      v-rws))))
+      (union (set-difference s-rws (list '*)) v-rws))))
 
 
 (defmethod simplify-progn-sexp ((fun (eql '@)) args)
@@ -188,10 +188,10 @@ block, and are represented by the symbol *."
        (member (car form) '(posedge negedge))))
 
 
-(defmethod typecheck-sexp ((fun (eql 'posedge)) args)
+(defmethod compute-type-sexp ((fun (eql 'posedge)) args)
   (destructuring-bind (pin)
       args
-    (let ((ty (typecheck pin)))
+    (let ((ty (compute-type pin)))
       (ensure-subtype ty '(unsigned-byte 1))
       ty)))
 
@@ -204,10 +204,10 @@ block, and are represented by the symbol *."
     (as-literal ")")))
 
 
-(defmethod typecheck-sexp ((fun (eql 'negedge)) args)
+(defmethod compute-type-sexp ((fun (eql 'negedge)) args)
   (destructuring-bind (pin)
       args
-    (let ((ty (typecheck pin)))
+    (let ((ty (compute-type pin)))
       (ensure-subtype ty '(unsigned-byte 1))
       ty)))
 

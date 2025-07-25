@@ -23,20 +23,26 @@
 
 ;; ---------- if ----------
 
-(defmethod typecheck-sexp ((fun (eql 'if)) args)
+(defmethod compute-type-sexp ((fun (eql 'if)) args)
   (destructuring-bind (condition then &rest else)
       args
-    (let ((tycond (typecheck condition))
-	  (tythen (typecheck then))
+    (let ((tycond (compute-type condition))
+	  (tythen (compute-type then))
 	  (tyelse (if else
-		      (typecheck `(progn ,@else)))))
-      (ensure-boolean tycond)
+		      (compute-type (with-implicit-progn else)))))
 
       ;; the type of the expression is the widest of the
       ;; types of the two arms
       (if else
-	  (lurb tythen tyelse)   ; largest representable type
+	  `(or ,tythen ,tyelse)
 	  tythen))))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'if)) args)
+  (destructuring-bind (condition then &rest else)
+      args
+    (let ((tycond (compute-type condition)))
+      (ensure-boolean tycond))))
 
 
 (defun synthesise-if-expression (form)
@@ -110,7 +116,7 @@
 
 ;; ---------- case ----------
 
-(defun typecheck-clause (clause ty)
+(defun compute-type-clause (clause ty)
   "Typecheck case CLAUSE.
 
 The value of the clause should have a type compatible with TY.
@@ -118,26 +124,26 @@ Return the type of the clause body."
   (destructuring-bind (val &rest body)
       clause
     (if (not (eql val 't))
-	(let ((tyval (typecheck val)))
+	(let ((tyval (compute-type val)))
 	  (ensure-subtype tyval ty)))
-    (typecheck (cons 'progn body))))
+    (compute-type (cons 'progn body))))
 
 
-(defun typecheck-clauses (clauses ty)
+(defun compute-type-clauses (clauses ty)
   "Typecheck case CLAUSES.
 
 The clauses' test values should be compatible with TY.
 The type is the lub of the clause types."
   (foldr (lambda (tyl clause)
-	   (lub tyl (typecheck-clause clause ty)))
+	   (lub tyl (compute-type-clause clause ty)))
 	 clauses nil))
 
 
-(defmethod typecheck-sexp ((fun (eql 'case)) args)
+(defmethod compute-type-sexp ((fun (eql 'case)) args)
   (destructuring-bind (condition &rest clauses)
       args
-    (let ((ty (typecheck condition)))
-      (typecheck-clauses clauses ty))))
+    (let ((ty (compute-type condition)))
+      (compute-type-clauses clauses ty))))
 
 
 (defun synthesise-clause (clause)

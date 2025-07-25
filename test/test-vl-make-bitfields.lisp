@@ -44,8 +44,16 @@
 						  (vl::make-bitfields (vl::extend-bits a 5)))))
 		    '(unsigned-byte 20)))
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 8))
-						  (vl::make-bitfields (vl::extend-bits (+ a 9) 5)))))
+						     (vl::make-bitfields (vl::extend-bits (+ a 9) 5)))))
 		    '(unsigned-byte 25)))
+
+  ;; in this case the repeat is a constant
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 8))
+						     (declare (as vl::constant a))
+						     (vl::make-bitfields (vl::extend-bits 0 a)))))
+		     '(unsigned-byte 8)))
+
+  ;; ... but in this case it isn't
   (signals (vl::not-static)
     (vl::typecheck (vl::expand/vl '(let ((a 8))
 				    (setq a 8)
@@ -62,4 +70,4 @@
 				b)
 			   (setq b (vl::make-bitfields (vl::extend-bits a 5)))))))
     (vl::typecheck p)
-    (vl::synthesise p)))
+    (is (vl::synthesise p))))

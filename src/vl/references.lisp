@@ -20,16 +20,14 @@
 (in-package :verilisp/core)
 
 
-(defmethod typecheck ((form symbol))
-  `(type-of ,form))
+(defmethod compute-type ((form symbol))
+  (let ((f (get-frame-declaring form (current-frame))))
+    (or (get-frame-property form 'type f :default nil)
+	`(type-of ,form ,f))))
 
 
-(defmethod dependencies ((form symbol))
-  nil)
-
-
-(defmethod read-written-variables ((form symbol))
-  (list (list form) '()))
+(defmethod read-variables ((form symbol))
+  (list form))
 
 
 (defmethod float-let-blocks ((form symbol))

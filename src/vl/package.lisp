@@ -83,6 +83,7 @@
    #:posedge
    #:negedge
    #:bref
+   #:if-let-bitfields
    #:with-bitfields
    #:make-bitfields
    #:extend-bits
@@ -112,8 +113,7 @@
    #:add-frames
    #:declare-annotation
    #:typecheck
-   #:free-variables
-   #:read-written-variables
+   #:read-variables
    #:infer-representation
    #:rewrite-variables
    #:float-let-blocks
@@ -159,6 +159,7 @@
    #:coercion-mismatch
    #:precision-mismatch
    #:bitfield-mismatch
+   #:module-mismatch
    #:shape-mismatch
    #:state-machine-mismatch
    #:unreachable-code

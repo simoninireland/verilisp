@@ -190,6 +190,21 @@ This means that the required module isn't available, either having not yet
 been defined or not having been imported."))
 
 
+(define-condition module-mismatch (vl-error)
+  ((modname
+    :documentation "The module."
+    :initarg :module
+    :reader module))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Can't instanciate ~s"
+					       (module c))
+				       c str)))
+  (:documentation "Condition signalled when a module can't be instanciated.
+
+This means there's a parameter mismatch in terms of unrecognised arguments
+or duplicates. It isn't signalled for type errors."))
+
+
 (define-condition unknown-state (vl-error)
   ((label
     :documentation "The state label."
@@ -266,11 +281,11 @@ being provided in the import or one that's needed not being provided."))
 	     (format-condition-context "Expression is not static" c str)))
   (:documentation "Condition signalled when an expression isn't static.
 
-Some prts of a program need to be known at compile-time, and so can't
+Some parts of a program need to be known at compile-time, and so can't
 include terms that are only known at run-time."))
 
 
-(define-condition value-mismatch (vl-condition)
+(define-condition value-mismatch (vl-error)
   ((expected
     :documentation "The values allowed."
     :initarg :expected

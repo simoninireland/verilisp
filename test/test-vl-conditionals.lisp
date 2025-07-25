@@ -88,12 +88,13 @@ q
     (vl::declare-variable 'd '((type (unsigned-byte 8))
 			       (initial-value 0)))
 
-    (vl::expand/vl '(if (> a 1)
-		    (setq a b)
-		    (setq a c)))
+    (let ((p (vl::expand/vl '(if (> a 1)
+			      (setq a b)
+			      (setq a c)))))
+      (vl::typecheck p)
 
-    (is (set-equal (vl::variable-property 'a 'depends-on)
-		   '(b c)))))
+      (is (set-equal (vl::variable-property 'a 'depends-on)
+		     '(b c))))))
 
 
 ;; ---------- Multi-armed value comparisons (CASE) ----------
@@ -196,17 +197,19 @@ q
 			       (initial-value 45)))
     (vl::declare-variable 'd '((type (unsigned-byte 8))
 			       (initial-value 0)))
-    (vl::expand/vl  '(case (+ a 1)
-		     (1
-		      (setq b c))
-		     (2
-		      (setq b a))
-		     (t
-		      (setq a d))))
 
-    (is (set-equal (vl::variable-property 'a 'depends-on)
-		   '(d)))
-    (is (set-equal (vl::variable-property 'b 'depends-on)
-		   '(c a)))
-    (is (null (vl::variable-property 'c 'depends-on)))
-    (is (null (vl::variable-property 'd 'depends-on)))))
+    (let ((p (vl::expand/vl  '(case (+ a 1)
+			       (1
+				(setq b c))
+			       (2
+				(setq b a))
+			       (t
+				(setq a d))))))
+      (vl::typecheck p)
+
+      (is (set-equal (vl::variable-property 'a 'depends-on)
+		     '(d)))
+      (is (set-equal (vl::variable-property 'b 'depends-on)
+		     '(c a)))
+      (is (null (vl::variable-property 'c 'depends-on)))
+      (is (null (vl::variable-property 'd 'depends-on))))))

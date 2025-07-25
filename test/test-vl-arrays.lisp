@@ -125,8 +125,8 @@
 			    (setf (vl::bref (aref a 8) 3 :end 0)
 			     (vl::bref (aref a 0) 3 :end 0))))))
 
-    (is (vl::subtype-p (vl::typecheck p)
-		       '(unsigned-byte 32)))))
+    (is (vl:subtype-p (vl::typecheck p)
+		      '(unsigned-byte 4)))))
 
 
 (test test-synthesise-aref-simple
@@ -139,6 +139,18 @@
     (is (vl::synthesise p))))
 
 
+(test test-array-inferred
+  "Test we can infer the element type of an array."
+  (let ((p (vl::expand/vl '(let ((a (make-array '(8))))
+			    (setf (aref a 0) 254)))))
+    (vl::typecheck p)
+
+    (let ((decls (elt p 1)))
+      (with-local-frame decls
+	(is (vl:subtype-p (vl::get-type 'a)
+			  '(array (unsigned-byte 8))))))))
+
+
 ;; ---------- Generalised place ----------
 
 (test test-aref-dependencies
@@ -147,21 +159,22 @@
     (vl::declare-variable 'a '((initial-value (make-array '(16)
 					       :element-type (unsigned-byte 8)))))
     (vl::declare-variable 'b '((type (unsigned-byte 8))
-				(initial-value 24)))
+			       (initial-value 24)))
     (vl::declare-variable 'c '((type (unsigned-byte 8))
-				(initial-value 0)))
+			       (initial-value 0)))
     (vl::declare-variable 'd '((type (unsigned-byte 8))
 			       (initial-value 0)
 			       (as constant)))
 
-    (vl::expand/vl '(progn
-		     (setq b (+ (aref a 23) 19))
-		     (setq c (+ (aref a d) b))))
+    (let ((p (vl::expand/vl '(progn
+			      (setq b (+ (aref a 23) 19))
+			      (setq c (+ (aref a d) b))))))
+      (vl::typecheck p)
 
-    (is (set-equal (vl::variable-property 'b 'depends-on)
-		   '(a)))
-    (is (set-equal (vl::variable-property 'c 'depends-on)
-		   '(a b)))))
+      (is (set-equal (vl::variable-property 'b 'depends-on)
+		     '(a)))
+      (is (set-equal (vl::variable-property 'c 'depends-on)
+		     '(a d b))))))
 
 
 (test test-aref-target
@@ -174,22 +187,24 @@
     (vl::declare-variable 'c '((type (unsigned-byte 8))
 			       (initial-value 0)))
 
-    (vl::expand/vl '(setq (aref a 1) b))
-    (is (set-equal (vl::variable-property 'a 'depends-on)
-		   '(b)))
-    (is (null (vl::variable-property 'b 'depends-on)))
+    (let ((p (vl::expand/vl '(setf (aref a 1) b))))
+      (vl::typecheck p)
 
-    (vl::expand/vl '(setq (aref a 1) (aref a c)))
-    (is (set-equal (vl::variable-property 'a 'depends-on)
-		   '(a b c))) ; b from the previous form
+      (is (set-equal (vl::variable-property 'a 'depends-on)
+		     '(b)))
+      (is (null (vl::variable-property 'b 'depends-on))))
 
-    (let ((rws (vl::read-written-variables '(setq (aref a 1) b))))
-      (is (set-equal (car rws) '(b)))
-      (is (set-equal (cadr rws) '(a))))
+    (let ((p (vl::expand/vl '(setf (aref a 1) (aref a c)))))
+      (vl::typecheck p)
 
-	(let ((rws (vl::read-written-variables '(setq (aref a 1) (aref a c)))))
-      (is (set-equal (car rws) '(a c)))
-      (is (set-equal (cadr rws) '(a))))))
+      (is (set-equal (vl::variable-property 'a 'depends-on)
+		     '(a b c)))) ; b from the previous form
+
+    (let ((rws (vl::read-variables '(setf (aref a 1) b))))
+      (is (set-equal rws '(b))))
+
+    (let ((rws (vl::read-variables '(setf (aref a 1) (aref a c)))))
+      (is (set-equal rws '(a c))))))
 
 
 ;; ---------- Initialisation ----------

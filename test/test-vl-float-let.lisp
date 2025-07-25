@@ -26,9 +26,10 @@
   (let ((p (vl::expand/vl '(let ((a 1))
 			    (declare (width 8 a))
 			    (setq a 12)
-			   (let ((b (+ a 1)))
-			     (setq a (+ a b)))))))
+			    (let ((b (+ a 1)))
+			      (setq a (+ a b)))))))
     (vl::typecheck p)
+
     (destructuring-bind (form env)
 	(vl::float-let-blocks p)
       (is (set-equal (vl::get-environment-names env)

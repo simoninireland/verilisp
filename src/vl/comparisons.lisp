@@ -29,11 +29,11 @@ in many applications."
 
 ;; ---------- Equality and inequality ----------
 
-(defmethod typecheck-sexp ((fun (eql '=)) args)
+(defmethod compute-type-sexp ((fun (eql '=)) args)
   (destructuring-bind (l r)
       args
-    (let ((ty1 (typecheck l))
-	  (ty2 (typecheck r)))
+    (let ((ty1 (compute-type l))
+	  (ty2 (compute-type r)))
       (ensure-subtype ty2 ty1))
 
     '(unsigned-byte 1)))
@@ -49,11 +49,11 @@ in many applications."
     (as-literal ")")))
 
 
-(defmethod typecheck-sexp ((fun (eql '/=)) args)
+(defmethod compute-type-sexp ((fun (eql '/=)) args)
   (destructuring-bind (l r)
       args
-    (let ((ty1 (typecheck l))
-	  (ty2 (typecheck r)))
+    (let ((ty1 (compute-type l))
+	  (ty2 (compute-type r)))
        (ensure-subtype ty2 ty1))
 
     '(unsigned-byte 1)))
@@ -71,10 +71,10 @@ in many applications."
 
 ;; ---------- Assertedness ----------
 
-(defmethod typecheck-sexp ((fun (eql 'asserted-p)) args)
+(defmethod compute-type-sexp ((fun (eql 'asserted-p)) args)
   (destructuring-bind (v)
       args
-    (let ((ty (typecheck v)))
+    (let ((ty (compute-type v)))
       '(unsigned-byte 1))))
 
 
@@ -88,11 +88,11 @@ in many applications."
 
 ;; ---------- Maths ----------
 
-(defmethod typecheck-sexp ((fun (eql '<)) args)
+(defmethod compute-type-sexp ((fun (eql '<)) args)
   (destructuring-bind (l r)
       args
-    (ensure-fixed-width (typecheck l))
-    (ensure-fixed-width (typecheck r))
+    (ensure-fixed-width (compute-type l))
+    (ensure-fixed-width (compute-type r))
 
     '(unsigned-byte 1)))
 
@@ -107,11 +107,11 @@ in many applications."
     (as-literal ")")))
 
 
-(defmethod typecheck-sexp ((fun (eql '>)) args)
+(defmethod compute-type-sexp ((fun (eql '>)) args)
   (destructuring-bind (l r)
       args
-    (ensure-fixed-width (typecheck l))
-    (ensure-fixed-width (typecheck r))
+    (ensure-fixed-width (compute-type l))
+    (ensure-fixed-width (compute-type r))
 
     '(unsigned-byte 1)))
 
@@ -126,11 +126,11 @@ in many applications."
     (as-literal ")")))
 
 
-(defmethod typecheck-sexp ((fun (eql '<=)) args)
+(defmethod compute-type-sexp ((fun (eql '<=)) args)
   (destructuring-bind (l r)
       args
-    (ensure-fixed-width (typecheck l))
-    (ensure-fixed-width (typecheck r))
+    (ensure-fixed-width (compute-type l))
+    (ensure-fixed-width (compute-type r))
 
     '(unsigned-byte 1)))
 
@@ -145,11 +145,11 @@ in many applications."
     (as-literal ")")))
 
 
-(defmethod typecheck-sexp ((fun (eql '>=)) args)
+(defmethod compute-type-sexp ((fun (eql '>=)) args)
   (destructuring-bind (l r)
       args
-    (ensure-fixed-width (typecheck l))
-    (ensure-fixed-width (typecheck r))
+    (ensure-fixed-width (compute-type l))
+    (ensure-fixed-width (compute-type r))
 
     '(unsigned-byte 1)))
 

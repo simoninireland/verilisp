@@ -107,9 +107,48 @@
 				     (declare (type (unsigned-byte 6) ctrl)
 					      (type bit a))
 
-				     (vl::with-bitfields (a b c
-							    d e f)
+				     (vl::with-bitfields (a b c d e f)
 					 ctrl
 				       (setf a d)))))))
-    (is (vl::subtype-p (vl::typecheck (vl::expand-macros-in-environment p))
-		      'vl::module-interface))))
+    (is (vl::subtype-p (vl::typecheck p)
+		      'vl::module))))
+
+
+(test test-test-wit-bitfields-fixed
+  "Test we can generate code for fixed bits."
+  ;; just test for code generated, ignore the details for now
+
+  ;; tests and declarations
+  (is (vl::expand/vl '(let (c)
+		       (vl::if-let-bitfields (a a a 1 0 b b b)
+			#2r10010110
+			(setf c (+ a b))
+			(setf c 0)))))
+
+  ;; declarations, no tests
+  (is (vl::expand/vl '(let (c)
+		       (vl::if-let-bitfields (a a a c c b b b)
+			#2r10010110
+			(setf c (+ a b))
+			(setf c 0)))))
+
+  ;; tests and declarations
+  (is (vl::expand/vl '(let (c)
+		       (vl::with-bitfields (a a a 1 1 b b b)
+			 #2r10010110
+			 (setf c (+ a b))
+			 (setf c 0)))))
+
+  ;; split tests and declarations
+  (is (vl::expand/vl '(let (c)
+		       (vl::with-bitfields (a a a 1 b b b 0)
+			 #2r10010110
+			 (setf c (+ a b))
+			 (setf c 0)))))
+
+  ;; tests, no declarations
+  (is (vl::expand/vl '(let (a b c)
+		       (vl::if-let-bitfields (1 0 1 1 0)
+			#2r10010110
+			(setf c (+ a b))
+			(setf c 0))))))

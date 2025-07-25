@@ -23,57 +23,30 @@
 
 ;; ---------- Free variables ----------
 
-(defgeneric read-written-variables (form)
-  (:documentation "Return all variables in FORM that are read from or written to.")
+(defgeneric read-variables (form)
+  (:documentation "Return all variables in FORM that are read from.")
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
-      (read-written-variables-sexp fun args))))
+      (read-variables-sexp fun args))))
 
 
-(defgeneric read-written-variables-sexp (fun args)
-  (:documentation "Return all variables that are read or written in FUN applied to ARGS.
+(defgeneric read-variables-sexp (fun args)
+  (:documentation "Return all variables that are read in FUN applied to ARGS.
 
-Methods on this functon should return a pair of sets consisting of the
-variables that could be read and the variables that could be updated
-in the form. The union of these two sets are the free variables in the
-form.
-
-Whether or not variables *are* updated may depend on the context of
-the form. In contexts where there are no writes, use
-MERGE-ALL-VARIABLES-AS-READ to merge read and written.
+Methods on this functon should return a set consisting of the
+variables that could be read during the evaluation of FORM.
 
 The default is to combine all the variables in the arguments.")
   (:method (fun args)
-    (merge-read-written-variables args)))
+    (foldr #'union (mapcar #'read-variables args) '())))
 
 
-(defun merge-read-written-variables (forms)
-  "Merge the read and written variables in FORMS.
+(defgeneric read-variables-sexp-setf (selector val selectorargs)
+  (:documentation "Return all variables that are read in an assignment..
 
-This folds READ-WRITTEN-VARIABLES across FORMS, taking care
-of unioning in the presence of nulls."
-  (foldr #'union2
-	 (remove-nulls (mapcar #'read-written-variables forms))
-	 '(() ())))
-
-
-(defun merge-all-variables-as-read (rws)
-  "Merge the read and written variables in RWS to be all written."
-  (destructuring-bind (rs ws)
-      rws
-    (list (union rs ws)
-	  '())))
-
-
-(defun free-variables (form)
-  "Return all free variables in FORM.
-
-The free variables are simply the union of the read and written
-variables as computed by READ-WRITTEN-VARIABLES."
-  (destructuring-bind (read written)
-      (read-written-variables form)
-    (union read written)))
+Methods on this function should return a set consisting of the
+variables that could be read while using FORM as a generalised place."))
 
 
 ;; ---------- Variable re-writing ----------
@@ -161,7 +134,7 @@ environment, and to add and access properties of those variables.
 The way the frame is stored is not specified, but the functions
 ADD-FRAMES-TO-DECLS and GET-LOCAL-FRAME-AND-DECLS pefrom adding
 and accessing by extending the list of declarations found in LET and
-MODULE forms. The WITH-LOCAL-FRAME macro an then be used to apply
+MODULE forms. The WITH-LOCAL-FRAME macro can then be used to apply
 the frame automatically in other methods.")
   (:method (fun args)
     `(,fun ,@(mapcar #'add-frames args))))
@@ -172,34 +145,16 @@ the frame automatically in other methods.")
 
 A new, empty, frame is added if F is omitted.
 
-Each decl in DECLS should either be a symbol or a list whose head is a
-symbol. Any keywords or lambda-list decorators are ignored.The frame
-is populated with the names, with no properties.
-
 Return the new decls. If DECLS was originally NULL, this will be
 a new list containing just the frame; if not, then the frame will have
 been added to the end destructively."
-  (if (null decls)
+   (if (null decls)
       ;; no decls, return a new list
       (setf decls (list (list 'local-frame f)))
 
-      (progn
-	;; existing decls, append the frame with initial
-	;; value if there is one
-	(mapc (lambda (decl)
-		(if (listp decl)
-		    ;; declare name and initial value
-		    (destructuring-bind (n v)
-			decl
-		      (declare-environment-variable n `((initial-value ,v)) f))
+      ;; existing decls, add frame as a new decl
+      (setf (cdr (last decls)) (list (list 'local-frame f))))
 
-		    ;; declare just name
-		    (declare-environment-variable decl '() f)))
-	      decls)
-
-	(setf (cdr (last decls)) (list (list 'local-frame f)))))
-
-  ;; return the decls
   decls)
 
 
@@ -221,6 +176,14 @@ been added to the end destructively."
       ;; return local frame as a singleton, followed by the "real" decls
       (let ((f (cadr (caar f-decls))))
 	(cons f (list (cadr f-decls)))))))
+
+
+(defun get-local-frame (decls)
+  "Retrieve the local frame from DECLS."
+  (if-let ((m (assoc 'local-frame decls)))
+    (cadr m)
+
+    (error "No local frame?")))
 
 
 (defmacro with-local-frame (decls &body body)
@@ -267,25 +230,41 @@ upon FUN.")
     (mapc #'apply-type-constraints args)))
 
 
-(defgeneric typecheck (form)
-  (:documentation "Type-check FORM in the current global environment.")
+(defgeneric compute-type (form)
+  (:documentation "Compute the type of FORM.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
       (with-unknown-forms
 	(with-current-form form
-	  (typecheck-sexp fun args))))))
+	  (compute-type-sexp fun args))))))
 
 
-(defgeneric typecheck-sexp (fun args)
-  (:documentation "Type-check the application of FUN to ARGS in the global environment."))
+(defgeneric compute-type-sexp (fun args)
+  (:documentation "Compute the type of the application of FUN to ARGS."))
 
 
-(defgeneric typecheck-sexp-setf (selector val selectorargs &key sync)
-  (:documentation "Type-check a SETF form allowing generalised places.
+(defgeneric compute-type-sexp-setf (selector val selectorargs)
+  (:documentation "Compute the type of a SETF form allowing generalised places.
 
 This matches a form (SETF (SELECTOR SELECTORARGS) VAL) and allows
 different selectors to be used as generalised places."))
+
+
+(defun typecheck (form)
+  "Perform a typechecking pass over FORM.
+
+This extracts types and applies any constraints needed to infer the
+types of variables."
+  (let ((ty (compute-type form)))
+
+    ;; check any remaining constraints after inference
+    (apply-type-constraints form)
+
+    ;; infer representations on the tree
+    (infer-representation form)
+
+    ty))
 
 
 ;; ---------- Generalised places ----------
@@ -318,28 +297,16 @@ Usually this will only involve examining SELECTOR.")
 
 ;; ---------- Dependencies ----------
 
-(defgeneric dependencies (form)
-  (:documentation "Find all the depenencies in FORM.
+(defun add-dependencies (n deps)
+  "Add variables DEPS as dependencies for N.
 
-The DEPENDS-ON property of a variable takes all the other variables
-whose values affect it. The READ property is set to T if the variable
- is ever read; the WRITTEN property is set if the variable is ever
-updated over its lifetime. These are used to infer representations.")
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (with-unknown-forms
-	(with-current-form form
-	  (dependencies-sexp fun args))))))
+A dependency is a variable that's read in assigning values to N."
+  (let ((old-deps (variable-property n 'depends-on)))
+    (set-variable-property n 'depends-on (union deps old-deps)))
 
-
-(defgeneric dependencies-sexp (fun args)
-  (:documentation "Find the dependencies of FUN applied to ARGS.
-
-Methods on this function should be built for each operator that makes
-and assignment, to capture the dataflow.")
-  (:method (fun args)
-    (mapc #'dependencies args)))
+  ;; any variables we depend on are read by definition
+  (dolist (m deps)
+    (set-variable-property m 'read t)))
 
 
 (defun traverse-dependencies (ns)

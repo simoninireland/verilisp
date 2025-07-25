@@ -49,32 +49,42 @@
 		    '(unsigned-byte 2)))
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
 						     (declare (width 8 a))
-						     (bref a 7))))
+						     (bref a 7 :end 0))))
 		    '(unsigned-byte 8)))
 
-  ;; matching and non-matching explicit widths
-  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
-						  (bref a 4 :end 2 :width 3))))
-		    '(unsigned-byte 3)))
-  (signals (vl::type-mismatch)
+  ;; syntax
+  (signals (vl::syntax-error)
     (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
-				  (bref a 4 :end 2 :width 4))))))
+				  (bref a 4 :end 2 :width 4)))))
+
+  ;; non-matching explicit widths and bad ends
+  (signals (value-mismatch)
+    (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
+				    (bref a 4 :width 6)))))
+  (signals (value-mismatch)
+    (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
+						   (bref a 4 :end 6))))
+		   '(unsigned-byte 6)))
+  (signals (value-mismatch)
+    (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
+						   (bref a 4 :end -4))))
+		   '(unsigned-byte 6))))
 
 
 (test test-positive-start-end-width
   "Test that we detect non-positive values."
   (signals (vl::value-mismatch)
     (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
-				  (vl::bref a 4 :end -1)))))
+				    (vl::bref a 4 :end -1)))))
   (signals (vl::value-mismatch)
     (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
-				  (vl::bref a 4 :width -1)))))
+				    (vl::bref a 4 :width -1)))))
   (signals (vl::value-mismatch)
     (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
-				  (vl::bref a -2 :end 0)))))
+				    (vl::bref a -2 :end 0)))))
   (signals (vl::value-mismatch)
     (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
-				  (vl::bref a -2))))))
+				    (vl::bref a -2))))))
 
 
 ;; ---------- Generalised place ----------
@@ -92,23 +102,24 @@
 			       (initial-value 0)
 			       (as constant)))
 
-    (vl::expand/vl '(progn
-		     (setq a (+ (vl::bref b d :end 0) 19))
-		     (setq c a)))
+    (let ((p (vl::expand/vl '(progn
+			      (setq a (+ (vl::bref b d :end 0) 19))
+			      (setq c a)))))
+      (vl::typecheck p)
 
-    ;; not (b d) as d is a constant
-    (is (set-equal (vl::variable-property 'a 'depends-on)
-		   '(b)))
+      ;; not (b d) as d is a constant
+      (is (set-equal (vl::variable-property 'a 'depends-on)
+		     '(b)))
 
-    (is (null (vl::variable-property 'b 'depends-on)))
+      (is (null (vl::variable-property 'b 'depends-on)))
 
-    (is (set-equal (vl::variable-property 'c 'depends-on)
-		   '(a)))
+      (is (set-equal (vl::variable-property 'c 'depends-on)
+		     '(a)))
 
-    ;; not (a b d), for the same reasons as above
-    (is (set-equal (vl::traverse-dependencies 'c)
-		   '(a b)))
-    (is (null (vl::variable-property 'd 'depends-on)))))
+      ;; not (a b d), for the same reasons as above
+      (is (set-equal (vl::traverse-dependencies 'c)
+		     '(a b)))
+      (is (null (vl::variable-property 'd 'depends-on))))))
 
 
 (test test-bit-target
@@ -121,14 +132,19 @@
     (vl::declare-variable 'c '((type (unsigned-byte 8))
 			       (initial-value 0)))
 
-    (vl::expand/vl '(setf (bref a 2 :end 0) 0))
-    (is (null (vl::variable-property 'a 'depends-on)))
+    (let ((p (vl::expand/vl '(setf (bref a 2 :end 0) 0))))
+      (vl::typecheck p)
 
-    (vl::expand/vl '(setf (bref a 4 :end 2) (bref b 2 :end 0)))
-    (is (set-equal (vl::variable-property 'a 'depends-on)
-		   '(b)))
+      (is (null (vl::variable-property 'a 'depends-on))))
 
+    (let ((p (vl::expand/vl '(setf (bref a 4 :end 2) (bref b 2 :end 2)))))
+      (vl::typecheck p)
 
-    (vl::expand/vl '(setf (bref c 4 :end 2) (bref c 2 :end 0)))
-    (is (set-equal (vl::variable-property 'c 'depends-on)
-		   '(c)))))
+      (is (set-equal (vl::variable-property 'a 'depends-on)
+		     '(b))))
+
+    (let ((p (vl::expand/vl '(setf (bref c 4 :end 2) (bref c 2 :end 0)))))
+      (vl::typecheck p)
+
+      (is (set-equal (vl::variable-property 'c 'depends-on)
+		     '(c))))))

@@ -21,18 +21,6 @@
 (declaim (optimize debug))
 
 
-(defun width-can-store-p (w ty env)
-  "Test whether W bits can accommodate the values of TY in ENV."
-  (>= (eval-in-static-environment w env)
-      (eval-in-static-environment (bitwidth ty env) env)))
-
-
-(defun ensure-width-can-store (w ty env)
-  "Ensure that W bits can accommodate the values of TY in ENV."
-  (unless (width-can-store-p w ty env)
-    (warn 'width-mismatch :expected (bitwidth ty env) :got w)))
-
-
 ;; ---------- Representationa ----------
 
 (deftype representation ()
@@ -58,10 +46,31 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 
 ;; ---------- Local frames ----------
 
+(defun add-decl-to-frame (decl)
+  "Add DECL to the local frame."
+   (if (listp decl)
+       ;; declare name and initial value
+       (destructuring-bind (n v)
+	   decl
+	 (declare-variable n `((initial-value ,v))))
+
+       ;; declare just name
+       (declare-variable decl '())))
+
+
+(defun compute-let-local-frame (decls)
+  "Populate the local frame of DECLS."
+  (with-local-frame decls
+    (mapc #'add-decl-to-frame decls)))
+
+
 (defmethod add-frames-sexp ((fun (eql 'let)) args)
+  (declare (optimize debug))
+
   (destructuring-bind (decls &rest body)
       args
     (add-local-frame-to-decls decls)
+    (compute-let-local-frame decls)
 
     ;; return the form
     `(let ,decls
@@ -78,6 +87,36 @@ The name is the first element, whether or not DECL is a list."
   (safe-car decl))
 
 
+(defun compute-let-env ()
+  "Compute the types of the declarations in the current frame."
+  (dolist (n (variables-declared-in-current-frame))
+    (with-recover-on-error
+	;; leave variable alone
+	nil
+
+      ;; constrain the variable with whatever information we have
+      (let* ((v (get-initial-value n))
+	     (rvs (read-variables v))
+	     (ty (or (variable-property n 'type :default nil)
+		     (if v (compute-type v))
+		     '(unsigned-byte 1))))
+
+	(add-type-constraint n ty)
+	(add-dependencies n rvs)))))
+
+
+(defmethod compute-type-sexp ((fun (eql 'let)) args)
+  (declare (optimize debug))
+  (let ((decls (car args))
+	(body (cdr args)))
+
+    (with-local-frame decls
+      (compute-let-env)
+
+      ;; compute-type the body
+      (compute-type (with-implicit-progn body)))))
+
+
 (defmethod apply-type-constraints-sexp ((fun (eql 'let)) args)
   (declare (optimize debug))
 
@@ -85,119 +124,37 @@ The name is the first element, whether or not DECL is a list."
       args
     (with-local-frame decls
       (dolist (n (variables-declared-in-current-frame))
+	(with-recover-on-error
+	    ;; leave constraints alone on error
+	    t
 
-	;; constrain the variable's type (which must be representable)
-	(let* ((constraints (get-type-constraints n))
-	       (lurbty (apply #'lurb constraints)))
+	  ;; constrain the variable's type (which must be representable)
+	  (let* ((constraints (get-type-constraints n))
+		 (lurbty (if constraints (apply #'lub constraints))))
 
-	  ;; update the type with the constrained type
-	  (set-variable-property n 'type lurbty)))
+	    (let ((ty (get-type n)))
+	      (if ty
+		  ;; check against provided type
+		  (unless (subtype-p lurbty ty)
+		    (warn 'type-mismatch :expected ty
+					 :got lurbty
+					 :hint "Make sure explicit type matches usage"))
+
+		  ;; update the type with the constrained type
+		  (progn
+		    (set-variable-property n 'type lurbty)
+		    (setq ty lurbty)))
+
+	      ;; ensure the initial value is a valid element
+	      (if-let ((v (get-initial-value n)))
+		(progn
+		  (ensure-subtype (compute-type v) ty)
+
+		  ;; cascade into any initial values
+		  (apply-type-constraints v)))))))
 
       ;; cascade into the body
       (apply-type-constraints (with-implicit-progn body)))))
-
-
-(defun typecheck-decl (decl)
-  "Extend global environment with the variable declared in DECL."
-  (declare (optimize debug))
-
-  (with-current-form decl
-    (with-recover-on-error
-	;; on error, return the most general and innocuous result to
-	;; allow us to continue
-	(set-variable-properties (safe-car decl)
-				 '((type (unsigned-byte 1))
-				   (as register)
-				   (initial-value 0)))
-
-      (if (listp decl)
-	  ;; full declaration
-	  (destructuring-bind (n v)
-	      decl
-	    (ensure-variable-declared n)
-
-	    (let ((type (variable-property n 'type :default nil)))
-	      ;; initial inferred type
-	      (let ((ity (or type
-
-			     ;; pick the narrowest type so it can be widened as needed
-			     '(unsigned-byte 1))))
-
-		;; typecheck initial value
-		(let ((vty (typecheck v)))
-		  (if type
-		      ;; type provided, ensure it works
-		      (ensure-subtype vty type)
-
-		      ;; no type provided, infer from the value
-		      (setq ity vty)))
-
-		(set-variable-properties-unless-set n `((inferred-type ,ity)
-							(initial-value ,v))))))
-
-	  ;; "naked" declaration
-	  (set-variable-properties-unless-set decl `((inferred-type (unsigned-byte 1))
-						     (initial-value 0)))))))
-
-
-(defun typecheck-env (decls)
-  "Type-check the declarations DECLS to extend the current environment."
-  (mapc #'typecheck-decl decls))
-
-
-(defmethod typecheck-sexp ((fun (eql 'let)) args)
-  (declare (optimize debug))
-  (let ((decls (car args))
-	(body (cdr args)))
-
-    (with-local-frame decls
-      (typecheck-env decls)
-
-      ;; typecheck the body
-      (prog1
-	  (typecheck `(progn ,@body))))))
-
-
-;; ---------- Dependencies ----------
-
-(defun dependencies-decl (decl)
-  "Calculate the dependencies for DECL.
-
-The dependencies are all the other variables that appear on the
-right-hand side of an assignment."
-  (with-current-form decl
-    (with-recover-on-error
-	;; on error, leave dependencies alone
-	nil
-
-	(if (listp decl)
-	    (destructuring-bind (n v &key &allow-other-keys)
-		decl
-
-	      (let ((fvs (remove-if #'static-constant-p (free-variables v)))
-		    (depends-on (variable-property n 'depends-on :default nil)))
-		(set-variable-property n 'depends-on (union depends-on fvs))))))))
-
-
-(defmethod dependencies-sexp ((fun (eql 'let)) args)
-  (destructuring-bind (decls &rest body)
-      args
-
-    (with-local-frame decls
-      ;; add dependencies for declared variables
-      (mapc #'dependencies-decl decls)
-
-      ;; process the body in this frame, with these dependencies
-      (dependencies (with-implicit-progn body))
-
-
-      ;; mark variables as read or written
-      (destructuring-bind (read written)
-	  (read-written-variables (with-implicit-progn body))
-	(dolist (n read)
-	  (set-variable-property n 'read t))
-	(dolist (n written)
-	  (set-variable-property n 'written t))))))
 
 
 ;; ---------- Representations ----------
@@ -254,8 +211,8 @@ right-hand side of an assignment."
 	    ;; check consistency with assigned representation
 	    (if-let ((given (get-representation n)))
 	      (when (not (eql rep given))
-		(warn 'representation-mismatch :got given
-					       :expected rep
+		(warn 'representation-mismatch :got rep
+					       :expected given
 					       :hint "Make sure the explicitly-assigned representation is appropriate"))
 
 	      ;; update representation if none given
@@ -264,24 +221,7 @@ right-hand side of an assignment."
 
 ;; ---------- Free variables ----------
 
-(defun read-written-variables-decl (decl)
-  "Calculate the read and written for DECL.
-
-The free variables are all the variables that appear on the
-right-hand side of an assignment."
-  (if (listp decl)
-      (destructuring-bind (n v)
-	  decl
-	(destructuring-bind (decl-rs decl-ws)
-	    (read-written-variables v)
-
-	  (list (remove-if #'static-constant-p decl-rs)
-		decl-ws)))
-
-      '(() ())))
-
-
-(defmethod read-written-variables-sexp ((fun (eql 'let)) args)
+(defmethod read-variables-sexp ((fun (eql 'let)) args)
   (declare (optimize debug))
 
   (destructuring-bind (decls &rest body)
@@ -290,13 +230,14 @@ right-hand side of an assignment."
     (with-local-frame decls
       (let ((lns (variables-declared-in-current-frame)))
 
-	(destructuring-bind (body-rs body-ws)
-	    (merge-read-written-variables body)
-	  (destructuring-bind (decl-rs decl-ws)
-	      (foldr #'union2 (mapcar #'read-written-variables-decl decls) '(() ()))
+	;; compute read variables
+	(let ((decl-rvs (foldr #'union (mapcar #'read-variables
+					       (remove-nulls (mapcar #'get-initial-value lns)))
+			       '()))
+	      (body-rvs (read-variables (with-implicit-progn body))))
 
-	    (list (set-difference (union body-rs decl-rs) lns)
-		  (set-difference (union body-ws decl-ws) lns))))))))
+	  ;; remove any variables declared in this binder
+	  (set-difference (union decl-rvs body-rvs) lns))))))
 
 
 ;; ---------- Variable re-writing ----------
@@ -468,10 +409,10 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
     (let* ((type (get-type n))
 	   (width (if (array-type-p type)
 		      ;; width is the width of the element type
-		      (apply #'bitwidth-type (deconstruct-type (cadr type)))
+		      (bitwidth (element-type-of-array type))
 
 		      ;; width is of the type itself
-		      (apply #'bitwidth-type (deconstruct-type type)))))
+		      (bitwidth type))))
 
       (when (or (not (numberp width))
 		(> width 1))
@@ -497,10 +438,10 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
     (let* ((type (get-type n))
 	   (width (if (array-type-p type)
 		      ;; width is the width of the element type
-		      (apply #'bitwidth-type (deconstruct-type (cadr type)))
+		      (bitwidth (element-type-of-array type))
 
 		      ;; width is of the type itself
-		      (apply #'bitwidth-type (deconstruct-type type)))))
+		      (bitwidth type))))
       (as-literal "wire ")
       (when (or (not (numberp width))
 		(> width 1))
@@ -543,9 +484,7 @@ Constants turn into local parameters."
 (defun synthesise-module-instanciation (n)
   "Synthesise N as a module instanciation."
   (let ((v (get-initial-value n)))
-    (destructuring-bind (modname &rest initargs)
-	(cdr v)
-      (synthesise-module-instance n modname initargs))))
+    (synthesise v)))
 
 
 (defun synthesise-decl (decl)

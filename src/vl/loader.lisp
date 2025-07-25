@@ -111,12 +111,6 @@ of a larger compilation process."
   (let* ((expanded (expand-macros-in-environment form *macro-environment*))
 	 (framed (add-frames expanded)))
 
-    ;; add dataflow dependencies to the tree
-    (dependencies framed)
-
-    ;; infer representations on the tree
-    (infer-representation framed)
-
     framed))
 
 

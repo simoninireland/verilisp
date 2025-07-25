@@ -77,7 +77,7 @@ Return a list of lists, each element being a state label and the state body."
     (reverse (foldr #'extract-state forms '()))))
 
 
-(defmethod typecheck-sexp ((fun (eql 'tagbody)) args)
+(defmethod compute-type-sexp ((fun (eql 'tagbody)) args)
   (let* ((states (extract-states args))
 	 (state-labels (mapcar #'car states))
 	 (state-bodies (mapcar #'cadr states)))
@@ -88,28 +88,20 @@ Return a list of lists, each element being a state label and the state body."
 	(declare-variable n '((as label)
 			      (ignorable t))))
 
-      ;; typecheck the bodies
+      ;; compute-type the bodies
       (dolist (b state-bodies)
-	(typecheck (with-implicit-progn b)))
+	(compute-type (with-implicit-progn b)))
 
       ;; tagbody doesn't return a value (yet)
-      nil)))
+      t)))
 
 
-(defmethod dependencies-sexp ((fun (eql 'tagbody)) args)
+(defmethod read-variables-sexp ((fun (eql 'tagbody)) args)
   (foldr (lambda (deps form)
 	   (if (symbolp form)
 	       deps
-	       (union deps (dependencies form))))
-	 args'()))
-
-
-(defmethod read-written-variables-sexp ((fun (eql 'tagbody)) args)
-  (foldr (lambda (deps form)
-	   (if (symbolp form)
-	       deps
-	       (union2 deps (read-written-variables form))))
-	 args '(() ())))
+	       (union deps (read-variables form))))
+	 args '()))
 
 
 (defgeneric parse-tagbody-forms-sexp (fun args forms current-state exit-state)
@@ -314,25 +306,9 @@ Return a list of states created, initial state (of the path) first."
     (append states (list passive-state))))
 
 
-(defmethod dependencies-sexp ((fun (eql 'tagbody)) args)
-  (foldr (lambda (deps form)
-	   (if (symbolp form)
-	       deps
-	       (union deps (dependencies form))))
-	 args'()))
-
-
-(defmethod read-written-variables-sexp ((fun (eql 'tagbody)) args)
-  (foldr (lambda (deps form)
-	   (if (symbolp form)
-	       deps
-	       (union2 deps (read-written-variables form))))
-	 args'(() ())))
-
-
 ;; ---------- GO ----------
 
-(defmethod typecheck-sexp ((fun (eql 'go)) args)
+(defmethod compute-type-sexp ((fun (eql 'go)) args)
   (let ((label (car args)))
     ;; ensure label is in scope
     (unless (variable-declared-p label)
@@ -344,9 +320,5 @@ Return a list of states created, initial state (of the path) first."
     t))
 
 
-(defmethod dependencies-sexp ((fun (eql 'go)) args)
-  nil)
-
-
-(defmethod read-written-variables-sexp ((fun (eql 'go)) args)
-  '(() ()))
+(defmethod read-variables-sexp ((fun (eql 'go)) args)
+  '())

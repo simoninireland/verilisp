@@ -51,16 +51,16 @@ so use in later passes."))
   `(declare ,@args))
 
 
-(defmethod typecheck-sexp ((fun (eql 'declare)) args)
+(defmethod compute-type-sexp ((fun (eql 'declare)) args)
   t)
 
 
-(defmethod read-written-variables-sexp ((fun (eql 'declare)) args)
-  '(() ()))
-
-
-(defmethod dependencies-sexp ((fun (eql 'declare)) args)
+(defmethod apply-type-constraints-sexp ((fun (eql 'declare)) args)
   nil)
+
+
+(defmethod read-variables-sexp ((fun (eql 'declare)) args)
+  '())
 
 
 (defmethod synthesise-sexp ((fun (eql 'declare)) args)
@@ -72,15 +72,18 @@ so use in later passes."))
 (defmethod declare-annotation ((tag (eql 'type)) args)
   (destructuring-bind (ty &rest vars)
       args
-    (mapc (lambda (n)
-	    (set-variable-property n 'type ty))
-	  vars)))
+    (dolist (n vars)
+      ;; set the explicit type
+      (set-variable-property n 'type ty)
+
+      ;; ... and add as a constraint
+      (add-type-constraint n ty))))
 
 
 (defmethod declare-annotation ((tag (eql 'width)) args)
   (destructuring-bind (width &rest vars)
       args
-    ;; width is a shortcut for an unsigned byte type
+    ;; width is a shortcut for an unsigned-byte type
     (declare-annotation 'type (cons `(unsigned-byte ,width) vars))))
 
 

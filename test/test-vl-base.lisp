@@ -103,6 +103,28 @@
     (is (null (vl::get-frame-property 'b :c env)))))
 
 
+(test test-forget-frame
+  "Test we can forget a variable in a frame."
+  (let ((env (vl::empty-environment)))
+    (vl::declare-environment-variable 'a '((:a 1) (:b 2)) env)
+    (vl::declare-environment-variable 'b '((:a 13) (:b 24)) env)
+    (vl::declare-environment-variable 'c '((:a 3) (:b 4)) env)
+
+    (is (set-equal (vl::get-frame-names env)
+		   '(a b c)))
+
+    (vl::forget-frame-variable 'b env)
+    (is (set-equal (vl::get-frame-names env)
+		   '(a c)))
+
+    (vl::forget-frame-variable 'c env)
+    (is (set-equal (vl::get-frame-names env)
+		   '(a)))
+
+    (vl::forget-frame-variable 'a env)
+    (is (null (vl::get-frame-names env)))))
+
+
 ;; ---------- Environments ----------
 
 (test test-names
@@ -201,14 +223,16 @@
   (flet ((filter-by-f (n env)
 	   (if-let ((prop (vl::get-environment-property n :f env)))
 	     (> prop 20))))
-    (let ((env1 emptyenv))
-      (is (null (vl::get-frame-names env1)))
+
+    (let ((env1 (vl::make-frame)))
+      (vl::declare-environment-variable 'c '((:f 5)) env1)
 
       (let ((env2 (vl::add-frame env1)))
-	(is (vl::declare-environment-variable 'a '((:f 10)) env2))
-	(is (vl::declare-environment-variable 'b '((:f 30)) env2))
-	(set-equal (vl::get-frame-names (vl::filter-environment #'filter-by-f env2))
-		   '(b))))))
+	(vl::declare-environment-variable 'a '((:f 10)) env2)
+	(vl::declare-environment-variable 'b '((:f 30)) env2)
+
+	(is (set-equal (vl::get-frame-names (vl::filter-frame #'filter-by-f env2))
+		       '(b)))))))
 
 
 (test test-filter-env

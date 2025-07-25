@@ -33,14 +33,20 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 
 ;; ---------- Maths ----------
 
-(defun typecheck-addition (args)
-  "Type-check an addition or subtraction of ARGS."
-  (declare (optimize debug))
+(defun compute-type-addition (args)
+  "Compute the type of an addition or subtraction of ARGS."
+  (let ((tys (mapcar #'compute-type args))
+	(n (1- (length args))))
 
-  (let ((tys (mapcar #'typecheck args)))
-    ;; return a widen type
-    (let ((w (1- (length args))))
-      `(widen (or ,@tys) ,w))))
+    ;; type is the LUB of the arguments plus the
+    ;; extra bits required for carries between the additions
+    `(and (or ,@tys) (unsigned-byte ,n))))
+
+
+(defmethod apply-type-constraints-addition (args)
+  (let ((tys (mapcar #'compute-type args)))
+    (dolist (ty tys)
+      (ensure-fixed-width ty))))
 
 
 (defun fold-constant-expressions-addition (fun args)
@@ -68,13 +74,12 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 	      `(,fun ,total ,@remaining ))))))
 
 
-(defmethod apply-type-constraints ((fun (eql '+)) args)
-  (dolist (ty tys)
-    (ensure-fixed-width ty)))
+(defmethod compute-type-sexp ((fun (eql '+)) args)
+  (compute-type-addition args))
 
 
-(defmethod typecheck-sexp ((fun (eql '+)) args)
-  (typecheck-addition args))
+(defmethod apply-type-constraints-sexp ((fun (eql '+)) args)
+  (apply-type-constraints-addition args))
 
 
 (defmethod fold-constant-expressions-sexp ((fun (eql '+)) args)
@@ -92,16 +97,20 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
     `(+ ,@vals)))
 
 
-(defmethod typecheck-sexp ((fun (eql '-)) args)
+(defmethod compute-type-sexp ((fun (eql '-)) args)
   (if (= (length args) 1)
       ;; unary negation
-      (let ((ty (typecheck (car args))))
-	`(signed-byte ,(1+ (bitwidth ty))))
+      (let ((ty (compute-type (car args))))
+	`(signed-byte (1+ (bitwidth ',ty))))
 
       ;; general substraction
       ;; we force subtractions to be signed
-      (let ((ty (typecheck-addition args)))
-	`(signed-byte ,(bitwidth ty)))))
+      (let ((ty (compute-type-addition args)))
+	`(signed-byte (bitwidth ',ty)))))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql '-)) args)
+  (apply-type-constraints-addition args))
 
 
 (defmethod fold-constant-expressions-sexp ((fun (eql '-)) args)
@@ -143,13 +152,13 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 ;;
 ;; The result is always unsigned.
 
-(defmethod typecheck-sexp ((fun (eql '<<)) args)
+(defmethod compute-type-sexp ((fun (eql '<<)) args)
   (ensure-number-of-arguments fun args 2)
 
   (destructuring-bind (val offset)
       args
-    (let ((tyval (typecheck val))
-	  (tyoffset (typecheck offset)))
+    (let ((tyval (compute-type val))
+	  (tyoffset (compute-type offset)))
       (ensure-fixed-width tyval)
       (ensure-fixed-width tyoffset)
 
@@ -181,13 +190,13 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 
 ;; We should probably do sign extension here, like Lisp does
 
-(defmethod typecheck-sexp ((fun (eql '>>)) args)
+(defmethod compute-type-sexp ((fun (eql '>>)) args)
   (ensure-number-of-arguments fun args 2)
 
   (destructuring-bind (val offset)
       args
-    (let ((tyval (typecheck val))
-	  (tyoffset (typecheck offset)))
+    (let ((tyval (compute-type val))
+	  (tyoffset (compute-type offset)))
       (ensure-fixed-width tyval)
       (ensure-fixed-width tyoffset)
 
@@ -221,14 +230,14 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 (defun typecheck-bitwise-operator (args)
   "Typecheck the arguments ARGS to a logical operator."
   (let ((ty (foldr (lambda (ty1 arg)
-		     (lub ty1 (typecheck arg)))
+		     (lub ty1 (compute-type arg)))
 		   args nil)))
     (ensure-subtype ty 'unsigned-byte)
 
     ty))
 
 
-(defmethod typecheck-sexp ((fun (eql 'logand)) args)
+(defmethod compute-type-sexp ((fun (eql 'logand)) args)
   (typecheck-bitwise-operator args))
 
 
@@ -240,7 +249,7 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
   (as-infix '& args))
 
 
-(defmethod typecheck-sexp ((fun (eql 'logior)) args)
+(defmethod compute-type-sexp ((fun (eql 'logior)) args)
   (typecheck-bitwise-operator args))
 
 
@@ -252,7 +261,7 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
   (as-infix '|\|| args))
 
 
-(defmethod typecheck-sexp ((fun (eql 'logxor)) args)
+(defmethod compute-type-sexp ((fun (eql 'logxor)) args)
   (typecheck-bitwise-operator args))
 
 
@@ -271,13 +280,13 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 
 All arguments must be booleans."
   (mapc (lambda (arg)
-	  (let ((ty (typecheck arg)))
+	  (let ((ty (compute-type arg)))
 	    (ensure-boolean ty)))
 	args)
   '(unsigned-byte 1))
 
 
-(defmethod typecheck-sexp ((fun (eql 'and)) args)
+(defmethod compute-type-sexp ((fun (eql 'and)) args)
   (typecheck-logical-operator args))
 
 
@@ -285,7 +294,7 @@ All arguments must be booleans."
   (as-infix '&& args))
 
 
-(defmethod typecheck-sexp ((fun (eql 'or)) args)
+(defmethod compute-type-sexp ((fun (eql 'or)) args)
   (typecheck-logical-operator args))
 
 
@@ -293,7 +302,7 @@ All arguments must be booleans."
   (as-infix '|\|\|| args))
 
 
-(defmethod typecheck-sexp ((fun (eql 'not)) args)
+(defmethod compute-type-sexp ((fun (eql 'not)) args)
   (ensure-number-of-arguments 'not args 1)
   (ensure-boolean (car args))
   '(unsigned-byte 1))

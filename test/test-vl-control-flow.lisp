@@ -75,22 +75,23 @@
 			       (initial-value 45)))
     (vl::declare-variable 'd '((type (unsigned-byte 8))
 			       (initial-value 0)))
-    (vl::expand/vl '(progn
-		    (setq a 8)
-		    (setq a b)
-		    (setq b (+ b c))))
+    (let ((p (vl::expand/vl '(progn
+			      (setq a 8)
+			      (setq a b)
+			      (setq b (+ b c))))))
+      (vl::typecheck p)
 
-    ;; b depends on itself
-    (is (set-equal (vl::variable-property 'b 'depends-on)
-		   '(b c)))
+      ;; b depends on itself
+      (is (set-equal (vl::variable-property 'b 'depends-on)
+		     '(b c)))
 
-    ;; b as direct dependency...
-    (is (set-equal (vl::variable-property 'a 'depends-on)
-		   '(b)))
+      ;; b as direct dependency...
+      (is (set-equal (vl::variable-property 'a 'depends-on)
+		     '(b)))
 
-    ;; ... and c when traversed
-    (is (set-equal (vl::traverse-dependencies 'a)
-		   '(b c)))))
+      ;; ... and c when traversed
+      (is (set-equal (vl::traverse-dependencies 'a)
+		     '(b c))))))
 
 
 ;; ---------- @ ----------
@@ -195,46 +196,43 @@
     (vl::declare-variable 'clk '((type (unsigned-byte 1))
 				 (initial-value 0)))
 
-    (vl::expand/vl '(@ (posedge clk)
-		    (setq a 8)
-		    (setq a (+ b clk))
-		    (setq b (+ b c))))
+    (let ((p (vl::expand/vl '(@ (posedge clk)
+			      (setq a 8)
+			      (setq a (+ b clk))
+			      (setq b (+ b c))))))
+      (vl::typecheck p)
 
-    ;; b depends on itself
-    (is (set-equal (vl::variable-property 'b 'depends-on)
-		   '(b c)))
+      ;; b depends on itself
+      (is (set-equal (vl::variable-property 'b 'depends-on)
+		     '(b c)))
 
-    ;; direct dependencies...
-    (is (set-equal (vl::variable-property 'a 'depends-on)
-		   '(b clk)))
+      ;; direct dependencies...
+      (is (set-equal (vl::variable-property 'a 'depends-on)
+		     '(b clk)))
 
-    ;; ... and a should also depend on c,after b's later update
-    (is (set-equal (vl::traverse-dependencies 'a)
-		   '(b c clk)))))
+      ;; ... and a should also depend on c,after b's later update
+      (is (set-equal (vl::traverse-dependencies 'a)
+		     '(b c clk))))))
 
 
 ;; ---------- Accesses ----------
 
 (test test-progn-accesses
   "Test we can extract variable accesses from a PROGN."
-  (let ((p (vl::read-written-variables '(progn
-				  (setf a (+ 1 2 b))
-				  (setf b 23)))))
-    (is (equal (car p) '(b)))
-    (is (set-equal (cadr p) '(a b)))))
+  (let ((p (vl::read-variables '(progn
+				 (setf a (+ 1 2 b))
+				 (setf b 23)))))
+    (is (equal p '(b)))))
 
 
 (test test-at-accesses
   "Test we can extract variable accesses from an @."
-  (let ((p (vl::read-written-variables '(@ (posedge clk)
-				  (setf a (+ 1 2 b))
-				  (setf b 23)))))
-    (is (set-equal (car p) '(b clk)))
+  (let ((p (vl::read-variables '(@ (posedge clk)
+				 (setf a (+ 1 2 b))
+				 (setf b 23)))))
+    (is (set-equal p '(b clk))))
 
-    (is (set-equal (cadr p) '(a b))))
-
-  (let ((p (vl::read-written-variables '(@ (*)
-				  (setf a (+ 1 2 b))
-				  (setf b 23)))))
-    (is (equal (car p) '(b)))
-    (is (set-equal (cadr p) '(a b)))))
+  (let ((p (vl::read-variables '(@ (*)
+				 (setf a (+ 1 2 b))
+				 (setf b 23)))))
+    (is (equal p '(b)))))

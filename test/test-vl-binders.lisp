@@ -31,9 +31,9 @@
 
 (test test-let-at-least-one
   "Test that a variable gets at least a width of one bit."
-  (is (equal '(unsigned-byte 1)
-	     (vl::typecheck (vl::expand/vl '(let ((a 0))
-					   a))))))
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 0))
+						     a)))
+		     '(unsigned-byte 1))))
 
 
 (test test-let-single-infer-width
@@ -73,7 +73,8 @@
   "Test we pick up an inferred width conflicting with a set type"
   (signals (vl::type-mismatch)
     (vl::typecheck (vl::expand/vl '(let ((a 5))
-				  (setq a 16))))))
+				    (declare (type (unsigned-byte 4) a))
+				    (setq a 17))))))
 
 
 (test test-let-scope
@@ -151,18 +152,14 @@
 			    (let ((a 10))
 			      (+ a b))))))
     (vl::typecheck p)
-    (is (equal (vl::read-written-variables (caddr p)) ; body of the outer LET
-	       '((b) ())))
-
-    (is (set-equal (vl::free-variables (caddr p))
-		   '(b))))
+    (is (equal (vl::read-variables (caddr p)) ; body of the outer LET
+	       '(b))))
 
   (let ((p (vl::expand/vl '(let ((a 10)
 				 b)
 			    (+ a b)))))
     (vl::typecheck p)
-    (is (set-equal (vl::free-variables p)
-		   '()))))
+    (is (null (vl::read-variables p)))))
 
 
 (test test-synthesise-binders
@@ -228,15 +225,16 @@
     (vl::declare-variable 'c '((type (unsigned-byte 8))
 			       (initial-value 0)))
 
-    (vl::expand/vl  '(progn
-		     (setq a (+ b 19))
-		     (setq c a)))
+    (let ((p (vl::expand/vl  '(progn
+			       (setq a (+ b 19))
+			       (setq c a)))))
+      (vl::typecheck p)
 
-    (is (set-equal (vl::variable-property 'a 'depends-on)
-		   '(b)))
-    (is (null (vl::variable-property 'b 'depends-on)))
-    (is (set-equal (vl::variable-property 'c 'depends-on)
-		   '(a)))))
+      (is (set-equal (vl::variable-property 'a 'depends-on)
+		     '(b)))
+      (is (null (vl::variable-property 'b 'depends-on)))
+      (is (set-equal (vl::variable-property 'c 'depends-on)
+		     '(a))))))
 
 
 (test test-let-declarations
@@ -265,13 +263,14 @@
 (test test-let-representation-inference
   "Check we infer the right representations."
   (let* ((p (expand/vl `(let ((a 23)
-			      (b (* 56 17))
+			      (b (+ 56 17))
 			      (c 0))
 			  (setq a (+ c b))
 			  (let ((d (+ a b)))
 			    (setq c (bref d 2 :end 0)))))))
+    (vl::typecheck p)
 
-    (let ((decls (cadr p)))  ; outer LET
+    (let ((decls (cadr p)))		; outer LET
       (with-local-frame decls
 	(is (eql (vl::variable-property 'a 'as) 'register))
 	(is (eql (vl::variable-property 'b 'as) 'constant))
@@ -291,11 +290,11 @@
 			    (setq a 1)
 			    (setq b (+ a 1))
 			    (setq c (+ a c))))))
+    (vl::typecheck p)
 
-    ;; both shuld be null, as no variables are free
-    (let ((vas (vl::read-written-variables p)))
-      (is (null (car vas)))
-      (is (null (cadr vas))))
+    ;; no free variables
+    (let ((vas (vl::read-variables p)))
+      (is (null vas)))
 
     (let ((decls (cadr p)))
       (with-local-frame decls

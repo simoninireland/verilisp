@@ -166,9 +166,6 @@
 
   ;; type-of types
   ;TODO:
-
-  ;; widen types
-  ;TODO:
   )
 
 

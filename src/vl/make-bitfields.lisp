@@ -23,22 +23,18 @@
 
 ;; ---------- make-bitfields ----------
 
-(defun typecheck-pattern (pat)
-  "Typecheck bitfield pattern PAT."
-  (let ((typ (typecheck pat)))
-    (ensure-fixed-width typ)
-    typ))
-
-
-(defmethod typecheck-sexp ((fun (eql 'make-bitfields)) args)
+(defmethod compute-type-sexp ((fun (eql 'make-bitfields)) args)
   (destructuring-bind (&rest pats)
       args
-    (let ((tys (mapcar #'typecheck-pattern pats)))
-      ;; work out the bit width of the result
-      (let ((w (foldr #'+
-		      (mapcar #'bitwidth tys)
-		      0)))
-	`(unsigned-byte ,w)))))
+    (let ((tys (mapcar #'compute-type pats)))
+      `(and ,@tys))))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'make-bitfields)) args)
+  (destructuring-bind (&rest pats)
+      args
+    (let ((tys (mapcar #'compute-type pats)))
+      (mapc #'ensure-fixed-width tys))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'make-bitfields)) args)
@@ -49,17 +45,26 @@
 
 ;; ---------- extend-bits ----------
 
-(defmethod typecheck-sexp ((fun (eql 'extend-bits)) args)
-  (destructuring-bind (bs width)
+(defmethod compute-type-sexp ((fun (eql 'extend-bits)) args)
+  (destructuring-bind (bs times)
       args
-    (let ((tyw (typecheck width))
-	  (tyb (typecheck bs)))
-      (ensure-fixed-width tyw)
-      (ensure-fixed-width tyb)
+    (let ((tybs (compute-type bs))
+	  (n (eval-in-static-environment times)))
 
-      ;; evaluate the width, which must be statically determined
-      (let ((w (ensure-static width)))
-	`(unsigned-byte ,w)))))
+      `(and ,@(n-copies tybs n)))))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'extend-bits)) args)
+  (destructuring-bind (bs times)
+      args
+    (let ((tyb (compute-type bs)))
+      (ensure-fixed-width tyb))))
+
+
+(defmethod read-variables-sexp ((fun (eql 'extend-bits)) args)
+  (destructuring-bind (bs times)
+      args
+    (foldr #'union (mapcar #'read-variables (list bs times)) '())))
 
 
 (defun synthesise-fixed-width-constant (c width &optional (base 2))

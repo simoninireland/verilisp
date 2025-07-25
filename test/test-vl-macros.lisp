@@ -128,5 +128,6 @@
 
   ;; should fail if we try to synthesise
   (let ((p '(when 1 (+ 1 2))))
-    (signals (vl::not-synthesisable)
-      (vl::synthesise p))))
+    (signals (vl::unknown-form)
+      (vl::with-unknown-forms
+	(vl::synthesise p)))))

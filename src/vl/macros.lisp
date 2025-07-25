@@ -35,22 +35,25 @@ environment before calling EXPAND-MACROS-IN-ENVIRONMENT (and can be
 detached again afterwards).")
 
 
+(defun forget-macro/vl (name)
+  "Forget the macro NAME."
+  (forget-environment-variable name *macro-environment*))
+
+
 ;; ---------- Macro definition macros ----------
 
-(eval-when (:compile-toplevel :load-toplevel)
+(defmacro defmacro/vl (name args &body body)
+  "Declare NAME with ARGS as a Verilisp macro."
+  (with-gensyms (external-name)
+    `(progn
+       (defmacro ,external-name ,args
+	 ,@body)
 
-  (defmacro defmacro/vl (name args &body body)
-    "Declare NAME with ARGS as a Verilisp macro."
-    (with-gensyms (external-name)
-      `(progn
-	 (defmacro ,external-name ,args
-	   ,@body)
-
-	 (with-frame *macro-environment*
-	   (declare-macro ',name ',external-name)))))
+       (with-frame *macro-environment*
+	 (declare-macro ',name ',external-name)))))
 
 
-  (defmacro importmacro/vl (name)
-    "Import Lisp macro NAME into Verilisp."
-    `(with-frame *macro-environment*
-       (declare-macro ',name))))
+(defmacro importmacro/vl (name)
+  "Import Lisp macro NAME into Verilisp."
+  `(with-frame *macro-environment*
+     (declare-macro ',name)))

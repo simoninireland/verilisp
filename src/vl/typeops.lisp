@@ -65,29 +65,31 @@ By default there is no relationship between a pair of types.")
   (:method ((ty1tag (eql 'or)) ty1args ty2tag ty2args)
     ;; A or B < C if A < C and B < C
     (every (rcurry #'subtype-p (construct-type ty2tag ty2args)) ty1args))
-
   (:method (ty1tag ty1args (ty2tag (eql 'or)) ty2args)
-    (not (subtype-p (construct-type ty2tag ty2args)
-		    (construct-type ty1tag ty1args))))
+    ;; C < A or B  if C < A or C < B
+    (some (curry #'subtype-p (construct-type ty1tag ty1args)) ty2args))
+
+  ;; intersection types
+  (:method ((ty1tag (eql 'and)) ty1args ty2tag ty2args)
+    ;; A and B < C if A < C or B < C
+    (every (rcurry #'subtype-p (construct-type ty2tag ty2args)) ty1args)
+    )
+  (:method (ty1tag ty1args (ty2tag (eql 'and)) ty2args)
+    ;; C < A and B if C < A or C < B
+    (some (rcurry #'subtype-p (construct-type ty2tag ty2args)) ty1args))
 
   ;; types of variables
   (:method ((ty1tag (eql 'type-of)) ty1args ty2tag ty2args)
-    ;; type-of A < C if A < C
-    (subtype-p (get-type (car ty1args)) (construct-type ty2tag ty2args)))
-
+    ;; type-of A < C if referent of A < C
+    (destructuring-bind (n &optional (f (currrent-frame)))
+	ty1args
+      (subtype-p (get-frame-property n 'type f)
+		 (construct-type ty2tag ty2args))))
   (:method (ty1tag ty1args (ty2tag (eql 'type-of)) ty2args)
-    (not (subtype-p (construct-type ty2tag ty2args)
-		    (construct-type ty1tag ty1args))))
-
-  ;; widened types
-  (:method ((ty1tag (eql 'widen)) ty1args ty2tag ty2args)
-    ;; widen A by n < C if widened A < C
-    (subtype-p (widen (lub (car ty1args)) (cadr ty1args))
-	       (construct-type ty2tag ty2args)))
-
-  (:method (ty1tag ty1args (ty2tag (eql 'widen)) ty2args)
-    (not (subtype-p (construct-type ty2tag ty2args)
-		    (construct-type ty1tag ty1args)))))
+    (destructuring-bind (n &optional (f (currrent-frame)))
+	ty2args
+      (subtype-p (construct-type ty1tag ty1args)
+		 (get-frame-property n 'type f)))))
 
 
 (defun subtype-p (ty1 ty2)
@@ -120,10 +122,40 @@ when comparing Verilisp types."
 
 	(t
 	 (destructuring-bind (ty1tag ty1args)
-	     (deconstruct-type ty1)
+	     (deconstruct-type (eval-type ty1))
 	   (destructuring-bind (ty2tag ty2args)
-	       (deconstruct-type ty2)
+	       (deconstruct-type (eval-type ty2))
 	     (subtype-type ty1tag ty1args ty2tag ty2args))))))
+
+
+;; ---------- Evaluate type parameters ----------
+
+(defgeneric eval-type-type (tytag tyargs)
+  (:documentation "Evaluate any parameters in a type.
+
+Methods on this function should reduce a type containing a value
+expression to a type containing a literal, signalling a NOT-STATIC
+error if this can't be done.
+
+The default is for there to be no parameters to expand.")
+  (:method (tytag tyargs)
+    (construct-type tytag tyargs))
+
+  (:method ((tytag (eql 'or)) tyargs)
+    `(or ,@(mapcar #'eval-type tyargs)))
+
+  (:method ((tytag (eql 'and)) tyargs)
+    `(and ,@(mapcar #'eval-type tyargs)))
+
+  (:method ((tytag (eql 'type-of)) tyargs)
+    (destructuring-bind (n &optional (f (current-frame)))
+	tyargs
+      (eval-type (get-frame-property n 'type f)))))
+
+
+(defun eval-type (ty)
+  "Evaluate any parameter values in TY."
+  (apply #'eval-type-type (deconstruct-type ty)))
 
 
 ;; ---------- Type checking ----------
@@ -142,48 +174,30 @@ can be ignored for systems not concerned with loss of precision."
 (defgeneric bitwidth-type (tytag tyargs)
   (:documentation "Return the width need for values of a type.
 
-The type is tagged TYTAG with arguments TYARGS.")
-  (:method (tytag tyargs)
-    nil)
+The type is tagged TYTAG with arguments TYARGS.
 
-  ;; union and intersection types
+The default width of a type is zero, meaning it won;t be representable.")
+  (:method (tytag tyargs)
+    0)
+
+  ;; union types
   (:method ((tytag (eql 'or)) tyargs)
-    (max (mapcar #'bitwidth tyargs)))
+    (apply #'max (mapcar #'bitwidth tyargs)))
+
+  ;; intersection types
   (:method ((tytag (eql 'and)) tyargs)
-    (max (mapcar #'bitwidth tyargs)))
+    (apply #'+ (mapcar #'bitwidth tyargs)))
 
   ;; types of variables
   (:method ((tytag (eql 'type-of)) tyargs)
-    (bitwidth (get-type (car tyargs))))
-
-  ;; widened types
-  (:method ((tytag (eql 'widen)) tyargs)
-    (+ (bitwidth (car tyargs)) (cadr tyargs))))
+    (destructuring-bind (n &optional (f (current-frame)))
+	tyargs
+      (bitwidth (get-frame-property n 'type f)))))
 
 
 (defun bitwidth (ty)
   "Return the bits required to represent type TY."
   (apply #'bitwidth-type (deconstruct-type ty)))
-
-
-(defgeneric widen-type (tytag tyargs n)
-  (:documentation "Widen a type by N bits.
-
-Methods on this function should widen the type accordingly. The default
-is for types not to be wideneable, which signals a TYPE-MISMATCH warning.")
-  (:method (tytag tyargs n)
-    (let ((ty (construct-type tytag tyargs)))
-      (error 'type-mismatch :expected '(unsigned-byte signed-byte bit)
-			    :got ty
-			    :hint "Can only widen fixed-width types"))
-
-    ;; return the type as-is
-    ty))
-
-
-(defun widen (ty n)
-  "Widen type TY by N bits."
-  (apply #'widen-type (append (deconstruct-type ty) (list n))))
 
 
 ;; ---------- Least upper-bounds ----------
@@ -193,22 +207,20 @@ is for types not to be wideneable, which signals a TYPE-MISMATCH warning.")
 
 The default LUB of two types is their union type.")
   (:method (ty1tag ty1args ty2tag ty2args)
-    (cond ((null ty2tag)
-	   (construct-type ty1tag ty1args))
-
-	  ((eql ty2tag nil)
-	   t)
-
-	  (t
-	   `(or ,(construct-type ty1tag ty1args)
-		,(construct-type ty2tag ty2args)))))
+    `(or ,(construct-type ty1tag ty1args)
+	 ,(construct-type ty2tag ty2args)))
 
   (:method ((ty1tag (eql t)) ty1args ty2tag ty2args)
+    t)
+  (:method (ty1tag ty1args (ty2tag (eql t)) ty2args)
     t)
 
   (:method ((ty1tag (eql 'nil)) ty1args ty2tag ty2args)
     (construct-type ty2tag ty2args))
+  (:method (ty1tag ty1args (ty2tag (eql nil)) ty2args)
+    (construct-type ty1tag ty1args))
 
+  ;; union types
   (:method ((ty1tag (eql 'or)) ty1args ty2tag ty2args)
     (if (= (length ty1args) 1)
 	(lub (car ty1args)
@@ -216,14 +228,19 @@ The default LUB of two types is their union type.")
 
 	(lub (apply #'lub ty1args)
 	     (construct-type ty2tag ty2args))))
+  (:method (ty1tag ty1args (ty2tag (eql 'or)) ty2args)
+    (lub `(or ,@ty2args) (construct-type ty1tag ty1args)))
 
+  ;; there are as yet no general intersection types
+
+  ;; type-of types
   (:method ((ty1tag (eql 'type-of)) ty1args ty2tag ty2args)
-    (lub (get-type (car ty1args))
-	 (construct-type ty2tag ty2args)))
-
-  (:method ((ty1tag (eql 'widen)) ty1args ty2tag ty2args)
-    (lub (widen (lub (car ty1args)) (cadr ty1args))
-	 (construct-type ty2tag ty2args))))
+    (destructuring-bind (n &optional (f (current-frame)))
+	ty1args
+      (lub (get-frame-property n 'type f)
+	   (construct-type ty2tag ty2args))))
+  (:method (ty1tag ty1args (ty2tag (eql 'type-of)) ty2args)
+    (lub `(type-of ,(car ty2args)) (construct-type ty1tag ty1args))))
 
 
 (defun lub (ty &rest tys)
@@ -236,43 +253,78 @@ Calling LUB with a single type is a quick way to simplify TY."
 
   (flet ((lubtype (ty1 ty2)
 	   (destructuring-bind (ty1tag ty1args)
-	       (deconstruct-type ty1)
+	       (deconstruct-type (eval-type ty1))
 	     (destructuring-bind (ty2tag ty2args)
-		 (deconstruct-type ty2)
+		 (deconstruct-type (eval-type ty2))
 	       (lub-type ty1tag ty1args ty2tag ty2args)))))
 
     (if (null tys)
-	;; only one type, make sure we try to reduce it
+	;; only one type, evaluate it
 	;; (otherwise FOLDR short-cuts and returns TY)
-	(lub ty nil)
+	(eval-type ty)
 
-	;; otherwise, fold across the types
 	(foldr #'lubtype tys ty))))
 
 
-(defun representable-type-p (ty)
-  "Tests whether TY is representable on hardware."
-  (destructuring-bind (tytag tyargs)
-      (deconstruct-type ty)
+;; ---------- Representability ----------
 
-    (not (or (null tytag)
-	     (eql tytag t)
-	     (and (member tytag '(unsigned-byte signed-byte))
-		  (null tyargs))))))
+(defun representable-type-p (ty)
+  "Tes that type TY can be represented."
+  (apply #'representable-type-sexp-p (deconstruct-type ty)))
+
+
+(defgeneric representable-type-sexp-p (tytag tyargs)
+  (:documentation "Test that a type can be represented.
+
+Methods on this function should test that there is a representation
+for the type, which generally means that it can be represented by a
+fixed number of bits.
+
+The default is that types are not representable.")
+  (:method (tytag tyargs)
+    nil)
+
+  (:method ((tytag (eql 'type-of)) tyargs)
+    (destructuring-bind (n &optional (f (current-frame)))
+	tyargs
+      (representable-type-p (get-frame-property n 'type f)))))
 
 
 (defun lurb (ty &rest tys)
-  "Return the least upper representable bound of TY1 and any further TYS.
+  "Return the least upper representable bound of TY and TYS.
 
-Representable types are those identified by REPRESENTABLE-TYPE-P. A
-NOT-REPRESENTABLE error is signalled if there is no representable
-upper bound."
-  (let ((lurbtype (apply #'lub (cons ty tys))))
-    (if (representable-type-p lurbtype)
-	lurbtype
+The LURB of two types is their LUB when they are bounded, but
+treates a test against an unbounded type as a sub-type comparison."
+  (declare (optimize debug))
 
-	(error 'not-representable :type lurbtype
-				  :hint "Make sure types are representable"))))
+  (flet ((lurbtype (ty1 ty2)
+	   (declare (optimize debug))
+
+	   (let ((lubty (lub ty1 ty2)))
+	     (if (representable-type-p lubty)
+		 lubty
+
+		 ;; if left side is representable, check subtyping
+		 (if (representable-type-p ty1)
+		     (if (subtype-p ty1 ty2)
+			 ty1
+			 nil)
+
+		     nil)))))
+
+    (let ((lurbty (if (null tys)
+		      ;; only one type, evaluate it
+		      ;; (otherwise FOLDR short-cuts and returns TY)
+		      (eval-type ty)
+
+		      ;; otherwise, fold across the types
+		      (foldr #'lurbtype tys ty))))
+
+      (if (representable-type-p lurbty)
+	  lurbty
+
+	  (error 'not-representable :type lurbty)))))
+
 
 
 ;; ---------- Type constraints ----------

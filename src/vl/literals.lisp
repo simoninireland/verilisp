@@ -22,19 +22,15 @@
 
 ;; ---------- Integers ----------
 
-(defmethod typecheck ((form integer))
+(defmethod compute-type ((form integer))
   (let ((w (bits-for-integer form)))
     (if (< form 0)
 	`(signed-byte ,w)
 	`(unsigned-byte ,w))))
 
 
-(defmethod read-written-variables ((form integer))
-  '(() ()))
-
-
-(defmethod dependencies ((form integer))
-  nil)
+(defmethod read-variables ((form integer))
+  '())
 
 
 (defmethod float-let-blocks ((form integer))

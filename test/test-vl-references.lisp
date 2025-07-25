@@ -24,7 +24,8 @@
 (test test-variable-scope
   "Test we can see variables in scope."
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 12))
-						  a)))
+						     ;;(declare (type (unsigned-byte 8) a))
+						     a)))
 		    '(unsigned-byte 8))))
 
 

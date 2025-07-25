@@ -47,17 +47,25 @@ isn't declared."
 
 ;; ---------- setq ----------
 
-(defmethod typecheck-sexp ((fun (eql 'setq)) args)
+(defmethod compute-type-sexp ((fun (eql 'setq)) args)
   (destructuring-bind (n v &key sync)
       args
     ;; catch the common mistake of using SETQ when we need SETF
     (unless (symbolp n)
       (error 'not-synthesisable :hint "Do you need SETF instead of SETQ?"))
 
-    (let ((tyvar (typecheck n))
-	  (tyval (typecheck v)))
-      (add-type-constraint n tyval)
-      tyval)))
+    (let ((ty (compute-type-sexp-setf n v nil)))
+
+      ty)))
+
+
+(defmethod compute-type-sexp-setf ((selector symbol) val selectorargs)
+  (let ((ty (compute-type val)))
+    (add-type-constraint selector ty)
+    (add-dependencies selector (read-variables val))
+    (set-variable-property selector 'written t)
+
+    ty))
 
 
 (defmethod apply-type-constraints-sexp ((fun (eql 'setq)) args)
@@ -65,17 +73,17 @@ isn't declared."
       args
     (ensure-writeable n)
 
-    (let ((tyvar (typecheck n))
-	  (tyval (typecheck v)))
+    (let ((tyvar (compute-type n))
+	  (tyval (compute-type v)))
       (ensure-subtype tyval tyvar))))
 
 
-(defmethod read-written-variables-sexp ((fun (eql 'setq)) args)
-  (read-written-variables `(setf ,@args)))
+(defmethod read-variables-sexp ((fun (eql 'setq)) args)
+  (read-variables `(setf ,@args)))
 
 
-(defmethod dependencies-sexp ((fun (eql 'setq)) args)
-  (dependencies `(setf ,@args)))
+(defmethod read-variables-sexp-setf ((selector symbol) val selectorargs)
+  (read-variables val))
 
 
 (defmethod synthesise-sexp ((fun (eql 'setq)) args)
@@ -124,66 +132,45 @@ generalised places."
     (error 'not-synthesisable :hint "Make sure the target of the assignment is a generalised, SETF-able, place")))
 
 
-(defmethod typecheck-sexp ((fun (eql 'setf)) args)
-  (destructuring-bind (var val &key sync)
+(defmethod compute-type-sexp ((fun (eql 'setf)) args)
+  (destructuring-bind (place val &key sync)
       args
-    (if (listp var)
+    (if (listp place)
 	(destructuring-bind (selector &rest selectorargs)
-	    var
-	  (typecheck-sexp-setf selector val selectorargs :sync sync))
+	    place
+
+	  (let ((ty (compute-type-sexp-setf selector val selectorargs)))
+
+	    ty))
 
 	;; a SETF to a simple variable is a SETQ
-	(typecheck `(setq ,var ,val :sync ,sync)))))
+	(compute-type `(setq ,place ,val :sync ,sync)))))
 
 
-(defmethod typecheck-sexp-setf ((selector symbol) val selectorargs &key sync)
-  (let* ((place `(,selector ,@selectorargs))
-	 (tyvar (typecheck place))
-	 (tyval (typecheck val)))
-    (ensure-subtype tyval tyvar)
+(defmethod apply-type-constraints-sexp ((fun (eql 'setf)) args)
+  (destructuring-bind (place val &key sync)
+      args
+
     (ensure-generalised-place place)
 
-    tyvar))
+    (let* ((tyvar (compute-type place))
+	   (tyval (compute-type val)))
+      (ensure-subtype tyval tyvar))))
 
 
-(defmethod read-written-variables-sexp ((fun (eql 'setf)) args)
+(defmethod read-variables-sexp ((fun (eql 'setf)) args)
   (declare (optimize debug))
-
-  (destructuring-bind (place v &key &allow-other-keys)
+  (destructuring-bind (place val &key sync)
       args
-    (let ((place-rws (if (symbolp place)
-			 ;; place targets a variable directly
-			 (list '() (list place))
+    (if (listp place)
+	(destructuring-bind (selector &rest selectorargs)
+	    place
 
-			 ;; place is complex, recurse into it
-			 (read-written-variables place)))
-	  (v-rws (merge-all-variables-as-read (read-written-variables v))))
-      (union2 place-rws v-rws))))
+	  (let ((ty (read-variables-sexp-setf selector val selectorargs)))
+	    ty))
 
-
-(defmethod dependencies-sexp ((fun (eql 'setf)) args)
-  (declare (optimize debug))
-
-  (with-recover-on-error
-      ;; leave dependencies alone
-      nil
-
-    (destructuring-bind (place v &key &allow-other-keys)
-	args
-
-      (let* ((rws (if (symbolp place)
-		      ;; shortcut for a symbol
-		      (list () (list place))
-
-		      (read-written-variables place)))
-	     (fvs (union (remove-if #'static-constant-p (free-variables v))
-			 (car rws))))
-
-	;; set the dependencies for all written variables
-	(mapc (lambda (n)
-		(let ((depends-on (variable-property n 'depends-on :default nil)))
-		  (set-variable-property n 'depends-on (union depends-on fvs))))
-	      (cadr rws))))))
+	;; a SETF to a simple variable is a SETQ
+	(read-variables val))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'setf)) args)

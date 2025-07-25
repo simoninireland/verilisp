@@ -23,34 +23,112 @@
 
 ;; ---------- Module interfaces ----------
 
-(deftype module-interface (parameters arguments frame)
+(deftype module (required optional parameters frame)
   "The type of module interfaces.
 
-Interfaces consist of two lists, of parameters and arguments, and the
-frame they form."
+Interfaces consist of three lists of arguments and the
+frame they form.
+
+REQUIRED holds the names of the required arguments. OPTIONAL holds the
+names of optional arguments, as a list if they have a default. PARAMETERS
+similarly holds the keyword arguments. NEEDED can't be null, but either
+of the others can."
   t)
 
 
 ;; No meaningful sub-type relationships at present
 
-(defmethod subtype-type ((ty1tag (eql 'module-interface)) ty1args
-			 (ty2tag (eql 'module-interface)) ty2args)
+(defmethod subtype-type ((ty1tag (eql 'module)) ty1args
+			 (ty2tag (eql 'module)) ty2args)
   t)
 
 
-(defun module-interface-parameters (ty)
-  "Return the list of parameter decls to modfule interface TY."
-  (cadr ty))
+(defmethod representable-type-sexp-p ((tytag (eql 'module)) tyargs)
+  t)
 
 
-(defun module-interface-arguments (ty)
-  "Return the list of argument decls to modfule interface TY."
-  (caddr ty))
+(defun module-required-arguments (ty)
+  "Return the list of argument names to module interface TY."
+  (elt ty 1))
 
 
-(defun module-interface-frame (ty)
+(defun module-optional-arguments (ty)
+  "Return the list of argument names to module interface TY."
+  (elt ty 2))
+
+
+(defun module-arguments (ty)
+  "Return the needed and optioal arguments."
+  (append (module-required-arguments ty)
+	  (module-optional-arguments ty)))
+
+
+(defun module-parameters (ty)
+  "Return the list of parameter names to module interface TY."
+  (elt ty 3))
+
+
+(defun module-frame (ty)
   "Return the frame formed by the module interface."
-  (cadddr ty))
+  (elt ty 4))
+
+
+(defun parse-module-lambda-list (decls)
+  "Parse DECLS as an ordinary lambda-list, returning the required, optional, and key parameters.
+
+NEEDED cannot be null. Each element of OPTIONAL and PARAMETERS will either be
+a symbol or a list of a symbol and an default value.
+
+This is not enough information to typecheck module instanciation, which is
+why the MODULE type also includes the environment created for these names."
+  (multiple-value-bind (req-names opts rest keys allow-p auxs key-p)
+      (handler-bind
+	  ((error (lambda (c)
+		    ;; map any underlying errors to syntax errors
+		    (error 'syntax-error :form decls
+					 :hint "Make sure lambda list is well-formed"))))
+	(parse-ordinary-lambda-list decls))
+
+    (let ((opt-names (mapcar #'safe-car opts))
+	  (key-names (mapcar #'safe-car keys)))
+
+      ;; sanity checks
+      (unless req-names
+	(error 'syntax-error :form decls
+			     :hint "Modules lambda lists need at least one variable"))
+      (when allow-p
+	(error 'syntax-error :form decls
+			     :hint "Module lambda lists can't include &allow-other-keys"))
+      (when auxs
+	(error 'syntax-error :form decls
+			     :hint "Module lambda lists can't include &aux parameters"))
+      (when rest
+	(error 'syntax-error :form decls
+			     :hint "Module lambda lists can't include a &rest parameter"))
+      (unless (and (set-p req-names)
+		   (set-p opt-names)
+		   (set-p key-names))
+	(error 'syntax-error :form decls
+			     :hint "Can't have duplicate variable names in a lambda list"))
+      (when (intersection req-names opt-names)
+	(error 'syntax-error :form decls
+			     :hint "Can't have optional and required parameters with the same names"))
+      (when (intersection (union req-names opt-names) key-names)
+	(error 'syntax-error :form decls
+			     :hint "Can't have keyword and non-keyword parameters with the same names"))
+
+      ;; structure into a consistent form
+      (list req-names
+	    (mapcar (lambda (opt)
+		      (if (null (cadr opt))
+			  (car opt)
+			  (list (car opt) (cadr opt))))
+		    opts)
+	    (mapcar (lambda (opt)
+		      (if (null (cadr opt))
+			  (cadar opt)
+			  (list (cadar opt) (cadr opt))))
+		    keys)))))
 
 
 ;; ---------- Module late initialisation ----------
@@ -112,22 +190,6 @@ Signal VALUE-MISMATCH as an error if not."
     (error 'value-mismatch :expected (list 'in 'out 'inout) :got dir)))
 
 
-(defun split-args-params (decls)
-  "Split DECLS into arguments and parameters.
-
-Arguments come first, and can either be bare symbols or lists of name
-and properties. Parameters come after any :key marker and consists of
-either bare names ot lists of names and values."
-  (let ((i (position '&key decls)))
-    (if i
-	;; parameters (and possibly arguments)
-	(list (subseq decls 0 i)
-	      (subseq decls (1+ i)))
-
-	;; just arguments
-	(list decls nil))))
-
-
 (defun join-args-params (args params)
   "Join ARGS and PARAMS into a single module lambda-list of decls."
   (if params
@@ -140,78 +202,38 @@ either bare names ot lists of names and values."
   (eql (get-representation n) 'parameter))
 
 
-(defun typecheck-module-param (decl)
-  "Type-check a module parameter declaration DECL.
+(defun compute-module-local-frame (decls)
+  "Populate the local frame of DECLS."
+  (with-local-frame decls
+    (destructuring-bind (reqs opts keys)
+	(parse-module-lambda-list decls)
 
-The value of the parameter, if provided, is evaluated as a Lisp
-expression in the current Lisp environment, *not* in Verilisp's
-environment. This means that parameter values can't be defined in terms
-of other parameter values."
-  (declare (optimize debug))
-  (with-current-form decl
-    (if (listp decl)
-	;; standard declaration
-	(destructuring-bind (n v)
-	    decl
+      ;; add all the names
+      (dolist (args (list reqs opts keys))
+	(mapc #'add-decl-to-frame args))
 
-	  (let ((val (eval v)))
-	    (set-variable-properties n `((initial-value ,val)
-					 (as parameter)))))
-
-	;; naked paramater
-	(set-variable-properties decl `((initial-value 0)
-					(as parameter))))))
+      ;; mark representations
+      (dolist (n reqs)
+	(set-variable-property n 'as 'wire))
+      (dolist (n (mapcar #'safe-car opts))
+	(set-variable-property n 'as 'wire))
+      (dolist (n (mapcar #'safe-car keys))
+	(set-variable-property n 'as 'parameter)))))
 
 
-(defun typecheck-module-params (decls)
-  "Type-check the module parameter declarations DECLS."
-  (mapc #'typecheck-module-param decls))
+(defun compute-module-interface-type (decls)
+  "Return the module interface implied by DECLS."
+  (destructuring-bind (reqs opts keys)
+      (parse-module-lambda-list decls)
 
-
-(defun typecheck-module-arg (n)
-  "Type-check a module argument declaration N."
-  (declare (optimize debug))
-
-  (with-current-form n
-    ;; set defaults
-    (set-variable-properties-unless-set n '((as wire)))))
-
-
-(defun typecheck-module-args (decls)
-  "Type-check the module argument declarations DECLS."
-  (mapc #'typecheck-module-arg decls))
-
-
-(defun env-from-module-decls (args params)
-  "Pop[ulate the global environment with the PARAMS and ARGS declarations of a module interface."
-  (typecheck-module-params params)
-  (typecheck-module-args args))
-
-
-(defun make-module-environment (decls)
-  "Populate the global environment from the DECLS of a module."
-  (destructuring-bind (modargs modparams)
-      (split-args-params decls)
-
-    ;; catch modules with no wires or registers
-    (unless (> (length modargs) 0)
-      (error 'not-synthesisable :hint "Module must import at least one wire or register"))
-
-    ;; create the environment
-    (env-from-module-decls modargs modparams)))
-
-
-(defun make-module-interface-type (decls)
-  "Return the module interface type of the DECLS of a module."
-  (destructuring-bind (modargs modparams)
-      (split-args-params decls)
-    `(module-interface ,modparams ,modargs ,(current-frame))))
+    `(module ,reqs ,opts ,keys ,(current-frame))))
 
 
 (defmethod add-frames-sexp ((fun (eql 'module)) args)
   (destructuring-bind (modname decls &rest body)
       args
     (add-local-frame-to-decls decls)
+    (compute-module-local-frame decls)
 
     ;; return the form
     `(module ,modname ,decls
@@ -219,32 +241,59 @@ of other parameter values."
 		 (mapcar #'add-frames body)))))
 
 
-(defmethod typecheck-sexp ((fun (eql 'module)) args)
+(defmethod compute-type-sexp ((fun (eql 'module)) args)
   (destructuring-bind (modname decls &rest body)
       args
 
     (with-local-frame decls
-      (make-module-environment decls)
-
       ;; typecheck the body of the module in its environment
-      (typecheck (cons 'progn body))
+      (compute-type (with-implicit-progn body))
 
       ;; return the interface type
-      (make-module-interface-type decls))))
+      (compute-module-interface-type decls))))
 
 
-(defmethod read-written-variables-sexp ((fun (eql 'module)) args)
-  '(() ()))
+(defmethod apply-type-constraints-sexp ((fun (eql 'module)) args)
+  (declare (optimize debug))
 
-
-(defmethod dependencies-sexp ((fun (eql 'module)) args)
   (destructuring-bind (modname decls &rest body)
       args
-    (with-local-frame decls
 
-      ;; no need to check decls or parameters as they're never dependent
-      ;; (or are they?...)
-      (dependencies `(progn body)))))
+    (with-local-frame decls
+      (let ((intf (compute-module-interface-type decls)))
+	(dolist (n (variables-declared-in-current-frame))
+	  (if (member n (module-arguments intf))
+	      ;; constrain the variable's type (which must be representable)
+	      (let* ((constraints (get-type-constraints n))
+		     (lurbty (if constraints (apply #'lurb constraints))))
+
+		(let ((ty (get-type n)))
+		  (if ty
+		      ;; check against provided type
+		      (unless (subtype-p lurbty ty)
+			(warn 'type-mismatch :expected ty
+					     :got lurbty
+					     :hint "Make sure explicit type matches usage"))
+
+		      ;; update the type with the constrained type
+		      (progn
+			(set-variable-property n 'type lurbty)
+			(setq ty lurbty)))
+
+		  ;; ensure the initial value is a valid element
+		  (if-let ((v (get-initial-value n)))
+		    (progn
+		      (ensure-subtype (compute-type v) ty)
+
+		      ;; cascade into any initial values
+		      (apply-type-constraints v))))))))
+
+      ;; cascade into the body
+      (apply-type-constraints (with-implicit-progn body)))))
+
+
+(defmethod read-variables-sexp ((fun (eql 'module)) args)
+  '())
 
 
 (defmethod float-let-blocks-sexp ((fun (eql 'module)) args)
@@ -260,13 +309,14 @@ of other parameter values."
 			      (setq body (cdr body))))))
 
       (destructuring-bind (newbody newenv)
-	  (float-let-blocks `(progn ,@body))
+	  (float-let-blocks (with-implicit-progn body))
 
 	(list
 	 `(module ,modname
 		  ,@(if declarations
 			(list decls declarations)
 			(list decls))
+
 		  ,(if newenv
 		       ;; declare the floated declarations around the body
 		       (let ((newdecls (mapcar (lambda (np)
@@ -278,6 +328,7 @@ of other parameter values."
 
 			 ;; add the new decls as a local frame
 			 (setq newdecls (add-local-frame-to-decls newdecls))
+			 (compute-let-local-frame newdecls)
 			 (with-local-frame newdecls
 			   (dolist (np (decls newenv))
 			     (destructuring-bind (n props)
@@ -292,7 +343,6 @@ of other parameter values."
 
 	 ;; no remaining variables to float
 	 (make-frame))))))
-
 
 
 (defmethod simplify-progn-sexp ((fun (eql 'module)) args)
@@ -327,7 +377,7 @@ of other parameter values."
 	(direction (variable-property n 'direction))
 	(as (variable-property n 'as)))
 
-    (let ((width (apply #'bitwidth-type (deconstruct-type type))))
+    (let ((width (bitwidth type)))
       (as-literal (format nil "~a ~a"
 			  (case direction
 			    ('in    "input")
@@ -351,15 +401,20 @@ of other parameter values."
       (as-literal "module ")
       (synthesise modname)
 
-      (destructuring-bind (args params)
-	  (split-args-params decls)
-	;; parameters
-	(if params
-	    (as-argument-list params :before " #(" :after ")"
-				     :sep ", "
-				     :process #'synthesise-param))
+      ;; parameters
+      (if-let ((params (get-frame-names (filter-frame (lambda (n env)
+							(eql (get-frame-property n 'as env)
+							     'parameter))
+						      (current-frame)))))
+	  (as-argument-list params :before " #(" :after ")"
+				   :sep ", "
+				   :process #'synthesise-param))
 
-	;; arguments
+      ;; arguments
+      (if-let ((args (get-frame-names (filter-frame (lambda (n env)
+						      (member (get-frame-property n 'as env)
+							      '(wire register)))
+					  (current-frame)))))
 	(as-argument-list args :before "(" :after ");"
 			       :sep ", "
 			       :process #'synthesise-arg))
@@ -385,83 +440,56 @@ of other parameter values."
 
 ;; ---------- Module instanciation ----------
 
-(defun argument-for-module-interface-p (n intf)
-  "Test whether N is an argument of INTF."
-  (not (null (member n (module-interface-arguments intf)
-		     :key #'symbol-name
-		     :test #'string-equal))))
+(defmethod compute-type-sexp ((fun (eql 'make-instance)) args)
+  (destructuring-bind (modname &rest initargs)
+      args
+
+    ;; skip over leading quote of module name,
+    ;; for compatability with Common Lisp usage
+    (unquote modname)
+
+    (get-module-interface modname)))
 
 
-(defun parameter-for-module-interface-p (n intf)
-  "Test whether N is a parameter of INTF."
-  (not (null (assoc n (module-interface-parameters intf)
-		    :key #'symbol-name
-		    :test #'string-equal))))
+(defun module-argument-name-to-keyword (n)
+  "Return the keyword form of N, as used in a MAKE-INSTANCE call."
+  (make-keyword n))
 
 
-(defun module-arguments-match-interface-p (intf modargs)
-  "Test that MODARGS conform to INTF.
+(defun ensure-module-arguments-match-interface (modname initargs intf)
+  "Ensure that INITARGS match the reqirements of INTF of MODNAME."
+  (declare (optimize debug))
 
-All the arguments in INTF must be provided in MODARGS. All the
-MODARGS must refer to an argument or a parameter of INTF."
-  (and
-   ;; every module argument is provided
-   (every (lambda (arg)
-	    (member arg modargs :test #'string-equal))
-	  (mapcar #'symbol-name (module-interface-arguments intf)))
+  (with-frame (module-frame intf)
+    (let* ((kv (adjacent-pairs initargs))
+	   (ks (alist-keys kv)))
 
-   ;; every modarg is either a module argument or parameter
-   (every (lambda (arg)
-	    (or (argument-for-module-interface-p arg intf)
-		(parameter-for-module-interface-p arg intf)))
-	  modargs)))
+      ;; make sure there are no duplicate arguments
+      (unless (set-p ks)
+	(error 'not-importable :module modname
+			:hint "Check for duplicate arguments"))
 
 
-(defun ensure-module-arguments-match-interface (modname intf modargs)
-  "Ensure that MODARGS or module MODNAME match INTF.
+      ;; make sure all required arguments are present
+      (unless (every (lambda (n)
+		       (member (module-argument-name-to-keyword n)
+			       ks))
+		     (module-required-arguments intf))
+	(error 'not-importable :module modname
+			       :hint "Make sure all required arguments are provided"))
 
-This is tested according to MODULE-ARGUMENTS-MATH-INTERFACE-P
-and causes a NOT-IMPORTABLE error if not."
-  (unless (module-arguments-match-interface-p intf modargs)
-    (error 'not-importable :module modname
-			   :hint "Check that arguments in the import match the module type")))
-
-
-(defun keys-to-arguments (modname modargs)
-  "Extract the keys from MODARGS when importing MODNAME."
-  (labels ((every-argument (l)
-	     "Return a list containing every argument element of L."
-	     (cond ((null l)
-		    '())
-		   (t
-		    (cons (car l)
-			  (every-argument (cddr l)))))))
-
-    (unless (evenp (length modargs))
-      (error 'not-importable :module modname
-			     :hint "Uneven number of module arguments"))
-
-    (mapcar #'symbol-name (every-argument modargs))))
+      ;; make sure all arguments are in the interface
+      (unless (every (lambda (k)
+		       (or (member k (mapcar (compose #'module-argument-name-to-keyword #'safe-car)
+					     (module-arguments intf)))
+			   (member k (mapcar (compose #'module-argument-name-to-keyword #'safe-car)
+					     (module-parameters intf)))))
+		     ks)
+	(error 'not-importable :module modname
+			       :hint "Make sure all arguments are declare on the interface")))))
 
 
-(defun values-to-arguments (modname modargs)
-  "Extract the values from MODARGS when importing MODNAME."
-  (labels ((every-value (l)
-	     "Return a list containing every argument value of L."
-	     (cond ((null l)
-		    '())
-		   (t
-		    (cons (cadr l)
-			  (every-value (cddr l)))))))
-
-    (unless (evenp (length modargs))
-      (error 'not-importable :module modname
-			     :hint "Uneven number of module arguments"))
-
-    (every-value modargs)))
-
-
-(defmethod typecheck-sexp ((fun (eql 'make-instance)) args)
+(defmethod apply-type-constraints-sexp ((fun (eql 'make-instance)) args)
   (declare (optimize debug))
 
   (destructuring-bind (modname &rest initargs)
@@ -471,47 +499,31 @@ and causes a NOT-IMPORTABLE error if not."
     ;; for compatability with Common Lisp usage
     (unquote modname)
 
-    (let ((intf (get-module-interface modname))
-	  (modargs (keys-to-arguments modname initargs)))
-      ;; ensure we have all the arguments we need
-      (ensure-module-arguments-match-interface modname intf modargs)
+    ;; check arguments
+    (let ((intf (get-module-interface modname)))
+      (ensure-module-arguments-match-interface modname initargs intf)
 
-      ;; typecheck the provided arguments against the interface
-      (let ((f (module-interface-frame intf))
-	    (initargs-plist (plist-alist initargs)))
-	(dolist (arg modargs)
-	  (let ((v (cdr (assoc arg initargs-plist
-			       :key #'symbol-name
-			       :test #'string-equal))))
-	    (cond ((argument-for-module-interface-p arg intf)
-		   (let ((tyval (typecheck v))
-			 (tyarg (get-frame-property arg 'type f)))
-		     (ensure-subtype tyval tyarg)))
+      (with-frame (module-frame intf)
+	(let ((kv (adjacent-pairs initargs)))
 
-		  ((parameter-for-module-interface-p arg intf)
-		   (typecheck (eval-in-static-environment v)))
+	  ;; required arguments
+	  (dolist (n (module-required-arguments intf))
+	    (let ((v (cadr (assoc (module-argument-name-to-keyword n) kv))))
+	      (ensure-subtype (compute-type v) (get-type n))))
 
-		  (t
-		   (error 'unknown-variable :variable arg
-					    :hint "Make sure variable is an argument to ~a" modname)))))
-
-	intf))))
+	  ;; optional arguments
+	  (dolist (n (module-required-arguments intf))
+	    (if-let ((m (assoc (module-argument-name-to-keyword n) kv)))
+	      (let ((v (cadr m)))
+		(ensure-subtype (compute-type v) (get-type n))))))))))
 
 
-(defmethod dependencies-sexp ((fun (eql 'make-instance)) args)
-  ;; skip (because everything has to be an expression)
-  ;TODO: Is this the right design, or should we depend on the expressions?
-  nil)
-
-
-(defmethod read-written-variables-sexp ((fun (eql 'make-instance)) args)
+(defmethod read-variables-sexp ((fun (eql 'make-instance)) args)
   (destructuring-bind (modname &rest initargs)
       args
 
-    ;; for compatability with Common Lisp usage
-    (unquote modname)
-
-    (merge-read-written-variables (values-to-arguments modname initargs))))
+    (let ((kv (adjacent-pairs initargs)))
+      (foldr #'union (mapcar #'read-variables (mapcar #'safe-cadr kv)) '()))))
 
 
 (defmethod rewrite-variables-sexp ((fun (eql 'make-instance)) args rewrites)
@@ -527,99 +539,67 @@ and causes a NOT-IMPORTABLE error if not."
       `(,fun ,modname ,@(rewrite-args initargs)))))
 
 
-(defun synthesise-param-binding (decl args)
-  "Synthesise the binding of parameter DECLs from ARGS in ENV."
-  (destructuring-bind (n v)
-      decl
-    (if-let ((m (assoc n args
-		       :key #'symbol-name
-		       :test #'string-equal)))
-      (let ((v (cdr m)))
-	(as-literal ".")
-	(synthesise n)
-	(as-literal "(")
-	(synthesise v)
-	(as-literal ")")))))
+(defun synthesise-param-binding (n kv)
+  "Synthesise the binding of parameter N in KV."
+  (if-let ((m (assoc n kv
+		     :key #'symbol-name
+		     :test #'string-equal)))
+    (let ((v (cadr m)))
+      (as-literal ".")
+      (synthesise n)
+      (as-literal "(")
+      (synthesise v)
+      (as-literal ")"))))
 
 
-(defun synthesise-arg-binding (n args)
-  "Synthesise the binding of N from ARGS in ENV."
-  (let ((v (cdr (assoc n args
+(defun synthesise-arg-binding (n kv)
+  "Synthesise the binding of N from KV"
+  (let ((v (cadr (assoc n kv
 		       :key #'symbol-name
 		       :test #'string-equal))))
-    (as-literal ".")
-    (synthesise n)
-    (as-literal "(")
-    (synthesise v)
-    (as-literal ")")))
+    (when v
+      (as-literal ".")
+      (synthesise n)
+      (as-literal "(")
+      (synthesise v)
+      (as-literal ")"))))
 
 
-(defun synthesise-module-instance-params (initargs intf)
-  "Synthesise the parameter bindings INITARGS of INTF."
+(defun synthesise-module-instance-params (paramdecls kv)
+  "Synthesise the parameter bindings PARAMDECLS in KV."
   (declare (optimize debug))
-  (let ((paramdecls (module-interface-parameters intf)))
-    ;; extract all the parameters actually specified
-    (let* ((paramkeys (alist-keys paramdecls))
-	   (args-alist (plist-alist initargs) )
-	   (argkeys (alist-keys args-alist))
-	   (paramsgiven (intersection paramkeys argkeys
-				      :key #'symbol-name :test #'string-equal))
-	   (paramdeclsgiven (remove-if (lambda (ndecl)
-					 (not (member (symbol-name (car ndecl)) paramsgiven
-						      :key #'symbol-name :test #'string-equal)))
-				       paramdecls)))
+  (let ((paramsgiven (intersection (mapcar (compose #'make-keyword #'safe-car) paramdecls)
+				   (alist-keys kv))))
 
-      (if paramdeclsgiven
-	  (progn
-	    (as-literal " ")
-	    (as-argument-list paramdeclsgiven
-			      :before "#(" :after ")"
-			      :process (rcurry #'synthesise-param-binding args-alist)))
+    (if paramsgiven
+	(progn
+	  (as-literal " ")
+	  (as-argument-list paramsgiven
+			    :before "#(" :after ")"
+			    :process (rcurry #'synthesise-param-binding kv)))
 
-	  (as-literal " ")))))
+	(as-literal " "))))
 
 
-(defun synthesise-module-instance-args (initargs intf)
-  "Synthesise the argument bindings INITARGS of INTF."
-  (let ((argdecls (module-interface-arguments intf)))
-    (as-argument-list argdecls
-		      :before "(" :after ");"
-		      :process (rcurry #'synthesise-arg-binding (plist-alist initargs)))))
-
-
-(defun synthesise-module-instance (n modname initargs)
-  "Synthesise the module instanciation MODNAME with given INITARGS assigning the instance to N."
-  ;; skip over leading quote of module name,
-  ;; for compatability with Common Lisp usage
-  (unquote modname)
-
-  (let ((intf (get-module-interface modname)))
-    (synthesise modname)
-    (synthesise-module-instance-params initargs intf)
-    (synthesise n)
-    (as-literal " ")
-    (synthesise-module-instance-args initargs intf)))
+(defun synthesise-module-instance-args (argdecls kv)
+  "Synthesise the argument bindings ARGDECLS from KV."
+  (as-argument-list argdecls
+		    :before "(" :after ");"
+		    :process (rcurry #'synthesise-arg-binding kv)))
 
 
 (defmethod synthesise-sexp ((fun (eql 'make-instance)) args)
-  (labels ((args-to-alist (plist)
-	     "Convert a plist of arguments to an alist, respecting sub-lists. "
-	     (if (null plist)
-		 plist
-		 (cons (list (car plist) (cadr plist))
-		       (args-to-alist (cddr plist))))))
+  (destructuring-bind (modname &rest initargs)
+      args
 
-    (destructuring-bind (modname &rest initargs)
-	args
+    ;; skip over leading quote of module name,
+    ;; for compatability with Common Lisp usage
+    (unquote modname)
 
-      ;; skip over leading quote of module name,
-      ;; for compatability with Common Lisp usage
-      (unquote modname)
-
-      (let ((intf (get-module-interface modname))
-	    (modargs (keys-to-arguments modname initargs)))
-
-	;; arguments
-	(as-argument-list (arguments intf)
-			  :before "(" :after ");"
-			  :process (rcurry #'synthesise-arg-binding (args-to-alist initargs)))))))
+    (let ((intf (get-module-interface modname))
+	  (kv (adjacent-pairs initargs)))
+      (synthesise modname)
+      (synthesise-module-instance-params (module-parameters intf) kv)
+      (synthesise modname)
+      (as-literal " ")
+      (synthesise-module-instance-args (module-arguments intf) kv))))

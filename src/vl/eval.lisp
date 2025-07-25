@@ -174,7 +174,12 @@ compile time.
 The resulting form is evaluated as Lisp, and so will signal
 standard Lisp conditions. To run Lisp (rather than Verilisp) use
 EVAL-LISP-IN-STATIC-ENVIRONMENT."
-  (eval-lisp-in-static-environment (lispify form)))
+  (with-current-form form
+    (handler-bind
+	((error (lambda (c)
+		  (declare (ignore c))
+		  (error 'not-static :hint "Make sure expression is statically determinable"))))
+      (eval-lisp-in-static-environment (lispify form)))))
 
 
 (defun ensure-static (form)
@@ -182,14 +187,7 @@ EVAL-LISP-IN-STATIC-ENVIRONMENT."
 
 A NOT-STATIC error condition is signalled if FORM does not
 evaluate correctly in the static environment."
-  (declare (optimize debug))
-
-  (with-current-form form
-    (handler-bind
-	((error (lambda (c)
-		  (declare (ignore c))
-		  (error 'not-static :hint "Make sure expression is statically determinable"))))
-      (eval-in-static-environment form))))
+  (eval-in-static-environment form))
 
 
 (defun eval-if-static (form)

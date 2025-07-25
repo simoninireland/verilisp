@@ -21,6 +21,64 @@
 (declaim (optimize debug))
 
 
+;; ---------- Array type ----------
+
+(defmethod subtype-type ((ty1tag (eql 'array)) ty1args
+			 (ty2tag (eql 'array)) ty2args)
+  (declare (optimize debug))
+
+  (cond ((null ty1args)
+	 (null ty2args))
+
+	((null ty2args)
+	 t)
+
+	(t
+	 (destructuring-bind (et1 &rest et1args)
+	     ty1args
+	   (destructuring-bind (et2 &rest et2args)
+	       ty2args
+
+	     ;; arrays match covariantly on element types, ignoring shapes
+	     (subtype-p et1 et2))))))
+
+
+(defmethod lub-type ((ty1tag (eql 'array)) ty1args
+		     (ty2tag (eql 'array)) ty2args)
+  (destructuring-bind (ety1 &optional esh1)
+	     ty1args
+    (destructuring-bind (ety2 &optional esh2)
+	ty2args
+
+      (let ((evty1 (eval-type ety1))
+	    (evty2 (eval-type ety2))
+	    (sh (cond ((and (null esh1)
+			    (null esh2))
+		       '(0))
+
+		      ((null esh1)
+		       esh2)
+		      ((null esh2)
+
+		       esh1)
+
+		      (t
+		       ;; maximum of the two lengths
+		       ;; TODO: need to fix the shapes for multiple dimensions
+		       (list (max (car esh1) (car esh2)))))))
+
+	;; LUB has the LUB element type
+	`(array ,(lub evty1 evty2) ,sh)))))
+
+
+(defmethod representable-type-sexp-p ((tytag (eql 'array)) tyargs)
+  (destructuring-bind (ty &optional sh)
+      tyargs
+
+    ;; an array is representable if its element type is
+    (representable-type-p (lub ty))))
+
+
 ;; ---------- Array initialisation data ----------
 
 (defun valid-array-shape-p (shape)
@@ -59,8 +117,8 @@ whose values are statically determinable."
   "Remove any leading quote from the data in PLACE.
 
 This is mainly used to preserve compatability with Lisp, where
-these forms need to be quoted. We /allow/ them to be quoted in
-Verilisp, but don't /require/ it."
+these forms need to be quoted. We *allow* them to be quoted in
+Verilisp, but don't *require* it."
   `(if (and (not (null ,place))
 	    (listp ,place)
 	    (eql (car ,place) 'quote))
@@ -79,7 +137,7 @@ Verilisp, but don't /require/ it."
 
 ;; shape needs to be statically determinable
 
-(defmethod typecheck-sexp ((fun (eql 'make-array)) args)
+(defmethod compute-type-sexp ((fun (eql 'make-array)) args)
   (destructuring-bind (shape &key
 			       (initial-element 0)
 			       initial-contents
@@ -94,15 +152,28 @@ Verilisp, but don't /require/ it."
     ;; check shape
     (ensure-valid-array-shape shape)
 
-    ;; check or derive element type
-    (if element-type
-	(ensure-subtype (typecheck initial-element) element-type)
+    ;; initialise type from the initial element unless an explicit element type is provided
+    (unless element-type
+      (setq element-type (compute-type initial-element))
 
-	;; default is a fixed-width unsigned
-	(setq element-type `(unsigned-byte ,*default-register-width*)))
+    `(array ,element-type ,shape))))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'make-array)) args)
+  (destructuring-bind (shape &key
+			       (initial-element 0)
+			       initial-contents
+		       &allow-other-keys)
+      args
+
+    ;; skip an initial quotes, allowed for Lisp compatability
+    (unquote shape)
+    (unquote initial-contents)
 
     ;; initial contents must either match the size of the array
     ;; or identify a file
+    ;; TODO: We need to type-check the initial contents, which we can't
+    ;; at the moment as we don;t know the inferred element type
     (if initial-contents
 	(if (listp initial-contents)
 	    (cond ((eql (car initial-contents) :file)
@@ -111,43 +182,12 @@ Verilisp, but don't /require/ it."
 
 		  (t
 		   ;; check all elements of literal data
-		   (ensure-data-has-shape initial-contents shape)
-		   (dolist (c initial-contents)
-		     (ensure-subtype (typecheck c) element-type))))))
-
-    `(array ,element-type ,shape)))
+		   (ensure-data-has-shape initial-contents shape)))))))
 
 
-;; Arrays match covariantly on element types, ignoring shapes
-;TODO:  (This may even be too much for what we can do in hardware?)
-
-(defmethod subtype-type ((ty1tag (eql 'array)) ty1args
-			 (ty2tag (eql 'array)) ty2args)
-  (declare (optimize debug))
-
-  (cond ((null ty1args)
-	 (null ty2args))
-
-	((null ty2args)
-	 t)
-
-	(t
-	 (destructuring-bind (et1 &rest et1args)
-	     ty1args
-	   (destructuring-bind (et2 &rest et2args)
-	       ty2args
-
-	     (subtype-p et1 et2))))))
-
-
-(defmethod read-written-variables-sexp ((fun (eql 'make-array)) args)
+(defmethod read-variables-sexp ((fun (eql 'make-array)) args)
   ;; can't have any free variables (I don't think)
-  '(() ()))
-
-
-(defmethod dependencies-sexp ((fun (eql 'make-array)) args)
-  ;; can't have any dependencies (I don't think)
-  nil)
+  '())
 
 
 (defun rebuild-options (ns vs)
@@ -232,7 +272,7 @@ probably should, for those that are statically determined."
 	   (= (length (cddr ty))
 	      (length indices)))
        (every (lambda (i)
-		(subtype-p (typecheck i)
+		(subtype-p (compute-type i)
 			   'unsigned-byte))
 	      indices)))
 
@@ -249,30 +289,76 @@ probably should, for those that are statically determined."
   (cadr ty))
 
 
-(defmethod typecheck-sexp ((fun (eql 'aref)) args)
+(defmethod compute-type-sexp ((fun (eql 'aref)) args)
   (declare (optimize debug))
 
-  (destructuring-bind (var &rest indices)
+  (destructuring-bind (place &rest indices)
       args
-    (let ((ty (typecheck var)))
-      (ensure-subtype ty 'array)
-      (ensure-valid-array-index ty indices)
-
+    (let ((ty (eval-type (compute-type place))))
       ;; the type is the type of the elements
       (element-type-of-array ty))))
 
 
-(defmethod read-written-variables-sexp ((fun (eql 'aref)) args)
+(defmethod compute-type-sexp-setf ((selector (eql 'aref)) val selectorargs)
+  (destructuring-bind (place &rest indices)
+      selectorargs
+    (if (symbolp place)
+	(let ((ty (compute-type val)))
+	  ;; constrain the variable
+	  (add-type-constraint place `(array ,ty))
+
+	  ;; mark as written
+	  (set-variable-property place 'written t)
+
+	  ;; add dependencies from the value and indices
+	  (add-dependencies place (read-variables val))
+	  (let ((rvs (foldr #'union (mapcar #'read-variables indices) '())))
+	    (add-dependencies place rvs))
+
+	  ty)
+
+	;; complex place, recurse
+	(destructuring-bind (psel &rest pselargs)
+	    place
+	  (compute-type-sext-setf psel val pselargs)))))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'aref)) args)
+  (destructuring-bind (place &rest indices)
+      args
+    (let ((ty (compute-type place)))
+      (ensure-subtype ty 'array)
+      (mapc #'ensure-fixed-width indices))))
+
+
+(defmethod read-variables-sexp ((fun (eql 'aref)) args)
+  (declare (optimize debug))
+
   (destructuring-bind (place &rest indices)
       args
     (let ((place-rws (if (symbolp place)
 			 ;; place targets a variable directly
-			 (list '()  (list place))
+			 (list place)
 
 			 ;; place is complex, recurse into it
-			 (read-written-variables target)))
-	  (indices-rws (merge-all-variables-as-read (merge-read-written-variables indices))))
-      (union2 place-rws indices-rws))))
+			 (read-variables place)))
+	  (indices-rws (foldr #'union (mapcar #'read-variables indices) '())))
+
+      (union place-rws indices-rws))))
+
+
+(defmethod read-variables-sexp-setf ((selector (eql 'aref)) val selectorargs)
+  (declare (optimize debug))
+
+  (destructuring-bind (place &rest indices)
+      selectorargs
+
+    (if (symbolp place)
+	(union (foldr #'union (mapcar #'read-variables indices) '())
+	       (read-variables val))
+
+	(destructuring-bind (psel &rest pselargs)
+	    (read-variables-sexp-setf psel val pselargs)))))
 
 
 (defmethod generalised-place-sexp-p ((selector (eql 'aref)) selectorargs)

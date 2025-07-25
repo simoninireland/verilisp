@@ -49,20 +49,35 @@
 	  end)))
 
 
-(defmethod read-written-variables-sexp ((fun (eql 'bref)) args)
+(defmethod read-variables-sexp ((fun (eql 'bref)) args)
   (declare (optimize debug))
 
   (destructuring-bind (place start &key end width)
       args
+
     (let ((place-rws (if (symbolp place)
 			 ;; place targets a variable directly
-			 (list '()  (list place))
+			 (list place)
 
 			 ;; place is complex, recurse into it
-			 (read-written-variables place)))
-	  (sel-rws (merge-all-variables-as-read (merge-read-written-variables (remove-nulls (list start end width))))))
+			 (read-variables place)))
+	  (sel-rws (foldr #'union (read-variables (remove-nulls (list start end width))) '())))
 
-      (union2 place-rws sel-rws))))
+      (union place-rws sel-rws))))
+
+
+(defmethod read-variables-sexp-setf ((selector (eql 'bref)) val selectorargs)
+  (declare (optimize debug))
+
+  (destructuring-bind (place start &key end width)
+      selectorargs
+
+    (if (symbolp place)
+	(union (foldr #'union (read-variables (remove-nulls (list start end width))) '())
+	       (read-variables val))
+
+	(destructuring-bind (psel &rest pselargs)
+	    (read-variables-sexp-setf psel val pselargs)))))
 
 
 (defmethod generalised-place-sexp-p ((selector (eql 'bref)) selectorargs)
@@ -71,54 +86,107 @@
     (generalised-place-p place)))
 
 
-(defmethod typecheck-sexp ((fun (eql 'bref)) args)
-  (destructuring-bind (var start &key end width)
+(defmethod compute-type-sexp ((fun (eql 'bref)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (place start &key end width)
       args
-    ;; we use the actual values in the type
-    (setq start (eval-in-static-environment start))
-    (when width
-      (setq width (eval-in-static-environment width)))
-    (when end
-      (setq end (eval-in-static-environment end)))
 
-    ;; check everything is positive
-    (unless (>= start 0)
-      (error 'value-mismatch :expected "the non-negative integers" :got start
-			     :hint "Start bit must be negative"))
-    (unless (or (null end)
-		(>= end 0))
-      (error 'value-mismatch :expected "the non-negative integers" :got end
-			     :hint "End bit must be non-negative"))
-    (unless (or (null width)
-		(> width 0))
-      (error 'value-mismatch :expected "the positive integers" :got width
-			     :hint "Width must be positive"))
+    ;; check syntax
+    (when (and (not (null width))
+	       (not (null end)))
+      (error 'syntax-error :form (cons fun args)
+			   :hint "Provide at most one of :END and :WIDTH)"))
 
-    ;; default to accessing the single START bit
+    ;; extract width
     (if (null width)
 	(if (null end)
+	    ;; default to accessing the single START bit
 	    (setq width 1)
-	    (setq width (1+ (- start end)))))
 
-    (let ((tyvar (typecheck var)))
-      (setq end (compute-end-bit start end width))
+	    ;; compute width from start and end
+	    (setq width `(1+ (- ,start ,end)))))
 
-      ;; check whether variable should be widened
-      (let ((l (1+ (- start end)))
-	    (vw (bitwidth tyvar)))
-	(when (> l vw)
+    ;; type depends on the number of bits extracted
+    `(unsigned-byte ,width)))
+
+
+(defmethod compute-type-sexp-setf ((selector (eql 'bref)) val selectorargs)
+  (destructuring-bind (place start &key end width)
+      selectorargs
+
+    ;; check syntax
+    (when (and (not (null width))
+	       (not (null end)))
+      (error 'syntax-error :form `(,selector ,*selectorargs)
+			   :hint "Provide at most one of :END and :WIDTH)"))
+
+    ;; extract width
+    (if (null width)
+	(if (null end)
+	    ;; default to accessing the single START bit
+	    (setq width 1)
+
+	    ;; compute width from start and end
+	    (setq width `(1+ (- ,start ,end)))))
+
+    (if (symbolp place)
+	(progn
+	  ;; constrain the written variable
+	  (add-type-constraint place `(unsigned-byte (1+ ,start)))
+
+	  ;; mark as written
+	  (set-variable-property place 'written t)
+
+	  ;; depend on the value and indices
+	  (add-dependencies place (read-variables val))
+	  (if-let ((rvs (foldr #'union (mapcar #'read-variables
+					       (remove-nulls (list start end width)))
+			       '())))
+	    (add-dependencies place rvs)))
+
+	;; recurse into the complex place
+	(destructuring-bind (psel &rest pselargs)
+	    place
+	  (compute-type-sexp-setf psel val pselargs)))
+
+    ;; type depends on the number of bits extracted
+    `(unsigned-byte ,width)))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'bref)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (place start &key end width)
+      args
+    ;; we use the actual values in the constraints
+    (setq start (eval-in-static-environment start))
+    (if (null width)
+	(if (null end)
+	    ;; default to accessing the single START bit
+	    (setq width 1)
+
+	    ;; compute width from start and end
+	    (setq width (1+ (- start (eval-in-static-environment end)))))
+
+	(setq width (eval-in-static-environment width)))
+
+    ;; sanity check bounds
+    (when (or (< width 0)
+	      (> width (1+ start)))
+      (error 'value-mismatch :expected (1+ start)
+			     :got width
+			     :hint "Make sure width bits can be extracted"))
+
+    ;; check whether variable should be widened
+    (let ((ty (compute-type place)))
+      (let ((vw (bitwidth ty)))
+
+	(when (> width vw)
 	  ;; signal to allow this to be picked up
 	  (warn 'type-mismatch :expected vw
-			       :got l
-			       :hint "Width greater than base variable")
-
-	  ;; constraint the written variable to have at least L bits
-	  (destructuring-bind (read written)
-	      (read-written-variables tyvar)
-	    (add-type-constraint (car written) `(unsigned-byte ,l))))
-
-	;; width is the number of bits extracted
-	`(unsigned-byte ,l)))))
+			       :got width
+			       :hint "Width wider than base variable"))))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'bref)) args)

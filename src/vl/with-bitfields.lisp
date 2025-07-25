@@ -182,7 +182,7 @@ Fixed bits are constant 0s or 1s."
 
 
 (defmacro/vl if-let-bitfields (pattern arg &body body)
-   "Create variables matching the bitfield PATTERN applied to ARG.
+  "Create variables matching the bitfield PATTERN applied to ARG.
 
 The pattern consists of a list of variable names, with each
 entry corresponding to a bit position. The rightmost bit is
@@ -235,42 +235,43 @@ SETF will update the appropriate positons in ARG."
 	     (tests (if fixed-bit-runs
 			(mapcar (curry #'run-to-test condition) fixed-bit-runs)))
 	     (decls (if variable-runs
-			(mapcar (curry #'run-to-decl condition) variable-runs)))
-	     (vars (mapcar #'car decls)))
+			(mapcar (curry #'run-to-decl condition) variable-runs))))
 
 	(if tests
-	    (if decls
-		;; tests and declarations
-		(if else-branch
-		    ;; two-armed conditional
-		    `(let ((,condition ,arg))
-		       (if (and ,@tests)
-			   (let ,decls
-			     ,then-branch)
+	    (let ((test (if (= (length tests) 1)
+		       (car tests)
+		       `(and ,@tests))))
 
-			   (progn
-			     ,@else-branch)))
+	      (if decls
+		  ;; tests and declarations
+		  (if else-branch
+		      ;; two-armed conditional
+		      `(let ((,condition ,arg))
+			 (if ,test
+			     ,(rewrite-variables then-branch decls)
 
-		    ;; one-armed conditional
-		    `(let ((,condition ,arg))
-		       (if (and ,@tests)
-			   (let ,decls
-			     ,then-branch))))
+			     (progn
+			       ,@(rewrite-variables else-branch decls))))
 
-		;; tests, no decls
-		(if else-branch
-		    ;; two-armed conditional
-		    `(let ((,condition ,arg))
-		       (if (and ,@tests)
-			   ,then-branch
+		      ;; one-armed conditional
+		      `(let ((,condition ,arg))
+			 (if ,test
+			     ,(rewrite-variables then-branch decls))))
 
-			   (progn
-			     ,@else-branch)))
+		  ;; tests, no decls
+		  (if else-branch
+		      ;; two-armed conditional
+		      `(let ((,condition ,arg))
+			 (if ,test
+			     ,then-branch
 
-		    ;; one-armed conditional
-		    `(let ((,condition ,arg))
-		       (if (and ,@tests)
-			   ,then-branch))))
+			     (progn
+			       ,@else-branch)))
+
+		      ;; one-armed conditional
+		      `(let ((,condition ,arg))
+			 (if ,test
+			     ,(rewrite-variables then-branch decls))))))
 
 	    (if decls
 		;; decls, no tests
@@ -279,8 +280,7 @@ SETF will update the appropriate positons in ARG."
 		    (warn 'unreachable-code :hint "Should there be fixed bits to test?"))
 
 		  `(let ((,condition ,arg))
-		     (let ,decls
-		       ,then-branch)))
+		     ,(rewrite-variables then-branch decls)))
 
 		(progn
 		  ;; no decls or tests
@@ -301,5 +301,5 @@ match, BODY is not evaluated."
 			 :hint "No value to match against?"))
 
   `(if-let-bitfields ,pattern
-       ,arg
-     (progn ,@body)))
+		     ,arg
+		     (progn ,@body)))

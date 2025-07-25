@@ -120,18 +120,6 @@
 				      (setq (bit a 0) 1)))))))
 
 
-(test test-setq-free-variables
-  "Test we extract free and updated variables from a SETQ."
-  (is (set-equal (vl::free-variables '(setq a '(+ 1 5 7 (* 3 6))))
-		 '(a)))
-  (is (set-equal (vl::free-variables '(setq a '(+ 1 c b (* 3 d))))
-		 '(a b c d)))
-
-  (let ((rws (vl::read-written-variables '(setq a '(+ 1 c b (* 3 d))))))
-    (is (set-equal (car rws) '(c b d)))
-    (is (set-equal (cadr rws) '(a)))))
-
-
 (test test-setq-dependencies
   "Test we can extract SETQ dependencies."
   (vl::with-new-frame
@@ -141,22 +129,24 @@
     (vl::declare-variable 'd '((type (unsigned-byte 8))))
     (vl::declare-variable 'e '((type (unsigned-byte 8))))
 
-    (vl::expand/vl '(setq a (+ b c 23)))
-    (is (set-equal (vl::variable-property 'a 'depends-on)
-		   '(b c)))
+    (let ((p (vl::expand/vl '(setq a (+ b c 23)))))
+      (vl:typecheck p)
+      (is (set-equal (vl::variable-property 'a 'depends-on)
+		     '(b c))))
 
-    (vl::expand/vl '(setq d (+ a b 1)))
-    (is (set-equal (vl::variable-property 'd 'depends-on)
-		   '(a b)))
+    (let ((p (vl::expand/vl '(setq d (+ a b 1)))))
+      (vl::typecheck p)
+      (is (set-equal (vl::variable-property 'd 'depends-on)
+		     '(a b)))
 
-    ;; if we travese the dependencies of d we should be c via a
-    (is (set-equal (vl::traverse-dependencies '(d))
-		   '(a b c)))
+      ;; if we travese the dependencies of d we should see c via a
+      (is (set-equal (vl::traverse-dependencies '(d))
+		     '(a b c))))
 
-    ;; should see c in its own dependencies
-    (vl::expand/vl '(setq e (+ e 1)))
-    (is (set-equal (vl::variable-property 'e 'depends-on)
-		   '(e)))))
+    (let ((p (vl::expand/vl '(setq e (+ e 1)))))
+      (vl:typecheck p)
+      (is (set-equal (vl::variable-property 'e 'depends-on)
+		     '(e))))))
 
 
 ;; ---------- Generalised places (SETF) ----------
@@ -183,24 +173,3 @@
 
 ;; Tests of the actual generalised place forms appear in their
 ;; respective test files.
-
-
-;; ---------- Accesses ----------
-
-(test test-setf-accesses
-  "Test we can extract the correct accesses."
-  (let ((p (vl::read-written-variables '(setf a '(+ 1 2 b)))))
-    (is (equal (car p) '(b)))
-    (is (equal (cadr p) '(a))))
-
-  (let ((p (vl::read-written-variables '(setf a '(+ 1 2 a b)))))
-    (is (set-equal (car p) '(b a)))
-    (is (equal (cadr p) '(a))))
-
-  (let ((p (vl::read-written-variables '(setf (aref a 26) '(+ 1 2 b)))))
-      (is (equal (car p) '(b)))
-      (is (equal (cadr p) '(a))))
-
-  (let ((p (vl::read-written-variables '(setf (aref a (aref d 1)) '(+ 1 2 b)))))
-    (is (set-equal (car p) '(b d)))
-    (is (equal (cadr p) '(a)))))

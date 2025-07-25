@@ -34,8 +34,8 @@
 
   ;; passes the Verilisp condition
   (signals (vl::unknown-variable)
-    (vl::expand/vl '(let (a)
-		    (setq b (+ 12 2))))))
+    (vl:typecheck (vl::expand/vl '(let (a)
+				   (setq b (+ 12 2)))))))
 
 
 ;; ---------- with-unknown-form ----------
