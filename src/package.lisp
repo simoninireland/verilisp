@@ -19,67 +19,70 @@
 
 (in-package :common-lisp-user)
 
-
 (defpackage verilisp
-  (:use :cl :alexandria)
+  (:use :cl :alexandria :verilisp/core)
   (:nicknames :vl)
-  (:import-from :verilisp/core
-		;; extra Verilisp functions, macros, values, and
-		;; annotations not present in Common Lisp
-		#:module
-		#:<<
-		#:>>
-		#:asserted-p
-		#:@
-		#:posedge
-		#:negedge
-		#:bref
-		#:with-bitfields
-		#:make-bitfields
-		#:extend-bits
-		#:register
-		#:wire
-		#:constant
-		#:width
-		#:as
-		#:direction
-		#:in
-		#:out
-		#:inout
-		#:0=
-		#:0/=
-		#:2*
+  (:export
+   ;; extra Verilisp functions, macros, values, and
+   ;; annotations not present in Common Lisp
+   #:module
+   #:<<
+   #:>>
+   #:asserted-p
+   #:@
+   #:posedge
+   #:negedge
+   #:bref
+   #:if-let-bitfields
+   #:with-bitfields
+   #:make-bitfields
+   #:extend-bits
+   #:register
+   #:wire
+   #:constant
+   #:width
+   #:as
+   #:direction
+   #:in
+   #:out
+   #:inout
+   #:0=
+   #:0/=
+   #:2*
 
-		;; top-level interface
-		#:defmodule/vl
-		#:synthesise/vl
+   ;; top-level interface
+   #:defmodule/vl
+   #:defmacro/vl
+   #:importmacro/vl
+   #:macrolet/vl
+   #:synthesise/vl
 
-		;; conditions
-		#:vl-condition
-		#:vl-error
-		#:vl-warning
-		#:recover
-		#:not-synthesisable
-		#:not-representable
-		#:syntax-error
-		#:unknown-variable
-		#:unknown-module
-		#:unknown-state
-		#:unknown-form
-		#:unrecognised-declaration
-		#:duplicate-variable
-		#:duplicate-module
-		#:duplicate-state
-		#:not-importable
-		#:not-static
-		#:value-mismatch
-		#:direction-mismatch
-		#:type-mismatch
-		#:coercion-mismatch
-		#:precision-mismatch
-		#:bitfield-mismatch
-		#:shape-mismatch
-		#:state-machine-mismatch
-		#:type-inferred
-		#:representation-mismatch
-		#:no-local-frame))
+   ;; conditions
+   #:vl-condition
+   #:vl-error
+   #:vl-warning
+   #:recover
+   #:not-synthesisable
+   #:not-representable
+   #:syntax-error
+   #:unknown-variable
+   #:unknown-module
+   #:unknown-state
+   #:unknown-form
+   #:unrecognised-declaration
+   #:duplicate-variable
+   #:duplicate-module
+   #:duplicate-state
+   #:not-importable
+   #:not-static
+   #:value-mismatch
+   #:direction-mismatch
+   #:type-mismatch
+   #:coercion-mismatch
+   #:precision-mismatch
+   #:bitfield-mismatch
+   #:shape-mismatch
+   #:state-machine-mismatch
+   #:type-inferred
+   #:representation-mismatch
+   #:no-local-frame))
