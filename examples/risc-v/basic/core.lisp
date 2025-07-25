@@ -23,8 +23,8 @@
 		   rxd txd)
   (declare (type bit clk-in rxd txd)
 	   (type (unsigned-byte 5) leds-out)
-	   (direction :in clk-in txd)
-	   (direction :out leds-out rxd))
+	   (direction in clk-in txd)
+	   (direction out leds-out rxd))
 
   (let (clk reset
 
