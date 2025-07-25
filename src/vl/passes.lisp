@@ -463,12 +463,11 @@ Use EXPAND-MACROS-IN-ENVIRONMENT to select a specific environment.")
 
     (if (macro-declared-p fun)
 	;; macro is expandable, replace with real name if there is one
-	(let ((realfun (variable-property fun 'real-name))
-	      (f (variable-property fun 'local-frame)))
+	(let ((realfun (variable-property fun 'real-name)))
 
 	  ;; expand the macro in a nested environment that will contain
 	  ;; any locally-declared macros
-	  (with-frame f
+	  (with-new-frame
 	    (multiple-value-bind (expansion expanded)
 		(macroexpand-1 (cons realfun args))
 	      (if expanded

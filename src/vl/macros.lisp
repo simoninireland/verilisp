@@ -17,10 +17,6 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-;; We re-implement some macros to avoid possible issues with the standard
-;; versions generating non-synthesisable Lisp. The names of these macros
-;; are suffixed /vl, and we alias them using ADD-MACRO in the loader.
-
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
@@ -30,23 +26,21 @@
 
 NAME is declared in the global environment, and so is
 available anywhere in a Verilsp program."
-  (with-gensyms (f external-name)
-    `(let ((,f (make-frame)))
-       (with-frame ,f
-
-	 ;; define macro with its own environment
-	 (defmacro ,external-name ,lambda-list
-	   ,@body))
+  (with-gensyms (external-name)
+    `(progn
+       ;; define the macro under a new name
+       (defmacro ,external-name ,lambda-list
+	 ,@body)
 
        ;; declare macro into Verilisp's global environment
        (with-frame *global-environment*
-	 (declare-macro ',name ,f ',external-name)))))
+	 (declare-macro ',name ',external-name)))))
 
 
 (defmacro importmacro/vl (name)
   "Import Lisp macro NAME globally into Verilisp."
   `(with-frame *global-environment*
-     (declare-macro ',name (make-frame))))
+     (declare-macro ',name)))
 
 
 (defmacro macrolet/vl (decls &body body)
@@ -67,7 +61,7 @@ A MACROLET/VL form should appear only within a DECLAREMACRO/VL form."
 				  ,@body))
 
 			      ;; bind macro into parent's local frame
-			      (declare-macro ',name ,f ',external-name)))))
+			      (declare-macro ',name ',external-name)))))
 		     decls)))
 
     `(progn

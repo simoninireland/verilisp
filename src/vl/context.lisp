@@ -140,14 +140,12 @@ This is used for setting defaults."
     (set-variable-property-unless-set n (car p) (cadr p))))
 
 
-(defun declare-macro (m env &optional underlying-name)
+(defun declare-macro (m &optional underlying-name)
   "Declare M as a macro in the current environment.
 
-ENV is a frame holding any macros defined locally by M.
 If UNDERLYING-NAME is provided then M is used as a synonym for it."
   (declare-variable m `((name ,m)
 			(real-name ,(or underlying-name m))
-			(local-frame ,env)
 			(as macro))))
 
 

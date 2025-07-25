@@ -167,3 +167,8 @@
     (let ((atoms (flatten p)))
       (is (member 'l1 atoms))
       (is (member 'l2 atoms)))))
+
+
+(test test-nested-macros
+  "Test we can nest the same macro."
+  (is (vl::expand/vl '(when a (when b c)))))
