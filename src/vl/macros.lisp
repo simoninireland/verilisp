@@ -76,4 +76,3 @@ A MACROLET/VL form should appear only within a DECLAREMACRO/VL form."
 
        ;; continue with the body
        ,@body)))
-*global-environment*

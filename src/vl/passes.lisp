@@ -466,8 +466,8 @@ Use EXPAND-MACROS-IN-ENVIRONMENT to select a specific environment.")
 	(let ((realfun (variable-property fun 'real-name))
 	      (f (variable-property fun 'local-frame)))
 
-	  ;; expand the macro in a nested environment that will receive
-	  ;; any macros locally defined
+	  ;; expand the macro in a nested environment that will contain
+	  ;; any locally-declared macros
 	  (with-frame f
 	    (multiple-value-bind (expansion expanded)
 		(macroexpand-1 (cons realfun args))
