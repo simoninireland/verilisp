@@ -306,6 +306,36 @@ Return a list of states created, initial state (of the path) first."
     (append states (list passive-state))))
 
 
+(defun synthesise-state-machine (machine)
+  "Return the code for MACHINE as a state machine."
+  (let* ((state-labels (mapcar #'label machine))
+	 (decls (mapcar (lambda (label index)
+			  `(,label ,index))
+			state-labels
+			(iota (length state-labels))))
+	 (declaration `(declare (as constant ,@state-labels)))
+	 (states (foldr (lambda (form state)
+			  (let ((l (label state))
+				(b (body state)))
+			    (append form `((,l
+					     ,@b)))))
+			machine '())))
+
+    (with-gensyms (state-variable)
+      `(let ,decls
+	 ,declaration
+
+	 (let ((,state-variable ,(car state-labels)))
+	   (case ,state-variable
+	     ,states))))))
+
+
+(defmethod synthesis-sexp ((fun (eql 'tagbody)) args)
+  (let ((machine (build-state-machine args)))
+    (synthesise-state-machine machine)
+    )
+  )
+
 ;; ---------- GO ----------
 
 (defmethod compute-type-sexp ((fun (eql 'go)) args)

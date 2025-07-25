@@ -269,3 +269,6 @@
 		 (setq d 999))))))
 
     (is (vl:typecheck p))))
+
+
+;; ---------- Synthesis ----------
