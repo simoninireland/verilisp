@@ -108,7 +108,7 @@ This function is not usually called directly, but is called as part
 of a larger compilation process."
   (declare (optimize debug))
 
-  (let* ((expanded (expand-macros-in-environment form *macro-environment*))
+  (let* ((expanded (expand-macros-in-environment form))
 	 (framed (add-frames expanded)))
 
     framed))

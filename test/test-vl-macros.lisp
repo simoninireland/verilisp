@@ -131,3 +131,39 @@
     (signals (vl::unknown-form)
       (vl::with-unknown-forms
 	(vl::synthesise p)))))
+
+
+(test test-local-macro
+  "Test we can declare local macros using MACROLET/VL."
+  (when (vl::variable-declared-p 'test-locals)
+    (vl::forget-environment-variable 'test-locals vl::*global-environment*))
+
+  (vl::defmacro/vl test-locals (z &body body)
+    (vl::macrolet/vl ((l1 (a)
+			  `(+ ,a ,z))
+		      (l2 (a &rest rs)
+			  `(apply #'+ ,a ,@rs)))
+
+      `(let (a b c)
+	 ,@body)))
+
+  ;; make sure all macros get expanded
+  (let ((p (vl::expand/vl '(let (q w e)
+			    (test-locals 23
+			     (l1 b)
+			     (l2 x y x))))))
+
+    (let ((atoms (flatten p)))
+      (is (not (member 'test-locals atoms)))
+      (is (not (member 'l1 atoms)))
+      (is (not (member 'l2 atoms)))))
+
+  ;; make sure we can't use L1 or L2 as macros elsewhere
+  ;; (they stay un-expanded out of context)
+  (let ((p (vl::expand/vl '(let (q w e)
+			    (l1 b)
+			    (l2 x y x)))))
+
+    (let ((atoms (flatten p)))
+      (is (member 'l1 atoms))
+      (is (member 'l2 atoms)))))

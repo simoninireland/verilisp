@@ -124,7 +124,7 @@ of the environment, as identified by CONSTANT-P. In other words, the
 form is placed in an environment with no non-constant information."
   (let ((constantenv (filter-environment (lambda (n env)
 					   (constant-p n))
-					 *global-environment*)))
+					 (current-frame))))
     (close-form-in-environment form constantenv)))
 
 
@@ -136,7 +136,7 @@ the environment, as identified by STATIC-CONSTANT-P. In other words,
 the form is placed into an environment that is known at compile time."
   (let ((staticenv (filter-environment (lambda (n env)
 					 (static-constant-p n))
-				       *global-environment*)))
+				       (current-frame))))
     (close-form-in-environment form staticenv)))
 
 

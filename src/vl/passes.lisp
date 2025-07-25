@@ -426,12 +426,12 @@ well as PROGNs nested inside other PROGNs.")
 
 ;; ---------- Macro expansion ----------
 
-(defun expand-macros-in-environment (form &optional (f *macro-environment*))
-  "Recursively expand all macros in FORM in the global macro environment.
+(defun expand-macros-in-environment (form &optional (f *global-environment*))
+  "Recursively expand all macros in FORM in an environment.
 
 This attaches the frame F before calling EXPAND-MACROS. If F is omitted
-(as is usual) then the macros are taken from *MACRO-ENVIRONMENT*."
-  (with-frame f
+(as is usual) then the macros are taken from *GLOBAL-ENVIRONMENT*."
+  (in-frame f
     (expand-macros form)))
 
 
@@ -447,29 +447,36 @@ This attaches the frame F before calling EXPAND-MACROS. If F is omitted
 
 (defun expand-descend (fun args)
   "Expand macros in ARGS when FUN applied."
-  `(,fun ,@(remove-if #'null (mapcar (lambda (arg)
-				       (unless (null arg)
-					 (expand-macros arg)))
-				     args))))
+  `(,fun ,@(remove-nulls (mapcar (lambda (arg)
+				   (unless (null arg)
+				     (expand-macros arg)))
+				 args))))
 
 
 (defgeneric expand-macros-sexp (fun args)
   (:documentation "Expand macros in FUN applied to ARGS.
 
-The macros available are taken from the global environment. Usually
-this will have *MACRO-ENVIRONMENT* attached to it prior to macro expansion.")
+The macros available are taken from the current environment.
+Use EXPAND-MACROS-IN-ENVIRONMENT to select a specific environment.")
   (:method (fun args)
+    (declare (optimize debug))
+
     (if (macro-declared-p fun)
 	;; macro is expandable, replace with real name if there is one
-	(let ((realfun (variable-property fun 'real-name)))
-	  (multiple-value-bind (expansion expanded)
-	      (macroexpand-1 (cons realfun args))
-	    (if expanded
-		;; form was expanded by macro, expand the expansion
-		(expand-macros expansion)
+	(let ((realfun (variable-property fun 'real-name))
+	      (f (variable-property fun 'local-frame)))
 
-		;; form wasn't expanded, descend into the form
-		(expand-descend fun args))))
+	  ;; expand the macro in a nested environment that will receive
+	  ;; any macros locally defined
+	  (with-frame f
+	    (multiple-value-bind (expansion expanded)
+		(macroexpand-1 (cons realfun args))
+	      (if expanded
+		  ;; form was expanded by macro, expand the expansion
+		  (expand-macros expansion)
+
+		  ;; form wasn't expanded, descend into the form
+		  (expand-descend fun args)))))
 
 	;; macro is not expandable, descend into the form
 	(expand-descend fun args))))

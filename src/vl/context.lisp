@@ -26,35 +26,46 @@
   "The global environment for the compiler.")
 
 
+(defparameter *current-frame* (attach-frame (make-frame) *global-environment*)
+  "The current frame (environment) for the compiler.")
+
+
 (defun clear-global-environment ()
   "Clear the global environment.
 
 This should, in principle, never be needed because the environment
 should be handled correctly using WITH-NEW-FRAME. However...."
-  (setf *global-environment* (empty-environment)))
+  (setf *global-environment* (empty-environment))
+  (setf *current-frame* (attach-frame (make-frame) *global-environment*)))
 
 
 (defun current-frame ()
-  "Return the current frame of the global environment."
-  *global-environment*)
+  "Return the current frame of the environment."
+  *current-frame*)
+
+
+(defmacro in-frame (f &body body)
+  "Run BODY in an environment consisting solely of F."
+  `(let ((*current-frame* f))
+     ,@body))
+
+
+(defmacro in-global-environment (&body body)
+  "Run BODY in the global environment."
+  `(in-frame *global-environment*))
 
 
 (defmacro with-frame (f &body body)
-  "Attach F to the current global environment for BODY."
-  (with-gensyms (oldenv)
-    `(let ((,oldenv (current-frame)))
-       (unwind-protect
-	    (progn
-	      ;; attach the new frame to the global environment
-	      (setq *global-environment* (attach-frame ,f ,oldenv))
+  "Attach F to the current environment for BODY."
+  `(let ((*current-frame* (attach-frame ,f *current-frame*)))
+     (unwind-protect
+	  (progn
+	    ;; run the body in the extended environment
+	    ,@body)
 
-	      ;; run the body in the extended environment
-	      ,@body)
-
-	 ;; detach the attached frame and restore the environment
-	 (progn
-	   (detach-frame *global-environment*)
-	   (setq *global-environment* ,oldenv))))))
+       ;; detach the attached frame and restore the environment
+       (progn
+	 (detach-frame *current-frame*)))))
 
 
 (defmacro with-new-frame (&body body)
@@ -77,7 +88,7 @@ should be handled correctly using WITH-NEW-FRAME. However...."
   "Signal an UNKNOWN-VARIABLE error is N is not declared."
   (unless (variable-declared-p n)
     (error 'unknown-variable :variables n
-			     :hint "Make sure variale is in scope")))
+			     :hint "Make sure variable is in scope")))
 
 
 (defun variables-declared ()
@@ -86,22 +97,22 @@ should be handled correctly using WITH-NEW-FRAME. However...."
 
 
 (defun variables-declared-in-current-frame ()
-  "Return the variables declared in only the shallowest frame of the global environment."
+  "Return the variables declared in only the shallowest frame of the environment."
   (get-frame-names (current-frame)))
 
 
 (defun variable-properties (n)
-  "Return the property list of variable N in the global environment."
+  "Return the property list of variable N in the environment."
   (get-environment-properties n (current-frame)))
 
 
 (defun variable-property (n p &key default)
-  "Return the value of property P of variable N in the global environment."
-  (get-environment-property n p *global-environment* :default default))
+  "Return the value of property P of variable N in the environment."
+  (get-environment-property n p (current-frame) :default default))
 
 
 (defun set-variable-property (n p v)
-  "Set the value of property P of variable N in the global environment to V."
+  "Set the value of property P of variable N in the environment to V."
   (set-environment-property n p v (current-frame)))
 
 
@@ -129,12 +140,14 @@ This is used for setting defaults."
     (set-variable-property-unless-set n (car p) (cadr p))))
 
 
-(defun declare-macro (m &optional underlying-name)
-  "Declare M as a macro in the global environment.
+(defun declare-macro (m env &optional underlying-name)
+  "Declare M as a macro in the current environment.
 
+ENV is a frame holding any macros defined locally by M.
 If UNDERLYING-NAME is provided then M is used as a synonym for it."
   (declare-variable m `((name ,m)
 			(real-name ,(or underlying-name m))
+			(local-frame ,env)
 			(as macro))))
 
 

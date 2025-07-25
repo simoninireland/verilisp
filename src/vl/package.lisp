@@ -53,6 +53,9 @@
    #:current-frame
    #:empty-environment
    #:add-frames
+   #:in-frame
+   #:in-global-environment
+   #:with-frame
    #:with-new-frame
    #:with-local-frame
    #:declare-variable
@@ -129,6 +132,8 @@
    #:get-module-interface
    #:get-modules-for-synthesis
    #:defmodule/vl
+   #:importmodule/vl
+   #:macrolet/vl
    #:expand/vl
    #:elaborate/vl
    #:synthesise/vl
