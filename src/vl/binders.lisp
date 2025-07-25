@@ -183,12 +183,17 @@ The name is the first element, whether or not DECL is a list."
 			 (if read
 			     ;; variable is read and not updated
 			     (if-let ((v (get-initial-value n)))
-			       (if (static-p v)
-				   ;; static constant, a constant
-				   'constant
+			       (cond ((array-value-p v)
+				      ;; arrays are always registers
+				      'register)
 
-				   ;; not constant, a wire
-				   'wire)
+				     ((static-p v)
+				      ;; static constant, a constant
+				      'constant)
+
+				     (t
+				      ;; not constant, a wire
+				      'wire))
 
 			       ;; no initial value, assume a wire
 			       'wire)

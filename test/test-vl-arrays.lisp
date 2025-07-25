@@ -233,7 +233,7 @@
 				    (aref a 0))))))
 
 
-(test test-syntheseise-array-init
+(test test-synthesise-array-init
   "Test we can synthesise array initialisation."
   (let ((p (vl::expand/vl '(let ((a (make-array '(10)
 				     :initial-contents '(1 2 3 4 5 6 7 8 9 10)))
