@@ -53,18 +53,24 @@ specifiers, and Verilisp supports:
 - Union types (for example :code:`(or unsigned-byte (signed-byte
   12))`) that include all values that are members of one or more of
   the component types
-- Intersection types (for example :code:`(and unsigned-byte
-  (unsigned-byte 12))`) that include all values that are members of
-  all of the component types
-- Negation types (for example :code:`(not unsigned-byte)`) that
-  include all values that are not members of the component type
+- Intersection types (for example :code:`(and (unsigned-byte 8)
+  (unsigned-byte 12))`) that include all values that have members of
+  all the component types
+
+These complex types are used during compilation to represent the most
+general types of forms, and are then reified to representable types
+before synthesis.
 
 .. note::
 
-   Common Lisp also includes two additional complex type specifiers,
-   :code:`satisfies` and :code:`member`. These are used to determine
-   whether a particular value is a member of a type, and as such
-   are not (yet) needed or supported by Verilisp.
+   Common Lisp also includes three additional complex type specifiers,
+   :code:`eql`, :code:`satisfies` and :code:`member`. These are used
+   to determine whether a particular value is a member of a type, and
+   as such are not (yet) needed or supported by Verilisp.
+
+   There is also a negation type specifier, :code:`not`, that
+   specifies all values that are not members of its component type.
+   We haven't yet found a use case that requires implementing this.
 
 The type lattice is completed with the :code:`t` (top) and :code:`nil`
 (bottom) types.
@@ -90,32 +96,23 @@ As with sub-types, the LUB calculations are provided generically.
    :nospecializers:
 
 
-Note that since the LUB relationship is symmetrical, you should make
+Note that since the LUB relationship is symmetrical, we need to make
 sure that methods on this function can handle types in either
 position.
 
 
-Least upper representable bounds
---------------------------------
+Representability
+----------------
 
 The Verilisp type lattice inherits the "top" and "bottom" types, ``t``
 and ``nil``, from Common Lisp. These aren't useful types on hardware,
-which doesn't support polymorphism. Similarly, ``unsigned-byte`` is
-useful as an abstraction but isn't something that can be implemented
-on real hardware.
-
-The LURB function returns the least upper *representable* bound of
-two types by effectively slicing-off those parts of the type lattice
-that can't be represented.
+which doesn't support polymorphism. Similarly, the unbounded
+``unsigned-byte`` is useful as an abstraction but not in practice.
+Only a sub-class of all available types are *representable* on
+hardware.
 
 .. cl:function:: representable-type-p
 
-
-.. cl:function:: lurb
-
-
-LURB re-uses the type comparisons encoded by LUB-TYPE, and so needs no
-further programmer support.
 
 Type (de)construction
 ---------------------
