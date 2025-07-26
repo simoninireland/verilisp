@@ -112,17 +112,20 @@
    #:2*
    #:2/
 
-   ;; DSL functions
+   ;; passes and code functions
    #:add-frames
+   #:expand-macros
+   #:expand-macros-in-environment
    #:declare-annotation
+   #:compute-type
+   #:apply-type-constraints
    #:typecheck
    #:read-variables
    #:infer-representation
    #:rewrite-variables
+   #:generalised-place-p
    #:float-let-blocks
    #:simplify-progn
-   #:expand-macros-in-environment
-   #:simplify
    #:synthesise
    #:lispify
 
