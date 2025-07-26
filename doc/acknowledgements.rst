@@ -1,9 +1,9 @@
 Acknowledgements
 ================
 
-To :ref:`Tom Spink <https://tom-spink.com/>` for first getting me
+To `Tom Spink <https://tom-spink.com/>`_ for first getting me
 into this stuff.
 
-To Bruno Levy for his excellent :ref:`Learn FPGA
-<https://github.com/BrunoLevy/learn-fpga>` tutorial and
+To Bruno Levy for his excellent `Learn FPGA
+<https://github.com/BrunoLevy/learn-fpga>`_ tutorial and
 resources.

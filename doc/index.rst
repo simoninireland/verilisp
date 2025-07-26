@@ -28,3 +28,4 @@ to both interpretations, from the same description.
    verilisp
    implementation
    zbibliography
+   acknowledgements
