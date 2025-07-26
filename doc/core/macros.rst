@@ -52,8 +52,8 @@ using ``macrolet/vl``:
 
    (defmacro/vl expand-things (a &body body)
       "Expand THING macro within BODY."
-      (macrolet ((thing (b)
-		    `(+ ,a ,b)))
+      (macrolet/vl ((thing (b)
+		       `(+ ,a ,b)))
 	 `(progn
 	     ,@body)))
 
