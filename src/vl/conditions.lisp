@@ -233,6 +233,18 @@ used as targets for GO forms."))
   (:documentation "Condition signalled when a variable is re-defined in the same scope."))
 
 
+(define-condition duplicate-macro (vl-warning)
+  ((var
+    :documentation "The macro."
+    :initarg :name
+    :reader name))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Re-defiing macro ~a"
+					       (name c))
+				       c str)))
+  (:documentation "Condition signalled when a macro is re-defined."))
+
+
 (define-condition duplicate-module (vl-error)
   ((modname
     :documentation "The module."

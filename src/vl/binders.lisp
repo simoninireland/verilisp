@@ -324,6 +324,34 @@ The name is the first element, whether or not DECL is a list."
 	 ,newbody))))
 
 
+;; ---------- Transformation ----------
+
+(defun transform-decls (decls)
+  "Apply transforms to the values in DECLS."
+  (mapcar (lambda (decl)
+	    (if (listp decl)
+		(destructuring-bind (n v)
+		    decl
+		  `(,n ,(transform v)))
+
+		decl))
+	  decls))
+
+
+(defmethod transform-sexp ((fun (eql 'let)) args)
+  (destructuring-bind (decls &rest body)
+      args
+
+    (with-local-frame decls
+      (let ((newdecls (transform-decls decls))
+	    (newbody (transform (with-implicit-progn body))))
+	;; add the local frame back to the new decls
+	(add-local-frame-to-decls newdecls (current-frame))
+
+	`(let ,newdecls
+	   ,@newbody)))))
+
+
 ;; ---------- Floating ----------
 
 (defmethod float-let-blocks-sexp ((fun (eql 'let)) args)

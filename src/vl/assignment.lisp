@@ -103,8 +103,6 @@ same (old) values of the variables, making their ordering irrelevant.
 Note that this creates temporary variables to hold the intermediate
 updates. Also note that it only works for variables, not for
 generalised places."
-  (declare (optimize debug))
-
   (let* ((var-val-pairs (adjacent-pairs var-vals))
 	 (vars (mapcar #'car var-val-pairs))
 	 (vals (mapcar #'cadr var-val-pairs))

@@ -462,23 +462,44 @@ Use EXPAND-MACROS-IN-ENVIRONMENT to select a specific environment.")
     (declare (optimize debug))
 
     (if (macro-declared-p fun)
-	;; macro is expandable, replace with real name if there is one
-	(let ((realfun (variable-property fun 'real-name)))
+	;; macro is expandable
+	(let ((realfun (variable-property fun 'initial-value)))
 
 	  ;; expand the macro in a nested environment that will contain
 	  ;; any locally-declared macros
 	  (with-new-frame
-	    (multiple-value-bind (expansion expanded)
-		(macroexpand-1 (cons realfun args))
-	      (if expanded
-		  ;; form was expanded by macro, expand the expansion
-		  (expand-macros expansion)
+	    (let ((expansion (apply realfun args)))
 
-		  ;; form wasn't expanded, descend into the form
-		  (expand-descend fun args)))))
+	      ;; expand the expansion
+	      (expand-macros expansion))))
 
 	;; macro is not expandable, descend into the form
 	(expand-descend fun args))))
+
+
+;; ---------- Transformation ----------
+
+(defgeneric transform (form)
+  (:documentation "Transform FORM.")
+  (:method (form)
+    form)
+  (:method ((form list))
+    (destructuring-bind (fun &rest args)
+	form
+      (transform-sexp fun args))))
+
+
+(defgeneric transform-sexp (fun args)
+  (:documentation "Transform FUN applied to ARGS.
+
+Methods on this function should transform the form as required. This
+pass happens late, after type-checking, meaning that the environment
+holds a lot of information about variable types, representations, dependencies,
+and so forth.
+
+The default recurses into ARGS.")
+  (:method (fun args)
+    `(,fun ,@(mapcar #'transform args))))
 
 
 ;; ---------- Synthesis ----------

@@ -352,6 +352,15 @@ Signal VALUE-MISMATCH as an error if not."
       `(module ,modname ,decls ,@(simplify-implied-progn newbody)))))
 
 
+(defmethod transform-sexp ((fun (eql 'module)) args)
+  (destructuring-bind (modname decls &rest body)
+      args
+
+    `(module ,modname ,decls
+	     ,@(with-local-frame decls
+		 (mapcar #'transform body)))))
+
+
 (defun synthesise-param (decl)
   "Return the code for parameter N."
   (if (listp decl)

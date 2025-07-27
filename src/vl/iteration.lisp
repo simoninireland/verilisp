@@ -89,9 +89,6 @@ the increments to the variables being executed every time."
 	      (go ,loop-head)))))))
 
 
-(importmacro/vl dotimes)
-
-
 ;; ---------- Structured iteration ----------
 
 (defmacro/vl while (condition &body body)
@@ -116,3 +113,11 @@ BODY is not run if CONDITION is already true."
   "Run BODY forever."
   `(while 1
      ,@body))
+
+
+(defmacro/vl dotimes ((var count) &body body)
+  `(let ((,var 0))
+     (while (< ,var ,count)
+	    ,@body
+
+	    (incf ,count))))

@@ -50,3 +50,16 @@
 
     (vl::typecheck p)
     (is (vl::synthesise p))))
+
+
+(test test-cond-unreachable-code
+  "Test we catch unreachable code."
+  (signals (unreachable-code)
+    (vl::expand/vl '(let ((a 1)
+			  (b 2))
+		     (cond ((< a 1)
+			    (setf b 1))
+			   (t
+			    (setf b 3))
+			   ((< a 2)
+			    (setf b 2)))))))

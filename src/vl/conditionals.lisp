@@ -202,3 +202,47 @@ The type is the lub of the clause types."
 	  (as-block clauses :process #'synthesise-clause)
 
 	  (as-literal "endcase" :newline t)))))
+
+
+;; ---------- cond ----------
+
+(defmacro/vl cond (&rest arms)
+  (labels ((arms-to-ifs (arms)
+	     (if (null arms)
+		 nil
+
+		 (destructuring-bind (test &rest body)
+		     (car arms)
+		   (if (eql test t)
+		       (progn
+			 ;; catch-all arm, test for unrerachable code
+			 (unless (null (cdr arms))
+			   (warn 'unreachable-code :fragment (cadr arms)
+						   :hint "Make sure all meaningful options in a COND form appear before the test against T"))
+
+			 ;; return the body as the last nested IF
+			 (single-or-long-body body))
+
+		       ;; arm with test, construct a nested IF
+		       (let ((rest (arms-to-ifs (cdr arms))))
+			 (if rest
+			     ;; arm with following arms
+			     `(if ,test
+				  ,(single-or-long-body body)
+
+				  ,rest)
+
+			     ;; last arm
+			     `(if ,test
+				  ,(single-or-long-body body))))))))
+
+	   (single-or-long-body (body)
+	     (if (> (length body) 1)
+		 ;; long body, put into a PROGN
+		 `(progn
+		    ,@body)
+
+		 ;; singleton body, return it
+		 (car body))))
+
+    (arms-to-ifs arms)))

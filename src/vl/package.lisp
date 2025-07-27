@@ -124,6 +124,7 @@
    #:infer-representation
    #:rewrite-variables
    #:generalised-place-p
+   #:transform
    #:float-let-blocks
    #:simplify-progn
    #:synthesise
@@ -156,6 +157,7 @@
    #:unrecognised-declaration
    #:duplicate-variable
    #:duplicate-module
+   #:duplicate-macro
    #:duplicate-state
    #:not-importable
    #:not-static

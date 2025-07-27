@@ -130,7 +130,8 @@ of a larger compilation process."
   (let* ((intf (typecheck form)))
 
     ;; simplify
-    (let* ((floated (car (float-let-blocks form)))
+    (let* ((transformed (transform form))
+	   (floated (car (float-let-blocks transformed)))
 	   (simplified (simplify-progn floated)))
 
       (list intf simplified))))
@@ -159,7 +160,6 @@ Return the name of the newly-defined module."
 	 (destructuring-bind (,intf ,elaborated)
 	     (elaborate/vl ,expanded)
 
-	   ;; typecheck and elaborate the expanded module
 	   ;; add type to interfaces available for import
 	   (add-module-interface ',modname ,intf)
 

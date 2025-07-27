@@ -23,26 +23,18 @@
 
 ;; ---------- Single-armed conditionals ----------
 
-(defmacro/vl when (cond &body body)
-  "Execute BODY when COND is true."
-  `(if ,cond
+(defmacro/vl when (condition &body body)
+  "Execute BODY when CONDITION is true."
+  `(if ,condition
        (progn
 	 ,@body)))
 
 
-(defmacro/vl unless (cond &body body)
-  "Execute BODY unless COND is true."
-  `(if (not,cond)
+(defmacro/vl unless (condition &body body)
+  "Execute BODY unless CONDITION is true."
+  `(if (not ,condition)
        (progn
 	 ,@body)))
-
-
-;; ---------- Multi-arm conditionals ----------
-
-;TODO: This may not be a great idea, as some implementations may use
-;non-portable constructions
-
-(importmacro/vl cond)
 
 
 ;; ---------- Increment and decrement ----------

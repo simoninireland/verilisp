@@ -58,8 +58,8 @@
   "Test that we synthesise module elements correctly."
   (vl::clear-module-registry)
 
-  (defmodule/vl clock/123 (clk-in clk-out
-			   &key (p 1) (q-r 2))
+  (vl::defmodule/vl clock/123 (clk-in clk-out
+				      &key (p 1) (q-r 2))
     (declare (type bit clk-in clk-out)
 	     (direction in clk-in)
 	     (direction out clk-out))

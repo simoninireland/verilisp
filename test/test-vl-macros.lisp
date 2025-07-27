@@ -36,7 +36,7 @@
 		   (+ a 1)
 		   (if (> a 34)
 		       (+ a 67)
-		       (the t 0)))))))
+		       0))))))
 
 
 (test test-no-expand-and
@@ -150,8 +150,8 @@
   ;; make sure all macros get expanded
   (let ((p (vl::expand/vl '(let (q w e)
 			    (test-locals 23
-			     (l1 b)
-			     (l2 x y x))))))
+			     (l1 q)
+			     (l2 w e w))))))
 
     (let ((atoms (flatten p)))
       (is (not (member 'test-locals atoms)))
@@ -161,8 +161,8 @@
   ;; make sure we can't use L1 or L2 as macros elsewhere
   ;; (they stay un-expanded out of context)
   (let ((p (vl::expand/vl '(let (q w e)
-			    (l1 b)
-			    (l2 x y x)))))
+			    (l1 q)
+			    (l2 e w e)))))
 
     (let ((atoms (flatten p)))
       (is (member 'l1 atoms))
@@ -172,3 +172,39 @@
 (test test-nested-macros
   "Test we can nest the same macro."
   (is (vl::expand/vl '(when a (when b c)))))
+
+
+(test test-nested-local-macro
+  "Test we get the right versions of nested local macros."
+  (when (vl::variable-declared-p 'test-locals)
+    (vl::forget-environment-variable 'test-locals vl::*global-environment*))
+
+  (vl::defmacro/vl test-locals (b &body body)
+    (vl::macrolet/vl ((l1 (a)
+			  `(+ ,a ,b)))
+
+      `(progn
+	 ,@body)))
+
+  (let ((p (expand/vl '(let (x y z)
+			(test-locals 12
+			 (setq x 27)
+			 (l1 y)
+			 (test-locals 13
+			  (setq x 25)
+			  (l1 z))
+			 (setq x (l1 z)))))))
+
+    (labels ((find-form (f l)
+	       (if (null l)
+		   nil
+
+		   (let ((f1 (car l)))
+		     (or (equal f1 f)
+			 (and (listp f1)
+			      (find-form f f1))
+			 (find-form f (cdr l)))))))
+
+      (is (find-form '(+ y 12) p))
+      (is (find-form '(+ z 13) p))
+      (is (find-form '(+ z 12) p)))))

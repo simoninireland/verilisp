@@ -140,13 +140,10 @@ This is used for setting defaults."
     (set-variable-property-unless-set n (car p) (cadr p))))
 
 
-(defun declare-macro (m &optional underlying-name)
-  "Declare M as a macro in the current environment.
-
-If UNDERLYING-NAME is provided then M is used as a synonym for it."
+(defun declare-macro (m f)
+  "Declare M as a macro with body F in the current environment."
   (declare-variable m `((name ,m)
-			(real-name ,(or underlying-name m))
-			(as macro))))
+			(initial-value ,f) (as macro))))
 
 
 (defun macro-declared-p (m)

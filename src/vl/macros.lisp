@@ -21,26 +21,38 @@
 (declaim (optimize debug))
 
 
+(defun translate-lambda-list (l)
+  "Translate a macro-style lambda-list L to a function-style lambda-list.
+
+Specifically this changes &body entries into &rest, which are equivalent
+but are laid-out differently."
+  (mapcar (lambda (e)
+	    (cond ((eql e '&body)
+		   '&rest)
+
+		  (t
+		   e)))
+	  l))
+
+
 (defmacro defmacro/vl (name lambda-list &body body)
   "Declare NAME with LAMBDA-LIST as a Verilisp macro.
 
 NAME is declared in the global environment, and so is
 available anywhere in a Verilsp program."
-  (with-gensyms (external-name)
-    `(progn
-       ;; define the macro under a new name
-       (defmacro ,external-name ,lambda-list
-	 ,@body)
 
-       ;; declare macro into Verilisp's global environment
-       (with-frame *global-environment*
-	 (declare-macro ',name ',external-name)))))
+  ;; test whether the macro already exists
+  (when (variable-declared-in-environment-p name *global-environment*)
+    ;; variable exists, delete it to allow re-definition
+    (warn 'duplicate-macro :name name)
+    (forget-environment-variable name *global-environment*))
 
-
-(defmacro importmacro/vl (name)
-  "Import Lisp macro NAME globally into Verilisp."
-  `(with-frame *global-environment*
-     (declare-macro ',name)))
+  (with-gensyms (tll)
+    `(with-frame *global-environment*
+       (declare-macro ',name (lambda (&rest ,tll)
+			       (destructuring-bind ,(translate-lambda-list lambda-list)
+				   ,tll
+				 ,@body))))))
 
 
 (defmacro macrolet/vl (decls &body body)
@@ -52,21 +64,16 @@ A MACROLET/VL form should appear only within a DECLAREMACRO/VL form."
   (let ((dms (mapcar (lambda (m)
 		       (destructuring-bind (name lambda-list &rest body)
 			   m
-			 (with-gensyms (f external-name)
-			   `(let ((,f (make-frame)))
-			      (with-frame ,f
-
-				;; declare macro as usual
-				(defmacro ,external-name ,lambda-list
-				  ,@body))
-
-			      ;; bind macro into parent's local frame
-			      (declare-macro ',name ',external-name)))))
-		     decls)))
+			 (with-gensyms (tll)
+			   `(declare-macro ',name (lambda (&rest ,tll)
+						    (destructuring-bind ,(translate-lambda-list lambda-list)
+							,tll
+						      ,@body)) )))
+		       decls))))
 
     `(progn
-       ;; declare the local macros
+       ;; declare embedded macros
        ,@dms
 
-       ;; continue with the body
+       ;; interpolate the body
        ,@body)))
