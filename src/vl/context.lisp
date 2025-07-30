@@ -22,20 +22,33 @@
 
 ;; ---------- Environment ----------
 
-(defparameter *global-environment* (empty-environment)
-  "The global environment for the compiler.")
+(defparameter *core-environment* (empty-environment)
+  "The core environment for the compiler.
+
+This frame contains all the core elements of Verilisp such as the
+core macros. It shouldn't change after the system is loaded.")
+
+
+(defparameter *global-environment* (attach-frame (make-frame) *core-environment*)
+  "The global environment for the compiler.
+
+This frame contains everything added to Verilisp in the current session,
+including macros and modules.")
 
 
 (defparameter *current-frame* (attach-frame (make-frame) *global-environment*)
-  "The current frame (environment) for the compiler.")
+  "The current environment for the compiler.
+
+This frame holds the shallowest definitions currently in scope,
+and is attached to the frames of the surrounding scopes back
+to *GLOBAL-ENVIRONMENT* and *CORE-ENVIRONMENT*.")
 
 
 (defun clear-global-environment ()
   "Clear the global environment.
 
-This should, in principle, never be needed because the environment
-should be handled correctly using WITH-NEW-FRAME. However...."
-  (setf *global-environment* (empty-environment))
+This forgets everything apart from core Verilisp."
+  (setf *global-environment* (attach-frame) (make-frame) *core-environment*)
   (setf *current-frame* (attach-frame (make-frame) *global-environment*)))
 
 
@@ -46,13 +59,22 @@ should be handled correctly using WITH-NEW-FRAME. However...."
 
 (defmacro in-frame (f &body body)
   "Run BODY in an environment consisting solely of F."
-  `(let ((*current-frame* f))
+  `(let ((*current-frame* ,f))
+     ,@body))
+
+
+(defmacro in-core-environment (&body body)
+  "Run BODY in the core environment.
+
+This should only be used during system loading."
+  `(in-frame *core-environment*
      ,@body))
 
 
 (defmacro in-global-environment (&body body)
   "Run BODY in the global environment."
-  `(in-frame *global-environment*))
+  `(in-frame *global-environment*
+     ,@body))
 
 
 (defmacro with-frame (f &body body)
@@ -207,12 +229,8 @@ the larger program.")
 
 Any conditions reported in BODY will be pointed as FORM as the current
 form."
-  `(unwind-protect
-	(progn
-	  (push ,form *current-form-queue*)
-	  ,@body)
-
-     (pop *current-form-queue*)))
+  `(let ((*current-form-queue* (cons ,form *current-form-queue*)))
+     ,@body))
 
 
 ;; form accessors

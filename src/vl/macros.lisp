@@ -42,13 +42,26 @@ NAME is declared in the global environment, and so is
 available anywhere in a Verilsp program."
 
   ;; test whether the macro already exists
-  (when (variable-declared-in-environment-p name *global-environment*)
+  (when (variable-declared-in-environment-p name *core-environment*)
     ;; variable exists, delete it to allow re-definition
     (warn 'duplicate-macro :name name)
-    (forget-environment-variable name *global-environment*))
+    (forget-environment-variable name *core-environment*))
 
   (with-gensyms (tll)
-    `(with-frame *global-environment*
+    `(in-global-environment
+       (declare-macro ',name (lambda (&rest ,tll)
+			       (destructuring-bind ,(translate-lambda-list lambda-list)
+				   ,tll
+				 ,@body))))))
+
+
+(defmacro defcoremacro/vl (name lambda-list &body body)
+  "Declare NAME with LAMBDA-LIST as a macro in core Verilisp.
+
+This should only be used during system loading to populate the core environment
+with core macros."
+  (with-gensyms (tll)
+    `(in-core-environment
        (declare-macro ',name (lambda (&rest ,tll)
 			       (destructuring-bind ,(translate-lambda-list lambda-list)
 				   ,tll

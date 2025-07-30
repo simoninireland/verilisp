@@ -92,7 +92,7 @@ isn't declared."
 
 ;; ---------- Parallel SETQ ----------
 
-(defmacro/vl psetq (&rest var-vals)
+(defcoremacro/vl psetq (&rest var-vals)
   "Update variables to values in parallel.
 
 VAR-VALS is a list of alternating variables and values. In performing
@@ -111,12 +111,12 @@ generalised places."
     (with-gensyms (temps reals)
       `(let ,tempvars
 	 (tagbody
-	  ,temps
+	    ,temps
 	    ,@(mapcar (lambda (tempvar val)
 			`(setq ,tempvar ,val))
 		      tempvars vals)
 
-	  ,reals
+	    ,reals
 	    ,@(mapcar (lambda (var tempvar)
 			`(setq ,var ,tempvar))
 		      vars tempvars))))))

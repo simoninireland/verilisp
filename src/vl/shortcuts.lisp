@@ -21,16 +21,14 @@
 (declaim (optimize debug))
 
 
-;; ---------- Single-armed conditionals ----------
-
-(defmacro/vl when (condition &body body)
+(defcoremacro/vl when (condition &body body)
   "Execute BODY when CONDITION is true."
   `(if ,condition
        (progn
 	 ,@body)))
 
 
-(defmacro/vl unless (condition &body body)
+(defcoremacro/vl unless (condition &body body)
   "Execute BODY unless CONDITION is true."
   `(if (not ,condition)
        (progn
@@ -41,45 +39,45 @@
 
 ;; These work because places in Verilisp can't be side-effecting.
 
-(defmacro/vl incf (place &optional (value 1))
+(defcoremacro/vl incf (place &optional (value 1))
   "Increment PLACE by VALUE, which defaults to 1."
   `(setf ,place (+ ,place ,value)))
 
 
-(defmacro/vl decf (place &optional (value 1))
+(defcoremacro/vl decf (place &optional (value 1))
   "Decrement PLACE by VALUE, which defaults to 1."
   `(setf ,place (- ,place ,value)))
 
 
 ;; ---------- Quick common tests ----------
 
-(defmacro/vl 0= (arg)
+(defcoremacro/vl 0= (arg)
   "Test whether ARG is equal to zero."
   `(= ,arg 0))
 
 
-(defmacro/vl 0/= (arg)
+(defcoremacro/vl 0/= (arg)
   "Test whether ARG is not equal to zero."
   `(/= ,arg 0))
 
 
 ;; ---------- Quick common maths operations ----------
 
-(defmacro/vl 1+ (arg)
+(defcoremacro/vl 1+ (arg)
   "Return ARG plus one."
   `(+ ,arg 1))
 
 
-(defmacro/vl 1- (arg)
+(defcoremacro/vl 1- (arg)
   "Return ARG minus one."
   `(- ,arg 1))
 
 
-(defmacro/vl 2* (arg)
+(defcoremacro/vl 2* (arg)
   "Return ARG times two."
   `(<< ,arg 1))
 
 
-(defmacro/vl 2/ (arg)
+(defcoremacro/vl 2/ (arg)
   "Return ARG divided by two."
   `(>> ,arg 1))

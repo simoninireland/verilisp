@@ -253,7 +253,7 @@ Each test element must be testable against TY."
 
 ;; ---------- cond ----------
 
-(defmacro/vl cond (&rest arms)
+(defcoremacro/vl cond (&rest arms)
   "Compile each case in ARMS to a nested conditional.
 
 Each case should be a list consisting of a test and a body executed if
