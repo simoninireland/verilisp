@@ -123,10 +123,8 @@ The value of the clause should have a type compatible with TY.
 Return the type of the clause body."
   (destructuring-bind (val &rest body)
       clause
-    (if (not (eql val 't))
-	(let ((tyval (compute-type val)))
-	  (ensure-subtype tyval ty)))
-    (compute-type (cons 'progn body))))
+
+    (compute-type (with-implicit-progn body))))
 
 
 (defun compute-type-clauses (clauses ty)
@@ -144,6 +142,33 @@ The type is the lub of the clause types."
       args
     (let ((ty (compute-type condition)))
       (compute-type-clauses clauses ty))))
+
+
+(defun constrain-clause (ty clause)
+  "Apply type constraints to a CLAUSE of a case.
+
+Each test element must be testable against TY."
+  (destructuring-bind (val &rest body)
+      clause
+
+    (if (not (eql val 't))
+	(if (listp val)
+	    ;; multiple test elements, make sure they're all appropriate
+	    (dolist (v val)
+	      (let ((tyval (compute-type v)))
+		(ensure-subtype tyval ty)))
+
+	    ;; single test element
+	    (let ((tyval (compute-type val)))
+	      (ensure-subtype tyval ty))))))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'case)) args)
+  (destructuring-bind (condition &rest clauses)
+      args
+    (let ((ty (compute-type condition)))
+
+      (mapc (curry #'constrain-clause ty) clauses))))
 
 
 (defun synthesise-clause (clause)
@@ -185,13 +210,45 @@ The type is the lub of the clause types."
 		 0)))))
 
 
+(defun synthesise-case-arm (clause)
+  "Synthesise a single arm of a case statement."
+  (destructuring-bind (match &rest body)
+      clause
+
+    ;; matching values
+    (if (listp match)
+	(as-list match :sep ", ")
+
+	(if (eql match t)
+	    (as-literal "otherwise")
+	    (synthesise match)))
+    (as-literal ": ")
+    (as-newline)
+
+    ;; body
+    (as-block body :before "begin" :after "end")))
+
+
+(defun synthesise-case (condition clauses)
+  "Synthesise a case directly."
+  (as-literal "case (")
+  (synthesise condition)
+  (as-literal ")")
+  (as-newline)
+  (as-block clauses :process #'synthesise-case-arm)
+  (as-literal "endcase"))
+
+
 (defmethod synthesise-sexp ((fun (eql 'case)) args)
   (declare (optimize debug))
   (destructuring-bind (condition &rest clauses)
       args
     (if (in-expression-context-p)
 	;; within an expression, expand as nested conditional expressions
-	(synthesise (synthesise-nested-if condition clauses)))))
+	(synthesise (synthesise-nested-if condition clauses))
+
+	;; otherwise synthesise as a Verilog case
+	(synthesise-case condition clauses))))
 
 
 ;; ---------- cond ----------

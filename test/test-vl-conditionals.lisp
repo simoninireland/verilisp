@@ -106,7 +106,7 @@ q
 						  (case a
 						    (1
 						     (setf b 23))
-						    (2
+						    ((2 3q 4)
 						     (setf b 34))
 						    (t
 						     (setf b 0))))))
@@ -133,7 +133,7 @@ q
 			   (case a
 			     (1
 			      (setf b 23))
-			     (2
+			     ((2 3 4)
 			      (setf b 34 :sync t)
 			      (setf a 0))
 			     (t
