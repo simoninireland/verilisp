@@ -196,13 +196,17 @@ An UNKNOWN-VARIABLE error is signalled if N is undefined."
 
 
 (defun forget-frame-variable (n env)
-  "Forget the declaration of NAME in the shallowest frame of ENV."
+  "Forget the declaration of NAME in the shallowest frame of ENV.
+
+Returns the name oe the variable forgotten."
   (unless (variable-declared-in-frame-p n env)
     (error 'unknown-variable :variable n))
 
   (setf (decls env) (remove-if (lambda (m)
 				 (eql (car m) n))
-			       (decls env))))
+			       (decls env)))
+
+  n)
 
 
 ;; ---------- Environments ----------
@@ -286,7 +290,9 @@ Signals a DUPLICATE-VARIABLE error if the variable already exists in this frame.
 
 
 (defun forget-environment-variable (name env)
-  "Forget the definition of NAME in ENV."
+  "Forget the definition of NAME in ENV.
+
+  Returns the name of the variable forgotten."
   (forget-frame-variable name (get-frame-declaring name env)))
 
 
