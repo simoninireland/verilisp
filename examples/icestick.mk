@@ -31,7 +31,7 @@ ICESTORM_CONTAINER_TAG = icestorm
 # ---------- Tools ----------
 
 # Tools
-VERILISPC = ../../../bin/verilispc
+VERILISPC = ../../bin/verilispc
 SYNTH = yosys
 PNR = nextpnr-ice40
 PACK = icepack
@@ -60,6 +60,22 @@ FPGA_GENERATED += $(foreach stem,$(FPGA_STEMS),$(stem).v $(stem).asc $(stem).bin
 ifneq ($(ICESTORM_CONTAINER_TAG),)
 ICESTORM_IN_CONTAINER = $(DOCKER) run -it --rm --privileged --mount type=bind,source=`pwd`,target=/work $(ICESTORM_CONTAINER_TAG)
 endif
+
+
+# ---------- Explicit targets ----------
+
+# Make the target bitstream
+target: $(TARGET)
+
+
+# Upload the target bitstream to the device
+upload: $(TARGET)
+	$(ICESTORM_IN_CONTAINER) $(PROGRAM) $(PROGRAM_OPTS) $(TARGET)
+
+
+# Clean-up the build directory
+clean:
+	$(RM) $(OBJECT) $(FPGA_GENERATED)
 
 
 # ---------- Implicit rules ----------

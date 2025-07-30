@@ -1,4 +1,4 @@
-;; A simple LED blinker in close-to-Verilog RTLisp
+;; A simple LED blinker
 ;;
 ;; Copyright (C) 2024--2025 Simon Dobson
 ;;
@@ -17,15 +17,15 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with cl-vhdsl. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :cl-vhdsl/examples/blink-raw)
-
-
-(defmodule/vl blink ((clk  :width 1 :direction :in)
-		     (leds :width bits :direction :out)
+(defmodule/vl blink (clk leds
 		     &key (bits 5) (delay 22))
+  (declare (type bit clk)
+	   (width 5 leds))
 
-  (let ((counter 0 :width (+ bits delay))
-	(out 0 :width 5))
+  (let ((counter 0)
+	(out 0))
+    (declare (width (+ bits delay) counter)
+	     (width 5 out))
 
     (@ (posedge clk)
        (setf counter (+ counter 1))

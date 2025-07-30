@@ -1,4 +1,4 @@
-# Makefile for blink in RTLisp
+# Makefile for blink in Verilisp
 #
 # Copyright (C) 2024--2025, Simon Dobson
 #
@@ -22,9 +22,10 @@ include ../icestick.mk
 
 # Bitstream
 TARGET = blink.bin
+#TOPMODULE =
 
 # Sources
-SOURCES = package.lisp blink.lisp
+SOURCES = blink.lisp
 CONFIG = blink.pcf
 OBJECT = blink.v
 
@@ -34,20 +35,13 @@ OBJECT = blink.v
 # Tools
 RM = rm -fr
 
+
 # ---------- Top-level targets ----------
 
 # Build the target bitstream
-$(TARGET): $(SOURCES) $(CONFIG)
+$(TARGET): $(OBJECT) $(CONFIG)
 
-
-# Upload the target bitstream to the device
-upload: $(TARGET)
-	$(PROGRAM) $(PROGRAM_OPTS) $<
-
-
-# Clean-up the build directory
-clean:
-	$(RM) $(GENERATED)
+$(OBJECT): $(SOURCES)
 
 
 # Print a help message
