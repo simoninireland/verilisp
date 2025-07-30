@@ -59,6 +59,11 @@ so use in later passes."))
   nil)
 
 
+(defmethod float-let-blocks-sexp ((fun (eql 'declare)) args)
+  ;; delete declarations when blocks are floated
+  '(() ()))
+
+
 (defmethod read-variables-sexp ((fun (eql 'declare)) args)
   '())
 
