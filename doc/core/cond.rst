@@ -1,7 +1,7 @@
 .. _core-cond:
 
 Multi-armed conditionals
-=======================
+========================
 
 The ``cond`` macro expands a sequence of tests into nested ``if``
 forms.

@@ -26,6 +26,7 @@ to both interpretations, from the same description.
 
    install
    verilisp
+   using
    implementation
    zbibliography
    acknowledgements

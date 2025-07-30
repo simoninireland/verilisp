@@ -60,7 +60,7 @@
 			     (:file "assignment")
 			     (:file "iteration")
 			     (:file "operators")
-			     (:file "shortcuts")q
+			     (:file "shortcuts")
 			     (:file "comparisons")
 			     (:file "bits")
 			     (:file "make-bitfields")

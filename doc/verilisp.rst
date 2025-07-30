@@ -66,3 +66,12 @@ The extra forms build on the core language using macros.
    core/shortcuts
    core/iteration
    core/with-bitfields
+
+
+Conditions
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   core/conditions

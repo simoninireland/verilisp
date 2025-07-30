@@ -85,26 +85,11 @@ but use of ``thing`` outside the body of ``expand-things`` will fail.
    the code is intended for Verilisp.
 
 
-Importing macros
-----------------
+Compatibility
+-------------
 
-Some Lisp macros can be imported as-is into Verilisp, and so don't
-have to be redefined:
-
-.. code-block:: lisp
-
-   (importmacro/vl cond)
-
-This imports the normal ``cond`` macro for use in Verilisp.
-
-.. warning::
-
-   Be careful when importing macros: the code they expand to needs to
-   (eventually) be Verilisp. This can be harder than it might appear.
-   The Common Lisp standard under-specifies (from our perspective) the
-   code to which even standard macros expand, leaving the details to
-   implementations. This allows implementations to optimise in
-   different ways, but also means that a macro may expand to code that
-   makes use of implementation-dependent features. This is why
-   Verilisp explicitly codes some standard macros (like ``do``), to
-   ensure compatibility on *all* Lisps.
+There are some significant differences between Verilisp macros and
+"normal" Lisp macros, both in the way they're implemented (which is
+largely invisible to the Verilisp programmer) and the way they're
+expanded (which can cause confusion in complicated cases). See
+:ref:`writing-macros` for more details.
