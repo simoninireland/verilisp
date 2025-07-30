@@ -181,7 +181,7 @@ Fixed bits are constant 0s or 1s."
 	      `(= (bref ,arg ,start :end ,end) ,val))))))
 
 
-(defmacro/vl if-let-bitfields (pattern arg &body body)
+(defcoremacro/vl if-let-bitfields (pattern arg &body body)
   "Create variables matching the bitfield PATTERN applied to ARG.
 
 The pattern consists of a list of variable names, with each
@@ -288,7 +288,7 @@ SETF will update the appropriate positons in ARG."
 		  nil)))))))
 
 
-(defmacro/vl with-bitfields (pattern arg &body body)
+(defcoremacro/vl with-bitfields (pattern arg &body body)
   "Create variables matching the bitfield PATTERN applied to ARG in BODY.
 
 The patterns are as in IF-LET-BITFIELDS. If the fixed bits do not
