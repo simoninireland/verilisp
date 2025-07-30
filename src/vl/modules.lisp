@@ -265,20 +265,20 @@ Signal VALUE-MISMATCH as an error if not."
 	  (if (member n (module-arguments intf))
 	      ;; constrain the variable's type (which must be representable)
 	      (let* ((constraints (get-type-constraints n))
-		     (lurbty (if constraints (apply #'lurb constraints))))
+		     (lubty (if constraints (apply #'lurb constraints))))
 
 		(let ((ty (get-type n)))
 		  (if ty
 		      ;; check against provided type
-		      (unless (subtype-p lurbty ty)
+		      (unless (subtype-p lubty ty)
 			(warn 'type-mismatch :expected ty
-					     :got lurbty
+					     :got lubty
 					     :hint "Make sure explicit type matches usage"))
 
 		      ;; update the type with the constrained type
 		      (progn
-			(set-variable-property n 'type lurbty)
-			(setq ty lurbty)))
+			(set-variable-property n 'type lubty)
+			(setq ty lubty)))
 
 		  ;; ensure the initial value is a valid element
 		  (if-let ((v (get-initial-value n)))
@@ -294,6 +294,65 @@ Signal VALUE-MISMATCH as an error if not."
 
 (defmethod read-variables-sexp ((fun (eql 'module)) args)
   '())
+
+
+(defmethod infer-representation-sexp ((fun (eql 'module)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (modname decls &rest body)
+      args
+
+    (with-local-frame decls
+      ;; do representation inference in body
+      (infer-representation (with-implicit-progn body))
+
+      ;; do direction inference on local variables (not parameters)
+      (dolist (n (remove-if (lambda (n)
+			      (eql (get-representation n) 'parameter))
+			    (variables-declared-in-current-frame)))
+	(let ((read (variable-property n 'read))
+	      (written (variable-property n 'written))
+	      (ignored (variable-property n 'ignored))
+	      (ignorable (variable-property n 'ignorable)))
+
+	  (let ((dir (if written
+			 (if read
+			     ;; variable is read and updated
+			     'inout
+
+			     ;; variable is just written to
+			     'out
+			     )
+
+			 (if read
+			     ;; variable is read but not updated
+			     'in
+
+			     ;; variable is neither read nor written
+			     (progn
+			       (if (not (or ignored ignorable))
+				   ;; not marked as ignored/able
+				   (warn 'unused-variable :variable n
+							  :hint "Make sure variable is needed"))
+
+			       ;; treat as read-only
+			       'in)))))
+
+	    (if (and (or read written)
+		     ignored)
+		;; variable is used despire being marked as ignored
+		(warn 'used-variable :variable n
+				     :hint "Why is the variable used when marked as ignored?"))
+
+	    ;; check consistency with assigned direction
+	    (if-let ((given (get-direction n)))
+	      (when (not (eql dir given))
+		(warn 'direction-mismatch :got dir
+					  :expected given
+					  :hint "Make sure the explicitly-assigned direction is appropriate"))
+
+	      ;; update direction if none given
+	      (set-variable-property n 'direction dir))))))))
 
 
 (defmethod float-let-blocks-sexp ((fun (eql 'module)) args)
@@ -361,21 +420,14 @@ Signal VALUE-MISMATCH as an error if not."
 		 (mapcar #'transform body)))))
 
 
-(defun synthesise-param (decl)
+(defun synthesise-param (n)
   "Return the code for parameter N."
-  (if (listp decl)
-      ;; parameter with an initial value
-      (destructuring-bind (n &rest rest)
-	  decl
-	(as-literal "parameter ")
-	(synthesise n)
-	(as-literal " = ")
-	(synthesise (get-initial-value n)))
-
-      ;; naked parameter
-      (progn
-	(as-literal "parameter ")
-	(synthesise decl))))
+  (let ((v (get-initial-value n)))
+    ;; parameter with an initial value
+    (as-literal "parameter ")
+    (synthesise n)
+    (as-literal " = ")
+    (synthesise (get-initial-value n))))
 
 
 (defun synthesise-arg (n)
@@ -383,17 +435,18 @@ Signal VALUE-MISMATCH as an error if not."
   (declare (optimize debug))
 
   (let ((type (get-type n))
-	(direction (variable-property n 'direction))
-	(as (variable-property n 'as)))
+	(direction (get-direction n))
+	(as (get-representation n)))
 
-    (let ((width (bitwidth type)))
+    (let* ((width (bitwidth type))
+	   (w (eval-in-static-environment width)))
       (as-literal (format nil "~a ~a"
 			  (case direction
-			    ('in    "input")
-			    ('out   "output")
-			    ('inout "inout"))
-			  (if (and (integerp width)
-				   (= width 1))
+			    (in    "input")
+			    (out   "output")
+			    (inout "inout"))
+			  (if (and (integerp w)
+				   (= w 1))
 			      ""
 			      (format nil "[ ~(~a~) - 1 : 0 ] " width))))
       (synthesise n))))

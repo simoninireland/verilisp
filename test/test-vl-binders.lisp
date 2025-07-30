@@ -304,3 +304,15 @@
 	(is (not (vl::variable-property 'b 'read)))
 	(is (vl::variable-property 'c 'written))
 	(is (vl::variable-property 'c 'read))))))
+
+
+;; ---------- Variable declarations ----------
+
+(test test-declare-non-local
+  "Test we can't add declarations to variables from shallower frames."
+  (signals (vl::unknown-variable)
+    (vl::expand/vl '(let (a b c)
+		     (declare (type bit a))
+
+		     (let (d)
+		       (declare (type (unsigned-byte 8) c)))))))

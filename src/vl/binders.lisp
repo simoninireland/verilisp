@@ -130,20 +130,20 @@ The name is the first element, whether or not DECL is a list."
 
 	  ;; constrain the variable's type (which must be representable)
 	  (let* ((constraints (get-type-constraints n))
-		 (lurbty (if constraints (apply #'lub constraints))))
+		 (lubty (if constraints (apply #'lub constraints))))
 
 	    (let ((ty (get-type n)))
 	      (if ty
 		  ;; check against provided type
-		  (unless (subtype-p lurbty ty)
+		  (unless (subtype-p lubty ty)
 		    (warn 'type-mismatch :expected ty
-					 :got lurbty
+					 :got lubty
 					 :hint "Make sure explicit type matches usage"))
 
 		  ;; update the type with the constrained type
 		  (progn
-		    (set-variable-property n 'type lurbty)
-		    (setq ty lurbty)))
+		    (set-variable-property n 'type lubty)
+		    (setq ty lubty)))
 
 	      ;; ensure the initial value is a valid element
 	      (if-let ((v (get-initial-value n)))
@@ -349,7 +349,7 @@ The name is the first element, whether or not DECL is a list."
 	(add-local-frame-to-decls newdecls (current-frame))
 
 	`(let ,newdecls
-	   ,@newbody)))))
+	   ,newbody)))))
 
 
 ;; ---------- Floating ----------

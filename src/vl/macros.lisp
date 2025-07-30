@@ -68,8 +68,8 @@ A MACROLET/VL form should appear only within a DECLAREMACRO/VL form."
 			   `(declare-macro ',name (lambda (&rest ,tll)
 						    (destructuring-bind ,(translate-lambda-list lambda-list)
 							,tll
-						      ,@body)) )))
-		       decls))))
+						      ,@body))))))
+		     decls)))
 
     `(progn
        ;; declare embedded macros

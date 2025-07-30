@@ -191,22 +191,22 @@ The type is the lub of the clause types."
       args
     (if (in-expression-context-p)
 	;; within an expression, expand as nested conditional expressions
-	(synthesise (synthesise-nested-if condition clauses))
-
-	;; elsewhere, synthesise as case
-	(progn
-	  (as-literal"case (")
-	  (synthesise condition)
-	  (as-literal ")" :newline t)
-
-	  (as-block clauses :process #'synthesise-clause)
-
-	  (as-literal "endcase" :newline t)))))
+	(synthesise (synthesise-nested-if condition clauses)))))
 
 
 ;; ---------- cond ----------
 
 (defmacro/vl cond (&rest arms)
+  "Compile each case in ARMS to a nested conditional.
+
+Each case should be a list consisting of a test and a body executed if
+that tests passes. The body executed will be the first for which the
+test passes, reckoned from the top of the arms. If no test passes, no
+body is executed,
+
+A test T always passes. An UNREACHABLE-CODE warning will be signalled
+if there are arms after one with a T test, since these can never be
+executed."
   (labels ((arms-to-ifs (arms)
 	     (if (null arms)
 		 nil

@@ -174,5 +174,6 @@
    #:state-machine-mismatch
    #:unreachable-code
    #:type-inferred
+   #:state-machine-inferred
    #:representation-mismatch
    #:no-local-frame))

@@ -101,6 +101,20 @@ should be handled correctly using WITH-NEW-FRAME. However...."
   (get-frame-names (current-frame)))
 
 
+(defun variable-declared-in-current-frame-p (n)
+  "Test that N is declared in the current frame."
+  (variable-declared-in-frame-p n (current-frame)))
+
+
+(defun ensure-variable-declared-in-current-frame (n)
+  "Test that N is declared in the current frame.
+
+An UNKNOWN-VARIABLE error is signalled if not."
+  (unless (variable-declared-in-current-frame-p n)
+    (error 'unknown-variable :variable n
+			     :hint "Is this variable declared in another frame, not the local one?")))
+
+
 (defun variable-properties (n)
   "Return the property list of variable N in the environment."
   (get-environment-properties n (current-frame)))

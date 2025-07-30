@@ -314,7 +314,7 @@ include terms that are only known at run-time."))
   (:documentation "Condition signalled when a mis-matched value is received."))
 
 
-(define-condition direction-mismatch (vl-error)
+(define-condition direction-mismatch (vl-warning)
   ((expected
      :documentation "The direction(s) allowed."
      :initarg :expected
@@ -330,7 +330,9 @@ include terms that are only known at run-time."))
 				       c str)))
   (:documentation "Condition signalled when a mis-matched direction is received.
 
-This is usually caused by assigning to a module argument denoted :IN."))
+This is signalled when an explicit direction is declared for a module
+parameter that is inconsistent with the one Verilisp infers. This is
+almost certainly a logical error."))
 
 
 (define-condition type-mismatch (vl-warning)
@@ -490,6 +492,30 @@ This is almost always a warning, signalled when the compiler infers the
 type of a variable that doesn't have an explicit type provided. If may
 cause downstream errors if the inferred type is incorrect, but that will
 only happen when the types are being used inconsistently."))
+
+
+(define-condition state-machine-inferred (vl-warning)
+  ((given
+    :documentation "The number of states in the machine as specified."
+    :initarg :given
+    :reader given-states)
+   (inferred
+    :documentation "The number of states inferred."
+    :initarg :inferred
+    :reader inferred-states))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Inferred state machine has ~a states (~a in original code)"
+					       (inferred-states c)
+					       (given-states c))
+				       c str)))
+  (:documentation "Condition signalled when a state machine is inferred.
+
+This is a condition that doesn't necessarily indicte a problem, but announces
+how many states have been inferred for a state machine. This will never be less
+than the number in the code, but will frequently be more due to constructs
+introduced by loops, dependencies, and so on. This may be important where
+the timing of the final system is critical, since each state requires its own
+clock cycle."))
 
 
 (define-condition unused-variable (vl-warning)

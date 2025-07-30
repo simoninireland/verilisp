@@ -222,11 +222,11 @@
 
 
 (defmethod bitwidth-type ((tytag (eql 'unsigned-byte)) tyargs)
-  (eval-in-static-environment (car tyargs)))
+  (car tyargs))
 
 
 (defmethod bitwidth-type ((tytag (eql 'signed-byte)) tyargs)
-  (eval-in-static-environment (car tyargs)))
+  (car tyargs))
 
 
 (defmethod bitwidth-type ((tytag (eql 'bit)) tyargs)
@@ -234,14 +234,14 @@
 
 
 (defmethod eval-type-type ((tytag (eql 'unsigned-byte)) tyargs)
-  (let ((w (bitwidth (construct-type tytag tyargs))))
+  (let ((w (eval-in-static-environment (bitwidth (construct-type tytag tyargs)))))
     (if (null w)
 	'unsigned-byte
 	`(unsigned-byte ,w))))
 
 
 (defmethod eval-type-type ((tytag (eql 'signed-byte)) tyargs)
-  (let ((w (bitwidth (construct-type tytag tyargs))))
+  (let ((w (eval-in-static-environment (bitwidth (construct-type tytag tyargs)))))
     (if (null w)
 	'signed-byte
 	`(signed-byte ,w))))

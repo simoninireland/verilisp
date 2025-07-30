@@ -191,9 +191,12 @@ block, and are represented by the symbol *."
 (defmethod compute-type-sexp ((fun (eql 'posedge)) args)
   (destructuring-bind (pin)
       args
-    (let ((ty (compute-type pin)))
-      (ensure-subtype ty '(unsigned-byte 1))
-      ty)))
+    (set-variable-property pin 'read t)
+    'bit))
+
+
+(defmethod read-variables-sexp ((fun (eql 'posedge)) args)
+  (read-variables (car args)))
 
 
 (defmethod synthesise-sexp ((fun (eql 'posedge)) args)
@@ -207,9 +210,12 @@ block, and are represented by the symbol *."
 (defmethod compute-type-sexp ((fun (eql 'negedge)) args)
   (destructuring-bind (pin)
       args
-    (let ((ty (compute-type pin)))
-      (ensure-subtype ty '(unsigned-byte 1))
-      ty)))
+    (set-variable-property pin 'read t)
+    'bit))
+
+
+(defmethod read-variables-sexp ((fun (eql 'negedge)) args)
+  (read-variables (car args)))
 
 
 (defmethod synthesise-sexp ((fun (eql 'negedge)) args)

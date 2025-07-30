@@ -237,13 +237,29 @@ form fell-through and should therefore continue to EXIT-STATE.")
 	  (list current-state)))))
 
 
+(defun count-tagbody-forms (forms)
+  "Return the number of states in FORMS."
+  (let ((states 0))
+
+    ;; count the state markers in the forms
+    (dolist (form forms)
+      (when (state-marker-p form)
+	(incf states)))
+
+    ;; add one if the initial state wasn't labelled
+    (unless (state-marker-p (car forms))
+      (incf states))
+
+    states))
+
+
 (defun parse-tagbody-forms (forms current-state exit-state)
   "Parse FORMS as the body of a TAGBODY, returning a state machine.
 
 The FORMS are built into CURRENT-STATE until there is a state
 change. If a state falls-through, it lands in EXIT-STATE.
 
-Return a list of states created, initial state (of the path) first."
+Return a list of of states created, initial state first."
   (declare (optimize debug))
 
   (if (null forms)
@@ -276,10 +292,10 @@ Return a list of states created, initial state (of the path) first."
 
 	    ;; otherwise, part of the current state's body
 	    (progn
-	      (if (null current-state)
-		  ;; this is the body of an unlabelled initial state, so
-		  ;; create the state to hold it
-		  (setq current-state (make-instance 'state)))
+	      (when (null current-state)
+		;; this is the body of an unlabelled initial state, so
+		;; create the state to hold it
+		(setq current-state (make-instance 'state)))
 
 	      ;; parse form
 	      (if (listp form)
@@ -322,6 +338,11 @@ Return a list of states created, initial state (of the path) first."
 			machine '())))
 
     (with-gensyms (state-variable)
+      ;; record the current state machine variable
+      (declare-variable 'tagbody-state-variable `((type 'unsigned-byte)
+						  (initial-value ,state-variable)))
+
+      ;; synthesise the machine
       `(let ,decls
 	 ,declaration
 
@@ -330,11 +351,23 @@ Return a list of states created, initial state (of the path) first."
 	     ,states))))))
 
 
-(defmethod synthesis-sexp ((fun (eql 'tagbody)) args)
-  (let ((machine (build-state-machine args)))
-    (synthesise-state-machine machine)
-    )
-  )
+;; TAGBODY/GO is transformed away into a CASE-based state machine, so
+;; the forms have no synthesis functions.
+
+(defmethod transform-sexp ((fun (eql 'tagbody)) args)
+   (let ((machine (build-state-machine args)))
+
+     ;; warn about the number of states inferred if different from that specified
+     (let ((given (count-tagbody-forms args))
+	   (inferred (length machine)))
+       (when (/= given inferred)
+	 (warn 'state-machine-inferred :given given
+				       :inferred inferred)))
+
+     (with-new-frame
+       (let ((form (synthesise-state-machine machine)))
+	 (transform (expand/vl form))))))
+
 
 ;; ---------- GO ----------
 
@@ -352,3 +385,10 @@ Return a list of states created, initial state (of the path) first."
 
 (defmethod read-variables-sexp ((fun (eql 'go)) args)
   '())
+
+
+(defmethod transform-sexp ((fun (eql 'go)) args)
+  (let ((state-label (car args))
+	(state-variable (get-initial-value 'tagbody-state-variable)))
+
+    (transform (expand/vl `(setq ,state-variable ,state-label)))))

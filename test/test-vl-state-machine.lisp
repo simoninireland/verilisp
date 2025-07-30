@@ -271,4 +271,21 @@
     (is (vl:typecheck p))))
 
 
-;; ---------- Synthesis ----------
+;; ---------- Transformation ----------
+
+(test test-synthesise-tagbody
+  "Test we can synthesise a tTAGBODY/GO form."
+  (let ((p (vl::expand/vl '(let (a b)
+			    (tagbody
+			     start
+			       (setq a (+ a 1))
+			     test
+			       (if (>= a b)
+				   (go start)))))))
+
+
+    (vl::typecheck p)
+    (vl:transform p)
+    )
+
+  )

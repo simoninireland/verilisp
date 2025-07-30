@@ -73,6 +73,8 @@ so use in later passes."))
   (destructuring-bind (ty &rest vars)
       args
     (dolist (n vars)
+      (ensure-variable-declared-in-current-frame n)
+
       ;; set the explicit type
       (set-variable-property n 'type ty)
 
@@ -90,26 +92,26 @@ so use in later passes."))
 (defmethod declare-annotation ((tag (eql 'as)) args)
   (destructuring-bind (rep &rest vars)
       args
-    (mapc (lambda (n)
-	    (set-variable-property n 'as rep))
-	  vars)))
+    (dolist (n vars)
+      (ensure-variable-declared-in-current-frame n)
+      (set-variable-property n 'as rep))))
 
 
 (defmethod declare-annotation ((tag (eql 'direction)) args)
   (destructuring-bind (rep &rest vars)
       args
-    (mapc (lambda (n)
-	    (set-variable-property n 'direction rep))
-	  vars)))
+    (dolist (n vars)
+      (ensure-variable-declared-in-current-frame n)
+      (set-variable-property n 'direction rep))))
 
 
 (defmethod declare-annotation ((tag (eql 'ignore)) args)
-  (mapc (lambda (n)
-	  (set-variable-property n 'ignore t))
-	args))
+  (dolist (n vars)
+    (ensure-variable-declared-in-current-frame n)
+    (set-variable-property n 'ignore t)))
 
 
 (defmethod declare-annotation ((tag (eql 'ignorable)) args)
-  (mapc (lambda (n)
-	  (set-variable-property n 'ignorable t))
-	args))
+  (dolist (n vars)
+    (ensure-variable-declared-in-current-frame n)
+    (set-variable-property n 'ignorable t)))
