@@ -1,7 +1,7 @@
-* Blink in RTLisp
+* Blink in Verlisp
 
   This is one of the classic "blink the LEDs" programs written in
-  RTLisp, closely modelled on the many Verilog examples of the same
+  Verilisp, closely modelled on the many Verilog examples of the same
   functionality available online.
 
   The program is intended for the Lattice IceStick FPGA development
