@@ -49,6 +49,9 @@
    #:0=
    #:0/=
    #:2*
+   #:while
+   #:until
+   #:forever
 
    ;; top-level interface
    #:defmodule/vl
