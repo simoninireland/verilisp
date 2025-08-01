@@ -27,55 +27,16 @@ in many applications."
   (ensure-subtype ty 'bit))
 
 
-;; ---------- Equality and inequality ----------
-
-(defmethod compute-type-sexp ((fun (eql '=)) args)
-  (destructuring-bind (l r)
-      args
-    (let ((ty1 (compute-type l))
-	  (ty2 (compute-type r)))
-      (ensure-subtype ty2 ty1))
-
-    '(unsigned-byte 1)))
-
-
-(defmethod synthesise-sexp ((fun (eql '=)) args)
-  (destructuring-bind (l r)
-      args
-    (as-literal "(")
-    (synthesise l)
-    (as-literal " == ")
-    (synthesise r)
-    (as-literal ")")))
-
-
-(defmethod compute-type-sexp ((fun (eql '/=)) args)
-  (destructuring-bind (l r)
-      args
-    (let ((ty1 (compute-type l))
-	  (ty2 (compute-type r)))
-       (ensure-subtype ty2 ty1))
-
-    '(unsigned-byte 1)))
-
-
-(defmethod synthesise-sexp ((fun (eql '/=)) args)
-  (destructuring-bind (l r)
-      args
-    (as-literal "(")
-    (synthesise l)
-    (as-literal " != ")
-    (synthesise r)
-    (as-literal ")")))
-
-
 ;; ---------- Assertedness ----------
 
 (defmethod compute-type-sexp ((fun (eql 'asserted-p)) args)
+  '(unsigned-byte 1))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'asserted-p)) args)
   (destructuring-bind (v)
       args
-    (let ((ty (compute-type v)))
-      '(unsigned-byte 1))))
+    (compute-type v)))
 
 
 (defmethod synthesise-sexp ((fun (eql 'asserted-p)) args)
@@ -88,77 +49,39 @@ in many applications."
 
 ;; ---------- Maths ----------
 
-(defmethod compute-type-sexp ((fun (eql '<)) args)
-  (destructuring-bind (l r)
-      args
-    (ensure-fixed-width (compute-type l))
-    (ensure-fixed-width (compute-type r))
+(defmacro define-fixed-width-binary-maths-comparator (symbol &optional verilog-operator)
+  "Declare the necessary functions for SYMBOL.
 
-    '(unsigned-byte 1)))
+Use VERILOG-OPERATOR if provided for synthesis."
+  (unless verilog-operator
+    (setq verilog-operator symbol))
 
-
-(defmethod synthesise-sexp ((fun (eql '<)) args)
-  (destructuring-bind (l r)
-      args
-    (as-literal "(")
-    (synthesise l)
-    (as-literal " < ")
-    (synthesise r)
-    (as-literal ")")))
+  `(progn
+     (defmethod compute-type-sexp ((fun (eql ,symbol)) args)
+       '(unsigned-byte 1))
 
 
-(defmethod compute-type-sexp ((fun (eql '>)) args)
-  (destructuring-bind (l r)
-      args
-    (ensure-fixed-width (compute-type l))
-    (ensure-fixed-width (compute-type r))
-
-    '(unsigned-byte 1)))
+     (defmethod apply-type-constraints-sexp ((fun (eql ,symbol)) args)
+       (destructuring-bind (l r)
+	   args
+	 (ensure-fixed-width (compute-type l))
+	 (ensure-fixed-width (compute-type r))))
 
 
-(defmethod synthesise-sexp ((fun (eql '>)) args)
-  (destructuring-bind (l r)
-      args
-    (as-literal "(")
-    (synthesise l)
-    (as-literal " > ")
-    (synthesise r)
-    (as-literal ")")))
+     (defmethod synthesise-sexp ((fun (eql ,symbol)) args)
+       (destructuring-bind (l r)
+	   args
+	 (as-literal "(")
+	 (synthesise l)
+	 (as-literal ,(format nil " ~a " verilog-operator))
+	 (synthesise r)
+	 (as-literal ")")))))
 
 
-(defmethod compute-type-sexp ((fun (eql '<=)) args)
-  (destructuring-bind (l r)
-      args
-    (ensure-fixed-width (compute-type l))
-    (ensure-fixed-width (compute-type r))
+(define-fixed-width-binary-maths-comparator '= "==")
+(define-fixed-width-binary-maths-comparator '/= "!=")
 
-    '(unsigned-byte 1)))
-
-
-(defmethod synthesise-sexp ((fun (eql '<=)) args)
-  (destructuring-bind (l r)
-      args
-    (as-literal "(")
-    (synthesise l)
-    (as-literal " <= ")
-    (synthesise r)
-    (as-literal ")")))
-
-
-(defmethod compute-type-sexp ((fun (eql '>=)) args)
-  (destructuring-bind (l r)
-      args
-    (ensure-fixed-width (compute-type l))
-    (ensure-fixed-width (compute-type r))
-
-    '(unsigned-byte 1)))
-
-
-(defmethod synthesise-sexp ((fun (eql '>=)) args)
-  (destructuring-bind (l r)
-      args
-    (as-literal "(")
-    (synthesise l)
-    (as-literal " >= ")
-    (synthesise r)
-    (as-literal ")")))
+(define-fixed-width-binary-maths-comparator '<)
+(define-fixed-width-binary-maths-comparator '<=)
+(define-fixed-width-binary-maths-comparator '>)
+(define-fixed-width-binary-maths-comparator '>=)
