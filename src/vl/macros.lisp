@@ -42,10 +42,10 @@ NAME is declared in the global environment, and so is
 available anywhere in a Verilsp program."
 
   ;; test whether the macro already exists
-  (when (variable-declared-in-environment-p name *core-environment*)
+  (when (variable-declared-in-environment-p name *global-environment*)
     ;; variable exists, delete it to allow re-definition
     (warn 'duplicate-macro :name name)
-    (forget-environment-variable name *core-environment*))
+    (forget-environment-variable name *global-environment*))
 
   (with-gensyms (tll)
     `(in-global-environment

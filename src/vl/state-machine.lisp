@@ -68,19 +68,21 @@ Return a list of lists, each element being a state label and the state body."
 
 		 ;; add form to current state
 		 (let* ((current-state (car states))
-			(current-body (cadr current-state)))
+			(current-body (cdr current-state)))
 		   (if (null current-body)
-		       (setf (cdr current-state) (list (list form)))
-		       (setf (cdr current-body) (list form)))
+		       (setf (cdr current-state) (list form))
+		       (setf (cdr (last current-body)) (list form)))
 		   states)))))
 
     (reverse (foldr #'extract-state forms '()))))
 
 
 (defmethod compute-type-sexp ((fun (eql 'tagbody)) args)
+  (declare (optimize debug))
+
   (let* ((states (extract-states args))
 	 (state-labels (mapcar #'car states))
-	 (state-bodies (mapcar #'cadr states)))
+	 (state-bodies (mapcar #'cdr states)))
 
     (with-new-frame
       ;; add labels to frame
@@ -119,17 +121,22 @@ form fell-through and should therefore continue to EXIT-STATE.")
   (:method (fun args forms current-state exit-state)
     ;; "normal" form, add to body of current state
     (appendf (body current-state) (list (cons fun args)))
-    (parse-tagbody-forms forms current-state exit-state)))
+    (parse-tagbody-forms forms
+			 current-state
+			 exit-state)))
 
 
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'tagbody)) args forms current-state exit-state)
   ;; nested machine, start a new state for this machine
-  (let* ((trailing-states (parse-tagbody-forms forms nil))
-	 (trailing-state (if trailing-states
-			     (car trailing-states)
-			     exit-state))
-	 (nested-body args)
-	 (nested-states (parse-tagbody-forms nested-body nil trailing-state)))
+  (let* ((trailing-states (parse-tagbody-forms forms
+					       nil
+					       exit-state))
+	 (trailing-state (if (null trailing-states)
+			     exit-state
+			     (car trailing-states)))
+	 (nested-states (parse-tagbody-forms args
+					     current-state
+					     trailing-state)))
 
     (append (list current-state)
 	    nested-states
@@ -145,6 +152,7 @@ form fell-through and should therefore continue to EXIT-STATE.")
 	   (trailing-state (if trailing-states
 			       (car trailing-states)
 			       exit-state))
+	   (trailing-label (label trailing-state))
 	   (then-states (parse-tagbody-forms (list then-branch)
 					     nil trailing-state))
 	   (then-state (car then-states))
@@ -167,7 +175,7 @@ form fell-through and should therefore continue to EXIT-STATE.")
 		       ;; one arm, jump to the trailing state on false
 		       `(if ,condition
 			    (go ,then-label)
-			    (go ,(label trailing-state))))))
+			    (go ,trailing-label)))))
 	(appendf (body current-state) (list cform)))
 
       (append (list current-state)
@@ -263,52 +271,47 @@ Return a list of of states created, initial state first."
   (declare (optimize debug))
 
   (if (null forms)
-      ;; finished this path
-      (when current-state
-	(when exit-state
-	  ;; add transition to exit state
-	  (appendf (body current-state) (list `(go ,(label exit-state)))))
+      ;; no more forms to process
+      (if current-state
+	  (progn
+	    ;; jump to the exit of the current machine
+	    (appendf (body current-state) (list `(go ,(label exit-state))))
+	    (list current-state))
 
-	(list current-state))
+	  ;; no current state either, nothing to do
+	  nil)
 
-      ;; path continues with more forms
-      (let ((form (car forms)))
+      ;; forms to do
+      (destructuring-bind (form &rest rest)
+	  forms
+
 	(if (state-marker-p form)
-	    ;; new state
-	    (let ((trailing-states (parse-tagbody-forms (cdr forms)
-							(make-instance 'state :label form)
-							exit-state)))
+	    ;; new state marker, create a new state
+	    (let ((new-state (make-instance 'state :label form)))
 	      (if current-state
-		  (when trailing-states
-		    ;; add jump to next state to current state
-		    (appendf (body current-state) (list `(go ,(label (car trailing-states)))))
+		  ;; link current state to new state
+		  (appendf (body current-state) (list `(go ,(label new-state)))))
 
-		    ;; prepend current state
-		    (cons current-state
-			  trailing-states))
+	      ;; use this state going forward
+	      (parse-tagbody-forms rest new-state exit-state))
 
-		  ;; initial state, nothing to prepend
-		  trailing-states))
-
-	    ;; otherwise, part of the current state's body
 	    (progn
 	      (when (null current-state)
-		;; this is the body of an unlabelled initial state, so
-		;; create the state to hold it
+		;; no current state, create one
 		(setq current-state (make-instance 'state)))
 
-	      ;; parse form
 	      (if (listp form)
+		  ;; handle sexp
 		  (destructuring-bind (fun &rest args)
 		      form
 		    (parse-tagbody-forms-sexp fun args
-					      (cdr forms)
+					      rest
 					      current-state exit-state))
 
 		  (progn
+		    ;; singleton form that isn't a state marker
 		    (appendf (body current-state) (list form))
-		    (parse-tagbody-forms (cdr forms)
-					 current-state exit-state))))))))
+		    (parse-tagbody-forms rest current-state exit-state))))))))
 
 
 (defun build-state-machine (forms)
@@ -322,25 +325,71 @@ Return a list of of states created, initial state first."
     (append states (list passive-state))))
 
 
+(defun merge-state-machine-empty-states (machine)
+  "Return an alist mapping states in MACHINE to only the necessary states.
+
+A state is unnecessary if it is empty or consists purely of a GO to another state."
+  (declare (optimize debug))
+
+  (flet ((merge-states (states m)
+	   (if (and (not (null (body m)))
+		    (= (length (body m)) 1)
+		    (eql (caar (body m)) 'go))
+
+	       ;; state is just a jump, match it to the jump target
+	       (destructuring-bind (fun target)
+		   (car (body m))
+
+		 ;; if target is merged itself, use the merged state
+		 (if-let ((m (assoc target states)))
+		   (setq target (cadr m)))
+
+		 ;; record the merge
+		 (cons (list (label m) target) states))
+
+	       ;; state is real, keep it
+	       states)))
+
+    (foldr #'merge-states machine '())))
+
+
+(defun get-label-from-merged-states (label merged-states)
+  "Return the label that should be used for LABEL under MERGED-STATES."
+  (if-let ((m (assoc label merged-states)))
+    (get-label-from-merged-states (cadr m) merged-states)
+    label))
+
+
 (defun synthesise-state-machine (machine)
   "Return the code for MACHINE as a state machine."
-  (let* ((state-labels (mapcar #'label machine))
+  (let* ((merged-states (merge-state-machine-empty-states machine))
+	 (state-labels (remove-if (lambda (l)
+				    (assoc l merged-states))
+				  (mapcar #'label machine)))
+	 (states (remove-if (lambda (m)
+			      (not (member (label m)
+					   state-labels)))
+			    machine))
 	 (decls (mapcar (lambda (label index)
 			  `(,label ,index))
 			state-labels
 			(iota (length state-labels))))
 	 (declaration `(declare (as constant ,@state-labels)))
-	 (states (foldr (lambda (form state)
-			  (let ((l (label state))
-				(b (body state)))
-			    (append form `((,l
+	 (clauses (foldr (lambda (form state)
+			   (let ((l (label state))
+				 (b (body state)))
+			     (append form `((,l
 					     ,@b)))))
-			machine '())))
+			 states '())))
 
     (with-gensyms (state-variable)
       ;; record the current state machine variable
-      (declare-variable 'tagbody-state-variable `((type 'unsigned-byte)
+      (declare-variable 'tagbody-state-variable `((type unsigned-byte)
 						  (initial-value ,state-variable)))
+
+      ;; record the merge table
+      (declare-variable 'tagbody-merged-states `((type cons)
+						 (initial-value ,merged-states)))
 
       ;; synthesise the machine
       `(let ,decls
@@ -348,25 +397,30 @@ Return a list of of states created, initial state first."
 
 	 (let ((,state-variable ,(car state-labels)))
 	   (case ,state-variable
-	     ,states))))))
+	     ,@clauses))))))
 
 
 ;; TAGBODY/GO is transformed away into a CASE-based state machine, so
 ;; the forms have no synthesis functions.
 
 (defmethod transform-sexp ((fun (eql 'tagbody)) args)
-   (let ((machine (build-state-machine args)))
+  (declare (optimize debug))
 
-     ;; warn about the number of states inferred if different from that specified
-     (let ((given (count-tagbody-forms args))
-	   (inferred (length machine)))
-       (when (/= given inferred)
-	 (warn 'state-machine-inferred :given given
-				       :inferred inferred)))
+  (let ((machine (build-state-machine args)))
 
-     (with-new-frame
-       (let ((form (synthesise-state-machine machine)))
-	 (transform (expand/vl form))))))
+    ;; warn about the number of states inferred if different from that specified
+    (let ((given (count-tagbody-forms args))
+	  (inferred (length machine)))
+      (when (/= given inferred)
+	(warn 'state-machine-inferred :given given
+				      :inferred inferred)))
+
+    (with-new-frame
+      (let ((form (synthesise-state-machine machine)))
+	(let* ((p (expand/vl form))
+	       (q (transform p)))
+	  (typecheck q)
+	  q)))))
 
 
 ;; ---------- GO ----------
@@ -388,7 +442,8 @@ Return a list of of states created, initial state first."
 
 
 (defmethod transform-sexp ((fun (eql 'go)) args)
-  (let ((state-label (car args))
-	(state-variable (get-initial-value 'tagbody-state-variable)))
+  (let* ((merged-states (get-initial-value 'tagbody-merged-states))
+	 (state-label (get-label-from-merged-states (car args) merged-states))
+	 (state-variable (get-initial-value 'tagbody-state-variable)))
 
-    (transform (expand/vl `(setq ,state-variable ,state-label)))))
+    `(setq ,state-variable ,state-label)))

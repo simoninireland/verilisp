@@ -254,10 +254,9 @@ different selectors to be used as generalised places."))
 (defun typecheck (form)
   "Perform a typechecking pass over FORM.
 
-This extracts types and applies any constraints needed to infer the
-types of variables."
+This is a synthestic pass that extracts types and applies any
+constraints needed to infer the types of variables."
   (let ((ty (compute-type form)))
-
     ;; check any remaining constraints after inference
     (apply-type-constraints form)
 
@@ -382,12 +381,17 @@ Return the re-written FORMS and a merged environment."
 	       old
 	     (destructuring-bind (newbody newenv)
 		 (float-let-blocks form)
-	       (list (if (null oldbody)
-			 (list newbody)
-			 (append oldbody (list newbody)))
-		     (if (null newenv)
-			 oldenv
-			 (add-frame-to-environment newenv oldenv)))))))
+	       (if (null newbody)
+		   ;; body was removed, skip
+		   old
+
+		   (list (if (null oldbody)
+			     (list newbody)
+
+			     (append oldbody (list newbody)))
+			 (if (null newenv)
+			     oldenv
+			     (add-frame-to-environment newenv oldenv))))))))
 
     (foldr #'pairwise-append forms (list '() (make-frame)))))
 

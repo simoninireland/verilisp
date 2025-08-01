@@ -58,10 +58,9 @@
 
 
 (test test-progn-empty-body
-  "Test we can detect an empty-bodied PROGN."
-  (signals (vl::not-synthesisable)
-    (vl::with-new-frame
-      (vl::typecheck (vl::expand/vl '(let ((a 12))))))))
+  "Test we can handle (and ignore) an empty-bodied PROGN."
+  (vl::with-new-frame
+    (is (vl::typecheck (vl::expand/vl '(let ((a 12))))))))
 
 
 (test test-progn-dependencies

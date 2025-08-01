@@ -273,19 +273,64 @@
 
 ;; ---------- Transformation ----------
 
-(test test-synthesise-tagbody
-  "Test we can synthesise a tTAGBODY/GO form."
-  (let ((p (vl::expand/vl '(let (a b)
+(test test-tagbody-simple-infinite
+  "Test we can generate the simplest infinite loop."
+  (let ((p (vl::expand/vl '(let (out
+				 (counter 1))
+			    (declare (type (unsigned-byte 8) counter))
 			    (tagbody
-			     start
-			       (setq a (+ a 1))
-			     test
-			       (if (>= a b)
-				   (go start)))))))
-
-
+			     initial
+			       (go initial))))))
     (vl::typecheck p)
-    (vl:transform p)
-    )
+    (is (vl::transform p))))
 
-  )
+
+(test test-tagbody-simple-looping
+  "Test we can generate a loop manually."
+  (let ((p (vl::expand/vl '(let (out
+				 (counter 1))
+			    (declare (type (unsigned-byte 8) counter))
+			    (tagbody
+			     count
+			       ;; wait while the counter increments around the counter
+			       (incf counter)
+			       (if (> counter 0)
+				   (go count))
+
+			     blink
+			       ;; update the LED
+			       (setq out (1+ out))
+			       (go count))))))
+    (vl::typecheck p)
+    (is (vl::transform p))))
+
+
+(test test-tagbody-while-looping
+  "Test we can generate a loop using WHILE (a nested TAGBODY)."
+  (let ((p (vl::expand/vl '(let (out
+				 (counter 1))
+			    (declare (type (unsigned-byte 8) counter))
+			    (tagbody
+			     looping
+			       (while (> counter 0)
+				      (incf counter))
+
+			       (setq out (1+ out))
+			       (go looping))))))
+    (vl::typecheck p)
+    (is (vl::transform p))))
+
+
+(test test-tagbody-forever-looping
+  "Test we can generate a loop using FOREVER (a nested TAGBODY)."
+  (let ((p (vl::expand/vl '(let (out
+			       (counter 1))
+			    (declare (type (unsigned-byte 8) counter))
+			    (tagbody
+			       (forever
+				(while (> counter 0)
+				       (incf counter))
+
+				(setq out (1+ out))))))))
+    (vl::typecheck p)
+    (is (vl::transform p))))

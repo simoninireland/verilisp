@@ -41,10 +41,10 @@
 		   ;; otherwise proceed to the next forms
 		   (compute-type-forms (cdr forms))))))
 
-    (when (= (length args) 0)
-      (error 'not-synthesisable :hint "Make sure body is not empty"))
+    (if (= (length args) 0)
+	t
 
-    (compute-type-forms args)))
+	(compute-type-forms args))))
 
 
 (defmethod apply-type-constraints-sexp ((fun (eql 'progn)) args)

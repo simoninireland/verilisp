@@ -226,7 +226,7 @@ Each test element must be testable against TY."
     (as-newline)
 
     ;; body
-    (as-block body :before "begin" :after "end")))
+    (as-block body :before "begin" :after "end" :always t)))
 
 
 (defun synthesise-case (condition clauses)

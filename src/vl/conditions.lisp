@@ -239,10 +239,12 @@ used as targets for GO forms."))
     :initarg :name
     :reader name))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Re-defiing macro ~a"
+	     (format-condition-context (format nil "Re-defining macro ~a"
 					       (name c))
 				       c str)))
-  (:documentation "Condition signalled when a macro is re-defined."))
+  (:documentation "Condition signalled when a macro is re-defined.
+
+This is acceptable, and is just a warning in case it's not intended."))
 
 
 (define-condition duplicate-module (vl-error)

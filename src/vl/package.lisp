@@ -111,6 +111,9 @@
    #:1-
    #:2*
    #:2/
+   #:while
+   #:until
+   #:forever
 
    ;; passes and code functions
    #:add-frames
@@ -136,7 +139,6 @@
    #:get-module-interface
    #:get-modules-for-synthesis
    #:defmodule/vl
-   #:importmodule/vl
    #:macrolet/vl
    #:expand/vl
    #:elaborate/vl

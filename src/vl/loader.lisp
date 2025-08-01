@@ -109,7 +109,7 @@ of a larger compilation process."
   (declare (optimize debug))
 
   (let* ((expanded (expand-macros-in-environment form))
-	 (framed (add-frames expanded)))
+	 (framed (add-frames (copy-tree expanded))))
 
     framed))
 
@@ -126,7 +126,9 @@ module ready for synthesis.
 
 This function is not usually called directly, but is called as part
 of a larger compilation process."
-  ;; Typecheck and infer
+  (declare (optimize debug))
+
+  ;; typecheck and infer
   (let* ((intf (typecheck form)))
 
     ;; simplify

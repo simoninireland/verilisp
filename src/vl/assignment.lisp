@@ -55,7 +55,6 @@ isn't declared."
       (error 'not-synthesisable :hint "Do you need SETF instead of SETQ?"))
 
     (let ((ty (compute-type-sexp-setf n v nil)))
-
       ty)))
 
 
@@ -136,10 +135,7 @@ generalised places."
     (if (listp place)
 	(destructuring-bind (selector &rest selectorargs)
 	    place
-
-	  (let ((ty (compute-type-sexp-setf selector val selectorargs)))
-
-	    ty))
+	  (compute-type-sexp-setf selector val selectorargs))
 
 	;; a SETF to a simple variable is a SETQ
 	(compute-type `(setq ,place ,val :sync ,sync)))))

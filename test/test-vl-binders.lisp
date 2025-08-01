@@ -131,10 +131,9 @@
 			    (setq a 23)))))     ; ...which changes after the inner LET
 						; has been processed
     (vl::typecheck p)
-    (vl::apply-type-constraints p)
 
     (let ((outer (elt p 1))                  ; outer LET's decls
-	  (inner (elt (elt (elt p 2) 1) 1))) ; inner LET's decls
+	  (inner (elt (elt p 2) 1))) ; inner LET's decls
       (vl::with-local-frame outer
 	(is (vl::subtype-p (get-type 'a)
 			   '(unsigned-byte 5))))    ; type coming from the lower SETQ
@@ -276,7 +275,7 @@
 	(is (eql (vl::variable-property 'b 'as) 'constant))
 	(is (eql (vl::variable-property 'a 'as) 'register))))
 
-    (let ((decls (cadr (elt (elt p 2) 2))))  ; inner LET
+    (let ((decls (elt (elt p 3) 1)))  ; inner LET
       (format t "~a" decls)
       (with-local-frame decls
 	(is (eql (vl::variable-property 'd 'as) 'wire))))))

@@ -362,46 +362,39 @@ Signal VALUE-MISMATCH as an error if not."
       args
 
     ;; extract any declarations
-    (let ((declarations (if (eql (caar body) 'declare)
-			    (prog1
-				(car body)
-			      (setq body (cdr body))))))
+    (destructuring-bind (newbody newenv)
+	(float-let-blocks (with-implicit-progn body))
 
-      (destructuring-bind (newbody newenv)
-	  (float-let-blocks (with-implicit-progn body))
+      (list
+       `(module ,modname
+		,decls
 
-	(list
-	 `(module ,modname
-		  ,@(if declarations
-			(list decls declarations)
-			(list decls))
+		,(if newenv
+		     ;; declare the floated declarations around the body
+		     (let ((newdecls (mapcar (lambda (np)
+					       (destructuring-bind (n props)
+						   np
+						 (list n
+						       (get-environment-property n 'initial-value newenv))))
+					     (decls newenv))))
 
-		  ,(if newenv
-		       ;; declare the floated declarations around the body
-		       (let ((newdecls (mapcar (lambda (np)
-						 (destructuring-bind (n props)
-						     np
-						   (list n
-							 (get-environment-property n 'initial-value newenv))))
-					       (decls newenv))))
+		       ;; add the new decls as a local frame
+		       (setq newdecls (add-local-frame-to-decls newdecls))
+		       (compute-let-local-frame newdecls)
+		       (with-local-frame newdecls
+			 (dolist (np (decls newenv))
+			   (destructuring-bind (n props)
+			       np
+			     (set-variable-properties n (copy-list props)))))
 
-			 ;; add the new decls as a local frame
-			 (setq newdecls (add-local-frame-to-decls newdecls))
-			 (compute-let-local-frame newdecls)
-			 (with-local-frame newdecls
-			   (dolist (np (decls newenv))
-			     (destructuring-bind (n props)
-				 np
-			       (set-variable-properties n (copy-list props)))))
+		       `(let ,newdecls
+			  ,newbody))
 
-			 `(let ,newdecls
-			    ,newbody))
+		     ;; no declarations, just use the new body
+		     newbody))
 
-		       ;; no declarations, just use the new body
-		       newbody))
-
-	 ;; no remaining variables to float
-	 (make-frame))))))
+       ;; no remaining variables to float
+       (make-frame)))))
 
 
 (defmethod simplify-progn-sexp ((fun (eql 'module)) args)

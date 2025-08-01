@@ -52,7 +52,7 @@
   (foldr #'generate-do-var vars '(() ())))
 
 
-(defmacro/vl do (vars test &body body)
+(defcoremacro/vl do (vars test &body body)
   "Declare VARS for BODY.
 
 TEST is a list consisting of a test for the end of
@@ -68,56 +68,76 @@ the increments to the variables being executed every time."
 	(generate-do-vars vars)
 
       (with-gensyms (loop-head loop-body)
-	`(let ,var-decls
+	(let ((loop-body `(tagbody
+			     ,loop-head
+			     ;; run test to determine whether we exit
+			     (if ,end-test
+				 (progn
+				   ;; test met, exit
+				   ,@end-body))
 
-	   (tagbody
-	    ,loop-head
-	      ;; run test to determine whether we exit
-	      (if ,end-test
-		  (progn
-		    ;; test met, exit
-		    ,@end-body))
+			     ,loop-body
+			     ;; run the loop body
+			     ,@body
 
-	    ,loop-body
-	      ;; run the loop body
-	      ,@body
+			     ;; run the stepper forms if there are any
+			     ,(if steppers
+				  `(psetq ,@steppers))
 
-	      ;; run the stepper forms
-	      (psetq ,@steppers)
+			     ;; return to head of the loop
+			     (go ,loop-head))))
 
-	      ;; return to head of the loop
-	      (go ,loop-head)))))))
+	  (if var-decls
+	      ;; form introduces variables, declare them
+	      `(let ,var-decls
+		 ,loop-body)
+
+	      ;; no new variables
+	      loop-body))))))
 
 
 ;; ---------- Structured iteration ----------
 
-(defmacro/vl while (condition &body body)
+(defcoremacro/vl while (condition &body body)
   "Run the BODY forms as long as CONDITION is true.
 
 BODY is not run if CONDITION is already true."
-  `(do ()
-       (,condition (return))
-     ,@body))
+  (with-gensyms (loop-head loop-end)
+    `(tagbody
+      ,loop-head
+	;; exit if condition isn't met
+	(if (not ,condition)
+	  (go ,loop-end))
+
+	;; otherwise, execute the body and repeat
+	,@body
+	(go ,loop-head)
+
+      ,loop-end)))
 
 
-(defmacro/vl until (condition &body body)
+(defcoremacro/vl until (condition &body body)
   "Run the BODY forms until CONDITION is true.
 
 BODY is not run if CONDITION is already true."
   `(do ()
-       ((not ,condition) (return))
+       ((not ,condition))
      ,@body))
 
 
-(defmacro/vl forever (&body body)
+(defcoremacro/vl forever (&body body)
   "Run BODY forever."
-  `(while 1
-     ,@body))
+  (with-gensyms (forever)
+    `(tagbody
+      ,forever
+	,@body
+
+	(go ,forever))))
 
 
-(defmacro/vl dotimes ((var count) &body body)
-  `(let ((,var 0))
-     (while (< ,var ,count)
-	    ,@body
-
-	    (incf ,count))))
+(defcoremacro/vl dotimes ((var count) &body body)
+  (with-gensyms (counter)
+    `(let ((,counter ,count))  ; will be optimised away if it's a constant
+       (do ((,var 0))
+	   ((>= ,var ,counter))
+	 ,@body))))

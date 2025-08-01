@@ -48,7 +48,7 @@ to *GLOBAL-ENVIRONMENT* and *CORE-ENVIRONMENT*.")
   "Clear the global environment.
 
 This forgets everything apart from core Verilisp."
-  (setf *global-environment* (attach-frame) (make-frame) *core-environment*)
+  (setf *global-environment* (attach-frame (make-frame) *core-environment*))
   (setf *current-frame* (attach-frame (make-frame) *global-environment*)))
 
 

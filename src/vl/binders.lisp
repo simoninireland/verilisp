@@ -319,9 +319,9 @@ The name is the first element, whether or not DECL is a list."
   (destructuring-bind (decls &rest body)
       args
     (let ((newdecls (mapcar #'expand-macros-decl decls))
-	  (newbody (expand-macros (with-implicit-progn body))))
+	  (newbody (mapcar #'expand-macros body)))
       `(let ,newdecls
-	 ,newbody))))
+	 ,@newbody))))
 
 
 ;; ---------- Transformation ----------
@@ -339,17 +339,24 @@ The name is the first element, whether or not DECL is a list."
 
 
 (defmethod transform-sexp ((fun (eql 'let)) args)
+  (declare (optimize debug))
+
   (destructuring-bind (decls &rest body)
       args
 
-    (with-local-frame decls
-      (let ((newdecls (transform-decls decls))
-	    (newbody (transform (with-implicit-progn body))))
-	;; add the local frame back to the new decls
-	(add-local-frame-to-decls newdecls (current-frame))
+    ;; (with-local-frame decls
+    ;;   (let ((newdecls (transform-decls decls))
+    ;;	    (newbody (mapcar #'transform body)))
+    ;;	;; add the local frame back to the new decls
+    ;;	(add-local-frame-to-decls newdecls (current-frame))
+    ;;	(break)
+    ;;	`(let ,newdecls
+    ;;	   ,@newbody)))
 
-	`(let ,newdecls
-	   ,newbody)))))
+    (let ((newbody (with-local-frame decls
+		     (mapcar #'transform body))))
+      `(let ,decls
+	 ,@newbody))))
 
 
 ;; ---------- Floating ----------

@@ -74,14 +74,12 @@
   (is (equal (vl::expand-macros-in-environment '(let ((a 1))
 						 (incf a)))
 	     '(let ((a 1))
-	       (progn
-		 (setf a (+ a 1))))))
+	       (setf a (+ a 1)))))
 
   (is (equal (vl::expand-macros-in-environment '(let ((a 1))
 						 (incf (bit a 5))))
 	     '(let ((a 1))
-	       (progn
-		 (setf (bit a 5) (+ (bit a 5) 1)))))))
+	       (setf (bit a 5) (+ (bit a 5) 1))))))
 
 
 (test test-expand-decf
@@ -89,14 +87,12 @@
   (is (equal (vl::expand-macros-in-environment '(let ((a 1))
 						 (decf a)))
 	     '(let ((a 1))
-	       (progn
-		 (setf a (- a 1))))))
+	       (setf a (- a 1)))))
 
   (is (equal (vl::expand-macros-in-environment '(let ((a 1))
 						 (decf (bit a 5))))
 	     '(let ((a 1))
-	       (progn
-		 (setf (bit a 5) (- (bit a 5) 1)))))))
+	       (setf (bit a 5) (- (bit a 5) 1))))))
 
 
 (test test-expand-maths
@@ -208,3 +204,17 @@
       (is (find-form '(+ y 12) p))
       (is (find-form '(+ z 13) p))
       (is (find-form '(+ z 12) p)))))
+
+
+(test test-do-no-variables
+  "Test we can expand a DO that doesn't declare any loop variables."
+  (let ((p (vl::expand/vl '(module test-do (clk)
+			    (declare (type bit clk))
+			    (@ (posedge clk)
+			     (tagbody
+			      ttt
+				(setf clk 0)
+				(go ttt)))))))
+    (vl::typecheck p)
+    (let ((q (cadr (vl::elaborate/vl p))))
+      (is (vl::synthesise q)))))
