@@ -1,0 +1,10 @@
+* Blink as a state machine
+
+  This is one of the classic "blink the LEDs" programs written in
+  written as a Verilisp state machine.
+
+  The program is intended for the Lattice IceStick FPGA development
+  board, which has a small number of on-board LEDs. The file ~blink.pcf~
+  is a constraints file that binds variables (in the program) to pins
+  (one the board) to make sure that they control the LEDs. These could
+  be changed very simply to drive off-board LEDs.
