@@ -1,0 +1,4 @@
+set_io led 44
+set_io rx 9
+set_io tx 8
+set_io clk 21
