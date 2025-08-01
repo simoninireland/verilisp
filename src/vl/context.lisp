@@ -204,9 +204,9 @@ inferred type if not."
   (variable-property n 'as))
 
 
-(defun get-initial-value (n)
-  "Return the initial value of N."
-  (variable-property n 'initial-value :default 0))
+(defun get-initial-value (n &key default)
+  "Return the initial value of N, with optional DEFAULT."
+  (variable-property n 'initial-value :default default))
 
 
 (defun get-direction (n)
