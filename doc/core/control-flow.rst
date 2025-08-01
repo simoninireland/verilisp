@@ -47,6 +47,8 @@ As shown above, sensitivities can be expressed in three ways:
 - As a single edge trigger expression (see below)
 - As a list of variables and/or edge triggers
 
+The body of an ``@`` is an implicit ``progn``, as with ``let``.
+
 
 ``posedge`` and ``negedge``
 ---------------------------
@@ -54,9 +56,3 @@ As shown above, sensitivities can be expressed in three ways:
 These two operators can *only* appear in sensitivity lists. They set
 the ``@`` block to be sensitive to positive (rising) or negative
 (falling) edges respectively on a wire.
-
-
-Compatibility
--------------
-
-``progn`` behaves exactly as in Common Lisp.
