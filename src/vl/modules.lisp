@@ -514,7 +514,8 @@ Signal VALUE-MISMATCH as an error if not."
 	(dolist (n (module-arguments intf))
 	  (let ((v (cadr (assoc (module-argument-name-to-keyword n) modargs)))
 		(ty (get-type n)))
-	    (if (symbolp v)
+	    (if (and (not (null v))
+		     (symbolp v))
 		(add-type-constraint v ty))))))))
 
 

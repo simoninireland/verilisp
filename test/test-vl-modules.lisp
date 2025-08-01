@@ -183,7 +183,7 @@
 							       :clk-out clk)))
 			      clock)))))
 
-    (vl::subtype-p (vl::typecheck p) 'module))
+    (is (vl::typecheck p)))
 
   ;; check we can wire the optional arguments too
   (let ((p (vl::expand/vl '(let ((clk 0)
