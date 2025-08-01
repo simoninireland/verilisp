@@ -65,6 +65,37 @@ the machine to exit until it is re-entered, normally at the next clock
 tick. Verilisp ``tagbody`` forms will typically appear in ``@`` blocks
 for this reason.
 
+This has some interesting side-effects. It means, for example, that
+there can be /two/ (or more) state machines in a single ``@`` block,
+executing simultaneously, as well as other code. For example:
+
+.. code-block:: lisp
+
+   (@ (posedge clk)
+      ;; constant code
+      (decf rx-clk-divider)
+      (when (0= rx-clk-divider)
+	 (setq rx-clk-divider clk-divide)
+	 (decf rx-countdown))
+
+      ;; first state machine
+      (tagbody
+       rx-idle
+	 (setq receiving-p 0)
+	 ...)
+
+      ;; second state machine
+      (tagbody
+       tx-idle
+	 (setq transmitting-p 0)
+	 ...))
+
+Each time through the block the constant code will run, as will a
+state of the first machine and a state of the second machine -- all in
+a single clock tick. (In Common Lisp the constant code would run, *then*
+the first machine to completion, and then the second machine to
+completion.)
+
 The second concerns the number of states. In Common Lisp the states of
 the machine are exactly those specified in the ``tagbody`` form. In
 Verilisp, because of the constraints of direct hardware
