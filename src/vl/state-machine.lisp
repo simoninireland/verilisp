@@ -429,9 +429,9 @@ A state is unnecessary if it is empty or consists purely of a GO to another stat
   (let ((label (car args)))
     ;; ensure label is in scope
     (unless (variable-declared-p label)
-      (error 'unknown-state :state label))
+      (error 'unknown-state :label label))
     (unless (eql (get-representation label) 'label)
-      (error 'unknown-state :state label))
+      (error 'unknown-state :label label))
 
     ;; GO doesn't really have a type
     t))
