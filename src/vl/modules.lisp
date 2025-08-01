@@ -496,6 +496,8 @@ Signal VALUE-MISMATCH as an error if not."
 ;; ---------- Module instanciation ----------
 
 (defmethod compute-type-sexp ((fun (eql 'make-instance)) args)
+  (declare (optimize debug))
+
   (destructuring-bind (modname &rest initargs)
       args
 
@@ -503,7 +505,17 @@ Signal VALUE-MISMATCH as an error if not."
     ;; for compatability with Common Lisp usage
     (unquote modname)
 
-    (get-module-interface modname)))
+    ;; add type constraints for all variables in the interface
+    (let ((intf (get-module-interface modname))
+	  (modargs (adjacent-pairs initargs)))
+
+      (with-frame (module-frame intf)
+
+	(dolist (n (module-arguments intf))
+	  (let ((v (cadr (assoc (module-argument-name-to-keyword n) modargs)))
+		(ty (get-type n)))
+	    (if (symbolp v)
+		(add-type-constraint v ty))))))))
 
 
 (defun module-argument-name-to-keyword (n)
