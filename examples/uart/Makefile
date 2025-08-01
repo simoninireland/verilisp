@@ -1,6 +1,6 @@
-# Makefile for the RTLisp UART demo
+# Makefile for theUART demo
 #
-# Copyright (C) 2023--2025 Simon Dobson
+# Copyright (C) 2024--2025 Simon Dobson
 #
 # This file is part of verilisp, a very Lisp approach to hardware synthesis
 #
@@ -23,11 +23,10 @@ include ../icestick.mk
 # ---------- Target code ----------
 
 # Bitstream
-TARGET = uart.bin
+TARGET = counter.bin
 
 # Sources
-SOURCES = package.lisp uart.lisp io.lisp
-TOPMODULE = io
+SOURCES = uart.lisp counter.lisp
 CONFIG = uart.pcf
 OBJECT = uart.v
 
@@ -42,15 +41,7 @@ RM = rm -fr
 # Build the target bitstream
 $(TARGET): $(SOURCES) $(CONFIG)
 
-
-# Upload the target bitstream to the device
-upload: $(TARGET)
-	$(PROGRAM) $(PROGRAM_OPTS) $<
-
-
-# Clean-up the build directory
-clean:
-	$(RM) $(GENERATED)
+$(OBJECT): $(SOURCES)
 
 
 # Print a help message

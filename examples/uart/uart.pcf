@@ -1,6 +1,0 @@
-set_io leds[0] 44
-set_io leds[1] 45
-set_io leds[2] 47
-set_io leds[3] 48
-set_io rx 9
-set_io clk 21

@@ -1,4 +1,4 @@
-;; A USB UART in close-to-Verilog RTLisp
+;; A USB UART
 ;;
 ;; Copyright (C) 2024--2025 Simon Dobson
 ;;
@@ -41,147 +41,123 @@
 ;; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 ;; THE SOFTWARE.
 
-(in-package :verilisp/examples/uart)
+(defmodule/vl uart (clk rst
+		    rx rx-byte received-p receiving-p receive-error-p
+		    tx tx-byte transmit transmitting-p
+		    &key
+		    (clk-divide 1302))   ;; (/ clock-rate (* baud-rate 4))
+  (declare (type bit clk rst
+		     rx received-p receiving-p receive-error-p
+		     tx transmit transmitting-p)
+	   (type (unsigned-byte 8) rx-byte tx-byte))
 
+  (let ((rx-clk-divider clk-divide)
+	(tx-clk-divider clk-divide)
+	rx-out rx-data rx-countdown rx-bits-remaining
+	tx-out tx-data tx-countdown tx-bits-remaining)
+    (declare (type (unsigned-byte 10) rx-clk-divider tx-clk-divider)
+	     (type (unsigned-byte 5) rx-countdown tx-countdown)
+	     (type (unsigned-byte 3) rx-bits-remaining tx-bits-remaining))
 
-(defmodule uart ((clk             :width 1 :direction :in)
-		 (rst             :width 1 :direction :in)
-		 (rx              :width 1 :direction :in)
-		 (tx              :width 1 :direction :out)
-		 (transmit        :width 1 :direction :in)
-		 (tx-byte         :width 8 :direction :in)
-		 (received        :width 1 :direction :out)
-		 (rx-byte         :width 8 :direction :out)
-		 (is-receiving    :width 1 :direction :out)
-		 (is-transmitting :width 1 :direction :out)
-		 (recv-error      :width 1 :direction :out)
-		 &key
-		 (clk-divide 1302))   ;; (/ clock-rate (* baud-rate 4))
+    (setq rx-byte rx-data)
+    (setq tx tx-out)
 
-  ;; states for state machines
-  (let ((rx-idle 0 :as :constant)
-	(rx-check-start 1 :as :constant)
-	(rx-read-bits 2 :as :constant)
-	(rx-check-stop 3 :as :constant)
-	(rx-delay-restart 4 :as :constant)
-	(rx-error 5 :as :constant)
-	(rx-received 6 :as :constant)
+    (@ (posedge clk)
+       ;; receive countdown
+       (decf rx-clk-divider)
+       (when (0= rx-clk-divider)
+	 (setq rx-clk-divider clk-divide)
+	 (decf rx-countdown))
 
-	(tx-idle 0 :as :constant)
-	(tx-sending 1 :as :constant)
-	(tx-delay-restart 2 :as :constant))
+       ;; transmit countdown
+       (decf tx-clk-divider)
+       (when (0= tx-clk-divider)
+	 (setq tx-clk-divider clk-divide)
+	 (decf tx-countdown))
 
-    ;; working registers
-    (let ((rx-clk-divider 0 :width 11)
-	  (tx-clk-divider 0 :width 11)
+       ;; receiving state machine
+       (tagbody
+	rx-idle
+	  (setq receiving-p 0)
+	  (setq received-p 0)
+	  (setq receive-error-p 0)
 
-	  (rx-state rx-idle :width 3)
-	  (rx-countdown 0 :width 6)
-	  (rx-bits-remaining 0 :width 4)
-	  (rx-data 0 :width 8)
+	  ;; wait for low on rx to signal start of data
+	  (while (0/= rx))
 
-	  (tx-state tx-idle :width 3)
-	  (tx-countdown 0 :width 6)
-	  (tx-bits-remaining 0 :width 4)
-	  (tx-data 0 :width 8))
+	  (setq receiving-p 1)
+	  (setq rx-clk-divider clk-divide)
+	  (setq rx-countdown 2)
 
-      ;; make status visible
-      (setq received (= rx-state rx-received))
-      (setq recv-error (= rx-state rx-error))
-      (setq is-receiving (/= rx-state rx-idle))
-      (setq is-transmitting (/= tx-state tx-idle))
-
-      ;; make data visible
-      (setq rx-byte rx-data)
-
-      (@ (posedge clk)
-	 ;; reset the machine when requested
-	 (when rst
-	   (setq rx-state rx-idle)
-	   (setq tx-state tx-idle))
-
-	 ;; run the countdown timers
-	 (decf rx-clk-divider)
-	 (when (0= rx-clk-divider)
-	   (setq rx-clk-divider clk-divide)
-	   (decf rx-countdown))
-	 (decf tx-clk-divider)
-	 (when (0= tx-clk-divider)
-	   (setq tx-clk-divider clk-divide)
-	   (decf tx-countdown))
-
-	 ;; receiving state machine
-	 (case rx-state
-	   (rx-idle
-	    (when (0= rx)
-	      (setq rx-clk-divider clk-divide)
-	      (setq rx-countdown 2)
-	      (setq rx-state rx-check-start)))
-
-	   (rx-check-start
-	    (when (0= rx-countdown)
+	rx-check-start
+	  (if (0= rx-countdown)
 	      (if (0= rx)
+		  ;; pulse still low
 		  (progn
 		    (setq rx-countdown 4)
 		    (setq rx-bits-remaining 8)
-		    (setq rx-state rx-read-bits))
+		    (go rx-read-bits))
 
-		  (setq rx-state rx-error))))
+		  ;; pulse unexpectedly went high, error
+		  (go rx-error)))
 
-	   (rx-read-bits
-	    (when (0= rx-countdown)
-	      (setq rx-data (+ (<< rx-data 1) rx))
-	      (setq rx-countdown 4)
-	      (decf rx-bits-remaining)
-	      (setq rx-state (if rx-bits-remaining
-				 rx-read-bits
-				 rx-check-stop))))
+	rx-read-bits
+	  (if (0= rx-countdown)
+	      (progn
+		(setq rx-data (make-bitfields rx (bref rx-data 7 :end 1)))
+		(setq rx-countdown 4)
+		(decf rx-bits-remaining)
+		(if (0= rx-bits-remaining)
+		    (go rx-check-stop))))
 
-	   (rx-check-stop
-	    (when (0= rx-countdown)
-	      (setq rx-state (if rx
-				 rx-received
-				 rx-error))))
+	rx-check-stop
+	  (if (0= rx-countdown)
+	      ;; receive should be high
+	      (if rx
+		  (go rx-received)
+		  (go rx-error)))
 
-	   (rx-delay-restart
-	    (setq rx-state (if rx-countdown
-			       rx-delay-restart
-			       rx-idle)))
+	rx-delay-restart
+	  (if (0= rx-countdown)
+	      (go rx-idle))
 
-	   (rx-error
-	    (setq rx-countdown 8)
-	    (setq rx-state rx-delay-restart))
+	rx-error
+	  (setq receive-error-p 1)
+	  (setq rx-countdown 8)
+	  (go rx-delay-restart)
 
-	   (rx-received
-	    (setq rx-state rx-idle)))
+	rx-received
+	  (setq received-p 1)
+	  (go rx-idle))
 
-	 ;; transmitting state machine
-	 (case tx-state
-	   (tx-idle
-	    (when transmit
-	      (setq tx-data tx-byte)
-	      (setq tx-clk-divider clk-divide)
-	      (setq tx-countdown 4)
-	      (setq tx 0)
-	      (setq tx-bits-remaining 8)
-	      (setq tx-state tx-sending)))
+       ;; transmitting state machine
+       (tagbody
+	tx-idle
+	  (setq transmitting-p 0)
 
-	   (tx-sending
-	    (when (0= tx-countdown)
-	      (if tx-bits-remaining
+	  (until (0/= transmit))
+
+	  (setq transmitting-p 0)
+	  (setq tx-data tx-byte)
+	  (setq tx-clk-divider clk-divide)
+	  (setq tx-countdown 4)
+	  (setq tx-out 0)
+	  (setq tx-bits-remaining 8)
+
+	tx-sending
+	  (if (0= tx-countdown)
+	      (if (> tx-bits-remaining 0)
 		  (progn
 		    (decf tx-bits-remaining)
-		    (setq tx (bit tx-data 0))
-		    (setq tx-data (>> tx-data 1))
-		    (setq tx-countdown 4)
-		    (setq tx-state tx-sending))
+		    (setq tx-out (bref tx-data 0))
+		    (setq tx-data (make-bitfields 0 (bref tx-data 7 :end 1)))
+		    (setq tx-countdown 4))
 
 		  (progn
-		    (setq tx 1)
-		    (setq tx-countdown 0)
-		    (setq tx-state tx-idle)))))
+		    (setq tx-out 1)
+		    (setq tx-countdown 8)
+		    (go tx-delay-restart))))
 
-	   (tx-delay-restart
-	    (setq tx-state (if tx-countdown
-			       tx-delay-restart
-			       tx-idle))))))))
+	tx-delay-restart
+	  (if (0= tx-countdown)
+	      (go tx-idle))))))

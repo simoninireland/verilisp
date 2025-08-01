@@ -96,13 +96,14 @@ The name is the first element, whether or not DECL is a list."
 
       ;; constrain the variable with whatever information we have
       (let* ((v (get-initial-value n))
-	     (rvs (read-variables v))
+	     (rvs (if v (read-variables v)))
 	     (ty (or (variable-property n 'type :default nil)
 		     (if v (compute-type v))
 		     '(unsigned-byte 1))))
 
 	(add-type-constraint n ty)
-	(add-dependencies n rvs)))))
+	(when rvs
+	  (add-dependencies n rvs))))))
 
 
 (defmethod compute-type-sexp ((fun (eql 'let)) args)
@@ -461,14 +462,15 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 	(synthesise width)
 	(as-literal " - 1 : 0 ] "))
       (synthesise n)
-      (if (array-value-p v)
-	  ;; synthesise the array bounds and initialisation
-	  (synthesise-array-init n v)
+      (if v
+	  (if (array-value-p v)
+	      ;; synthesise the array bounds and initialisation
+	      (synthesise-array-init n v)
 
-	  ;; synthesise the assignment to the initial value
-	  (progn
-	    (as-literal " = ")
-	    (synthesise v)))
+	      ;; synthesise the assignment to the initial value
+	      (progn
+		  (as-literal " = ")
+		  (synthesise v))))
       (as-literal ";"))))
 
 
@@ -494,18 +496,19 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 	  ;; synthesise the array constructor
 	  (synthesise-array-init n v)
 
-	  ;; synthesise the assignment to the initial value
-	  (if (static-constant-p v)
-	      (let ((iv (ensure-static v)))
-		(unless (= iv 0)
-		  ;; initial value isn't statially zero, synthesise
-		  (as-literal " = ")
-		  (synthesise v)))
+	  ;; synthesise the assignment to the initial value if there is one
+	  (if v
+	      (if (static-constant-p v)
+		  (let ((iv (ensure-static v)))
+		    (unless (= iv 0)
+		      ;; initial value isn't statially zero, synthesise
+		      (as-literal " = ")
+		      (synthesise v)))
 
-	      ;; initial value is an expression, synthesise
-	      (progn
-		(as-literal " = ")
-		(synthesise v))))
+		  ;; initial value is an expression, synthesise
+		  (progn
+		    (as-literal " = ")
+		    (synthesise v)))))
       (as-literal";"))))
 
 
@@ -513,7 +516,7 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
   "Synthesise a constant N within a LET block.
 
 Constants turn into local parameters."
-  (let ((v (get-initial-value n)))
+  (let ((v (get-initial-value n :default 0)))
     (as-literal "localparam ")
     (synthesise n)
     (as-literal " = ")
