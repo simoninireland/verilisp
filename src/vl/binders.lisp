@@ -217,7 +217,8 @@ The name is the first element, whether or not DECL is a list."
 	    ;; check consistency with assigned representation
 	    (if-let ((given (get-representation n)))
 	      (when (not (eql rep given))
-		(warn 'representation-mismatch :got rep
+		(warn 'representation-mismatch :variable n
+					       :got rep
 					       :expected given
 					       :hint "Make sure the explicitly-assigned representation is appropriate"))
 

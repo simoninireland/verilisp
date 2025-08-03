@@ -347,7 +347,8 @@ Signal VALUE-MISMATCH as an error if not."
 	    ;; check consistency with assigned direction
 	    (if-let ((given (get-direction n)))
 	      (when (not (eql dir given))
-		(warn 'direction-mismatch :got dir
+		(warn 'direction-mismatch :variable n
+					  :got dir
 					  :expected given
 					  :hint "Make sure the explicitly-assigned direction is appropriate"))
 
