@@ -247,7 +247,7 @@ used as targets for GO forms."))
 This is acceptable, and is just a warning in case it's not intended."))
 
 
-(define-condition duplicate-module (vl-error)
+(define-condition duplicate-module (vl-warning)
   ((modname
     :documentation "The module."
     :initarg :module
@@ -317,17 +317,22 @@ include terms that are only known at run-time."))
 
 
 (define-condition direction-mismatch (vl-warning)
-  ((expected
-     :documentation "The direction(s) allowed."
-     :initarg :expected
-     :reader expected-values)
+  ((variable
+    :documentation "The variable."
+    :initarg :variable
+    :reader variables)
+   (expected
+    :documentation "The direction(s) allowed."
+    :initarg :expected
+    :reader expected-values)
    (received
     :documentation "The direction received."
     :initarg :got
     :reader received-value))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Expected a direction that is one of ~s, got ~s"
+	     (format-condition-context (format nil "Expected a direction  ~a for ~a, got ~a"
 					       (expected-values c)
+					       (variables c)
 					       (received-value c))
 				       c str)))
   (:documentation "Condition signalled when a mis-matched direction is received.
@@ -391,7 +396,7 @@ Coercion only currently works between fixed-width types."))
     :initarg :want
     :reader wanted-type))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Can'Potential loss of precision coercing ~a to ~a"
+	     (format-condition-context (format nil "Potential loss of precision coercing ~a to ~a"
 					       (received-type c)
 					       (wanted-type c))
 				       c str)))
@@ -550,7 +555,11 @@ This is probably a user mistake. It does no harm, ut might indicate that there's
 
 
 (define-condition representation-mismatch (vl-warning)
-  ((expected
+  ((variable
+    :documentation "The variable."
+    :initarg :variable
+    :reader variables)
+   (expected
     :documentation "The representation expected."
     :initarg :expected
     :reader expected-values)
@@ -559,8 +568,9 @@ This is probably a user mistake. It does no harm, ut might indicate that there's
     :initarg :got
     :reader received-value))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Expected a representation from ~a, got ~a"
+	     (format-condition-context (format nil "Expected a representation ~a for ~a, got ~a"
 					       (expected-values c)
+					       (variables c)
 					       (received-value c))
 				       c str)))
   (:documentation "Condition signalled when representations are mis-matched.

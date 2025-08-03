@@ -57,18 +57,18 @@ Use VERILOG-OPERATOR if provided for synthesis."
     (setq verilog-operator symbol))
 
   `(progn
-     (defmethod compute-type-sexp ((fun (eql ,symbol)) args)
+     (defmethod compute-type-sexp ((fun (eql ',symbol)) args)
        '(unsigned-byte 1))
 
 
-     (defmethod apply-type-constraints-sexp ((fun (eql ,symbol)) args)
+     (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
        (destructuring-bind (l r)
 	   args
 	 (ensure-fixed-width (compute-type l))
 	 (ensure-fixed-width (compute-type r))))
 
 
-     (defmethod synthesise-sexp ((fun (eql ,symbol)) args)
+     (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
        (destructuring-bind (l r)
 	   args
 	 (as-literal "(")
@@ -78,10 +78,10 @@ Use VERILOG-OPERATOR if provided for synthesis."
 	 (as-literal ")")))))
 
 
-(define-fixed-width-binary-maths-comparator '= "==")
-(define-fixed-width-binary-maths-comparator '/= "!=")
+(define-fixed-width-binary-maths-comparator = "==")
+(define-fixed-width-binary-maths-comparator /= "!=")
 
-(define-fixed-width-binary-maths-comparator '<)
-(define-fixed-width-binary-maths-comparator '<=)
-(define-fixed-width-binary-maths-comparator '>)
-(define-fixed-width-binary-maths-comparator '>=)
+(define-fixed-width-binary-maths-comparator <)
+(define-fixed-width-binary-maths-comparator <=)
+(define-fixed-width-binary-maths-comparator >)
+(define-fixed-width-binary-maths-comparator >=)

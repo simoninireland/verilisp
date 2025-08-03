@@ -227,89 +227,99 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 
 ;; ---------- Bitwise operators ----------
 
-(defun typecheck-bitwise-operator (args)
-  "Typecheck the arguments ARGS to a logical operator."
-  (let ((ty (foldr (lambda (ty1 arg)
-		     (lub ty1 (compute-type arg)))
-		   args nil)))
-    (ensure-subtype ty 'unsigned-byte)
+(defmacro define-fixed-width-binary-bitwise-operator (symbol &optional verilog-operator)
+  "Declare the necessary functions for SYMBOL.
 
-    ty))
+Use VERILOG-OPERATOR if provided for synthesis."
+  (unless verilog-operator
+    (setq verilog-operator symbol))
 
-
-(defmethod compute-type-sexp ((fun (eql 'logand)) args)
-  (typecheck-bitwise-operator args))
+  `(progn
+     (defmethod compute-type-sexp ((fun (eql ',symbol)) args)
+       '(unsigned-byte 1))
 
 
-(defmethod fold-constant-expressions-sexp ((fun (eql 'logand)) args)
-  (fold-constant-expressions-addition 'logand args))
+     (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
+       (destructuring-bind (l r)
+	   args
+	 (ensure-fixed-width (compute-type l))
+	 (ensure-fixed-width (compute-type r))))
 
 
-(defmethod synthesise-sexp ((fun (eql 'logand)) args)
-  (as-infix '& args))
+     (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
+       (destructuring-bind (l r)
+	   args
+	 (as-literal "(")
+	 (synthesise l)
+	 (as-literal ,(format nil " ~a " verilog-operator))
+	 (synthesise r)
+	 (as-literal ")")))))
 
-
-(defmethod compute-type-sexp ((fun (eql 'logior)) args)
-  (typecheck-bitwise-operator args))
-
-
-(defmethod fold-constant-expressions-sexp ((fun (eql 'logior)) args)
-  (fold-constant-expressions-addition 'logior args))
-
-
-(defmethod synthesise-sexp ((fun (eql 'logior)) args)
-  (as-infix '|\|| args))
-
-
-(defmethod compute-type-sexp ((fun (eql 'logxor)) args)
-  (typecheck-bitwise-operator args))
-
-
-(defmethod fold-constant-expressions-sexp ((fun (eql 'logxor)) args)
-  (fold-constant-expressions-addition 'logxor args))
-
-
-(defmethod synthesise-sexp ((fun (eql 'logxor)) args)
-  (as-infix '^ args))
+(define-fixed-width-binary-bitwise-operator logand "&")
+(define-fixed-width-binary-bitwise-operator logior "|")
+(define-fixed-width-binary-bitwise-operator logxor "^")
 
 
 ;; ---------- Logical ----------
 
-(defun typecheck-logical-operator (args)
-  "Typecheck the arguments ARGS to a logical operator.
+(defmacro define-fixed-width-binary-logical-operator (symbol &optional verilog-operator)
+  "Declare the necessary functions for SYMBOL.
 
-All arguments must be booleans."
-  (mapc (lambda (arg)
-	  (let ((ty (compute-type arg)))
-	    (ensure-boolean ty)))
-	args)
-  '(unsigned-byte 1))
+Use VERILOG-OPERATOR if provided for synthesis."
+  (unless verilog-operator
+    (setq verilog-operator symbol))
 
-
-(defmethod compute-type-sexp ((fun (eql 'and)) args)
-  (typecheck-logical-operator args))
+  `(progn
+     (defmethod compute-type-sexp ((fun (eql ',symbol)) args)
+       '(unsigned-byte 1))
 
 
-(defmethod synthesise-sexp ((fun (eql 'and)) args)
-  (as-infix '&& args))
+     (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
+       (destructuring-bind (l r)
+	   args
+	 (ensure-boolean (compute-type l))
+	 (ensure-boolean (compute-type r))))
 
 
-(defmethod compute-type-sexp ((fun (eql 'or)) args)
-  (typecheck-logical-operator args))
+     (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
+       (destructuring-bind (l r)
+	   args
+	 (as-literal "(")
+	 (synthesise l)
+	 (as-literal ,(format nil " ~a " verilog-operator))
+	 (synthesise r)
+	 (as-literal ")")))))
+
+(define-fixed-width-binary-logical-operator and "&&")
+(define-fixed-width-binary-logical-operator or "||")
 
 
-(defmethod synthesise-sexp ((fun (eql 'or)) args)
-  (as-infix '|\|\|| args))
+(defmacro define-fixed-width-unary-logical-operator (symbol &optional verilog-operator)
+  "Declare the necessary functions for SYMBOL.
+
+Use VERILOG-OPERATOR if provided for synthesis."
+  (unless verilog-operator
+    (setq verilog-operator symbol))
+
+  `(progn
+     (defmethod compute-type-sexp ((fun (eql ',symbol)) args)
+       '(unsigned-byte 1))
 
 
-(defmethod compute-type-sexp ((fun (eql 'not)) args)
-  (ensure-number-of-arguments 'not args 1)
-  (ensure-boolean (car args))
-  '(unsigned-byte 1))
+     (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
+       (destructuring-bind (v)
+	   args
+	 (ensure-boolean (compute-type (v)))))
 
 
-(defmethod synthesise-sexp ((fun (eql 'not)) args)
-  (as-literal "(")
-  (as-literal "!")
-  (synthesise (car args))
-  (as-literal ")"))
+     (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
+       (destructuring-bind (v)
+	   args
+	 (as-literal "(")
+	 (as-literal ,(format nil " ~a" verilog-operator))
+	 (as-literal "(")
+	 (synthesise v)
+	 (as-literal ")")
+	 (as-literal ")")))))
+
+(define-fixed-width-unary-logical-operator not "!")
