@@ -176,16 +176,9 @@ This is used for setting defaults."
     (set-variable-property-unless-set n (car p) (cadr p))))
 
 
-(defun declare-macro (m f)
-  "Declare M as a macro with body F in the current environment."
-  (declare-variable m `((name ,m)
-			(initial-value ,f) (as macro))))
-
-
-(defun macro-declared-p (m)
-  "Test whether M is declared as a macro in the global environment."
-  (and (variable-declared-p m)
-       (eql (get-representation m) 'macro)))
+(defun forget-variable (n)
+  "Forget N from the current environment."
+  (forget-environment-variable n (get-frame-declaring n (current-frame))))
 
 
 ;;---------- Common properties ----------
@@ -193,10 +186,8 @@ This is used for setting defaults."
 (defun get-type (n)
   "Return the type of N.
 
-This is the assigned type if there is one, or the
-inferred type if not."
-  (or (variable-property n 'type :default nil)
-      (variable-property n 'inferred-type)))
+This is the assigned type if there is one."
+  (or (variable-property n 'type)))
 
 
 (defun get-representation (n)

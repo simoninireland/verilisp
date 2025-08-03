@@ -23,77 +23,65 @@
 
 ;; ---------- Module registry ----------
 
-(defvar *module-list* nil
-  "The module registry.
+;; Modules are all held in the global environment.
 
-Modules added here are queued for synthesis.")
+(defun declare-module (modname intf code)
+  "Declare a module MODNAME with the given INTF and CODE.
 
+The module is declare in *GLOBAL-ENVIRONMENT*. Moduls can be
+re-defined, overwriting previous declarationsn and signalling
+a DUPLICATE-MODULE warning."
+  (in-global-environment
 
-(defvar *module-interfaces* '()
-  "Mapping of known modules to their interface types.
+    ;; test whether the module already exists
+    (when (variable-declared-p modname)
+      ;; variable exists, delete it to allow re-definition
+      (warn 'duplicate-module :name modname)
+      (forget-variable name))
 
-This variable contains all the modules that can be imported. It will
-contain the types of all the modules in *MODULE-LIST* that have been
-defined in this session, plus any externlly-defined modules made
-available for import.")
-
-
-(defun clear-module-registry ()
-  "Clear the module registry of all imported and declared modules."
-  (setq *module-list* '()
-	*module-interfaces* '()))
-
-
-(defun known-module-interface-p (modname)
-  "Test whether MODNAME is known as a module interface."
-  (not (null (assoc modname *module-interfaces*))))
+    (declare-variable modname `((type ,intf)
+				(initial-value ,code)))))
 
 
-(defun add-module-interface (modname intf)
-  "Add module MODNAME with given INTF."
-  (when (known-module-interface-p modname)
-    (error 'duplicate-module :module modname))
-
-  (appendf *module-interfaces* (list (list modname intf))))
-
-
-(defun get-module-interface (modname)
-  "Return the module interface type for MODNAME."
-  (if-let ((m (assoc modname *module-interfaces*)))
-    (cadr m)
-
-    (error 'unknown-module :module modname
-			   :hint "Make sure the module has been defined or imported")))
-
-
-(defun synthesising-module-p (modname)
-  "Test whether MODNAME is queued for synthesis."
-  (not (null (assoc modname *module-list*))))
-
-
-(defun add-module-for-synthesis (modname module)
-  "Queue the module MODNAME with code MODULE for synthesis."
-  (when (synthesising-module-p modname)
-    (error 'duplicate-module :module modname))
-
-  (appendf *module-list* (list (list modname module))))
+(defun module-declared-p (modname)
+  "Test whether MODNAME is declared as a module in the current environment."
+  (in-global-environment
+   (let ((ty (get-type modname)))
+     (subtype-p ty 'module))))
 
 
 (defun get-module (modname)
   "Return the module code for MODNAME.
 
-This will typically have been set by DEFMODULE and so will have been
+This will typically have been set by DEFMODULE/VL and so will have been
 type-checked, macro-expanded, and possibly had other passes applied."
-  (if-let ((m (assoc modname *module-list*)))
-    (cadr m)
+  (if (module-declared-p modname)
+      (in-global-environment
+	(get-initial-value modname))
 
-    (error 'unknown-module :module modname
-			   :hint "Make sure the module has been declared")))
+      (error 'unknown-module :module modname
+			     :hint "Make sure the module has been declared")))
+
+
+(defun get-module-interface (modname)
+  "Return the module interface for MODNAME.
+
+This will typically have been set by DEFMODULE/VL and so will have a
+corresponding module body to be synthesised."
+  (if (module-declared-p modname)
+      (in-global-environment
+	(get-type modname))
+
+      (error 'unknown-module :module modname
+			     :hint "Make sure the module has been declared")))
 
 
 (defun get-modules-for-synthesis ()
   "Return an alist consisting of module names and their declarations."
-  *module-list*)
+  (decls (filter-environment (lambda (n env)
+			       (and (module-declared-p n)
+				    (not (null (get-initial-value n)))))
+			     *global-environment*)))
 
 
 ;; ---------- Module declaration ----------
@@ -162,11 +150,8 @@ Return the name of the newly-defined module."
 	 (destructuring-bind (,intf ,elaborated)
 	     (elaborate/vl ,expanded)
 
-	   ;; add type to interfaces available for import
-	   (add-module-interface ',modname ,intf)
-
-	   ;; add expanded code to modules for synthesis
-	   (add-module-for-synthesis ',modname ,elaborated)
+	   ;; declare the module
+	   (declare-module ',modname ,intf ,elaborated)
 
 	   ',modname)))))
 

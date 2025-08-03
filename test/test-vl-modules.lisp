@@ -141,7 +141,7 @@
 
 (test test-synthesise-module-from-defmodule
   "Test we can synthesise directly from a DEFMODULE/VL."
-  (vl::clear-module-registry)
+  (vl::clear-global-environment)
   (vl::clear-module-late-initialisation)
 
   (defmodule/vl test/998 (clk
@@ -167,7 +167,7 @@
 
 (test test-module-instanciate
   "Test we can instanciate a module."
-  (vl::clear-module-registry)
+  (vl::clear-global-environment)
 
   (defmodule/vl clock (clk-in clk-out &optional data)
     (declare (type bit clk-in clk-out data)
@@ -229,7 +229,7 @@
 
 (test test-module-instanciate-with-bitfields
   "Test we can instanciate a module that uses bitfields in its wiring."
-  (vl::clear-module-registry)
+  (vl::clear-global-environment)
 
   (defmodule/vl clock (clk_in clk_out)
     (declare (type bit clk_in clk_out)
@@ -269,7 +269,7 @@
 
 (test test-synthesise-module-instanciation
   "Test we can synthesise a module instanciation."
-  (vl::clear-module-registry)
+  (vl::clear-global-environment)
 
   (defmodule/vl clock (clk_in clk_out
 			  &key (p 1) (q 2))
@@ -297,7 +297,7 @@
 
 (test test-module-dependencies
   "Test we can perform dependency checks over modules and instanciations."
-  (vl::clear-module-registry)
+  (vl::clear-global-environment)
 
   (defmodule/vl clock (clk_in clk_out
 		       &key (p 1) (q 2))
@@ -358,7 +358,7 @@
 
 (test test-module-real-instanciate
   "Test we can instanciate a real module."
-  (vl::clear-module-registry)
+  (vl::clear-global-environment)
 
   (defmodule/vl clockworks (clk-in reset-in
 			    clk reset

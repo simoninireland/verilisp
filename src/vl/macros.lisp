@@ -21,6 +21,22 @@
 (declaim (optimize debug))
 
 
+;; ---------- Environment management----------
+
+(defun declare-macro (m f)
+  "Declare M as a macro with body F in the current environment."
+  (declare-variable m `((name ,m)
+			(initial-value ,f) (as macro))))
+
+
+(defun macro-declared-p (m)
+  "Test whether M is declared as a macro in the global environment."
+  (and (variable-declared-p m)
+       (eql (get-representation m) 'macro)))
+
+
+;; ---------- Declaration ----------
+
 (defun translate-lambda-list (l)
   "Translate a macro-style lambda-list L to a function-style lambda-list.
 
@@ -42,10 +58,11 @@ NAME is declared in the global environment, and so is
 available anywhere in a Verilsp program."
 
   ;; test whether the macro already exists
-  (when (variable-declared-in-environment-p name *global-environment*)
-    ;; variable exists, delete it to allow re-definition
-    (warn 'duplicate-macro :name name)
-    (forget-environment-variable name *global-environment*))
+  (in-global-environment
+    (when (variable-declared-p name)
+      ;; variable exists, delete it to allow re-definition
+      (warn 'duplicate-macro :name name)
+      (forget-variable name)))
 
   (with-gensyms (tll)
     `(in-global-environment
@@ -58,8 +75,9 @@ available anywhere in a Verilsp program."
 (defmacro defcoremacro/vl (name lambda-list &body body)
   "Declare NAME with LAMBDA-LIST as a macro in core Verilisp.
 
-This should only be used during system loading to populate the core environment
-with core macros."
+This should only be used during system loading to populate the core
+environment with core macros. As such re-declaring a core macro gives
+rise to an error, not a warning."
   (with-gensyms (tll)
     `(in-core-environment
        (declare-macro ',name (lambda (&rest ,tll)

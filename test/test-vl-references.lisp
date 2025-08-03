@@ -56,7 +56,7 @@
 
 (test test-legalise-modules
   "Test that we synthesise module elements correctly."
-  (vl::clear-module-registry)
+  (vl::clear-global-environment)
 
   (vl::defmodule/vl clock/123 (clk-in clk-out
 				      &key (p 1) (q-r 2))
@@ -85,7 +85,7 @@
 
 (test test-legalise-modules-instanciate
   "Test that we synthesise module instanciation correctly."
-  (vl::clear-module-registry)
+  (vl::clear-global-environment)
 
   (defmodule/vl clock/123 (clk-in
 			   clk-out
