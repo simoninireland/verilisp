@@ -58,6 +58,10 @@
    #:defmacro/vl
    #:macrolet/vl
    #:synthesise/vl
+   #:clear-global-environment
+   #:get-module
+   #:get-module-interface
+   #:get-modules-for-synthesis
 
    ;; conditions
    #:vl-condition

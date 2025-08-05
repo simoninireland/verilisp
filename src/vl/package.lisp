@@ -135,7 +135,7 @@
    #:lispify
 
    ;; loader
-   #:clear-module-registry
+   #:clear-global-environment
    #:get-module
    #:get-module-interface
    #:get-modules-for-synthesis
