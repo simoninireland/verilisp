@@ -41,12 +41,12 @@
 	       ;; core language
 	       (:module "vl"
 		:components ((:file "package")
-			     (:file "helpers")
 			     (:file "env")
+			     (:file "context")
 			     (:file "macros")
+			     (:file "helpers")
 			     (:file "conditions")
 			     (:file "pretty-printer")
-			     (:file "context")
 			     (:file "passes")
 			     (:file "typeops")
 			     (:file "identifiers")
