@@ -218,7 +218,8 @@ removed."
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
-      (apply-type-constraints-sexp fun args))))
+      (with-current-form form
+	(apply-type-constraints-sexp fun args)))))
 
 
 (defgeneric apply-type-constraints-sexp (fun args)
