@@ -34,7 +34,7 @@
       vds
     (if (listp var)
 	;; full declaration
-	(destructuring-bind (n &optional init step)
+	(destructuring-bind (n &optional (init 0) step)
 	    var
 
 	  (list (append var-decls (list (list n init)))
@@ -67,16 +67,25 @@ the increments to the variables being executed every time."
     (destructuring-bind (var-decls steppers)
 	(generate-do-vars vars)
 
-      (with-gensyms (loop-head loop-body)
+      (with-gensyms (loop-head loop-body loop-end)
 	(let ((loop-body `(tagbody
-			     ,loop-head
+			     ;; initialise any variables declared
+			     ,@(if var-decls
+				   (mapcar (lambda (decl)
+					     (destructuring-bind (n v)
+						 decl
+					       `(setq ,n ,v)))
+					   var-decls))
+
+			   ,loop-head
 			     ;; run test to determine whether we exit
 			     (if ,end-test
 				 (progn
 				   ;; test met, exit
-				   ,@end-body))
+				   ,@end-body
+				   (go ,loop-end)))
 
-			     ,loop-body
+			   ,loop-body
 			     ;; run the loop body
 			     ,@body
 
@@ -85,7 +94,9 @@ the increments to the variables being executed every time."
 				  `(psetq ,@steppers))
 
 			     ;; return to head of the loop
-			     (go ,loop-head))))
+			     (go ,loop-head)
+
+			   ,loop-end)))
 
 	  (if var-decls
 	      ;; form introduces variables, declare them
@@ -107,7 +118,7 @@ BODY is not run if CONDITION is already true."
       ,loop-head
 	;; exit if condition isn't met
 	(if (not ,condition)
-	  (go ,loop-end))
+	    (go ,loop-end))
 
 	;; otherwise, execute the body and repeat
 	,@body
@@ -120,8 +131,7 @@ BODY is not run if CONDITION is already true."
   "Run the BODY forms until CONDITION is true.
 
 BODY is not run if CONDITION is already true."
-  `(do ()
-       ((not ,condition))
+  `(while (not ,condition)
      ,@body))
 
 
@@ -138,6 +148,6 @@ BODY is not run if CONDITION is already true."
 (defcoremacro/vl dotimes ((var count) &body body)
   (with-gensyms (counter)
     `(let ((,counter ,count))  ; will be optimised away if it's a constant
-       (do ((,var 0))
+       (do ((,var 0 (1+ ,var)))
 	   ((>= ,var ,counter))
 	 ,@body))))
