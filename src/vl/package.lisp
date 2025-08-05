@@ -54,6 +54,7 @@
    #:empty-environment
    #:add-frames
    #:in-frame
+   #:in-core-environment
    #:in-global-environment
    #:with-frame
    #:with-new-frame
@@ -139,6 +140,7 @@
    #:get-module-interface
    #:get-modules-for-synthesis
    #:defmodule/vl
+   #:defmacro/vl
    #:macrolet/vl
    #:expand/vl
    #:elaborate/vl
