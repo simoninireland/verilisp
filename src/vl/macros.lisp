@@ -55,7 +55,7 @@ but are laid-out differently."
   "Declare NAME with LAMBDA-LIST as a Verilisp macro.
 
 NAME is declared in the global environment, and so is
-available anywhere in a Verilsp program."
+available anywhere in a Verilisp program."
 
   ;; test whether the macro already exists
   (in-global-environment
