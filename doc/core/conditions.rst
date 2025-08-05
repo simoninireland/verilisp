@@ -92,15 +92,28 @@ Conditions relating to state machines
 +---------------------+----------------------------------------------+
 
 
-Conditions relating to module declarations
-------------------------------------------
+Conditions relating to macros
+-----------------------------
 
-+--------------------+---------------------------------------+
-| Condition          | Meaning                               |
-+====================+=======================================+
-| ``unknown-module`` | The given module isn't defined        |
-+--------------------+---------------------------------------+
-| ``not-importable`` | A module import is being passed the   |
-|                    | wrong arguments, or not being passed  |
-|                    | non-optional ones                     |
-+--------------------+---------------------------------------+
++----------------------+---------------------------------------+
+| Condition            | Meaning                               |
++======================+=======================================+
++----------------------+---------------------------------------+
+| ``duplicate-macro``  | The given macro is being re-defined   |
++----------------------+---------------------------------------+
+
+
+Conditions relating to modules
+------------------------------
+
++----------------------+---------------------------------------+
+| Condition            | Meaning                               |
++======================+=======================================+
+| ``unknown-module``   | The given module isn't defined        |
++----------------------+---------------------------------------+
+| ``duplicate-module`` | The given module is being re-defined  |
++----------------------+---------------------------------------+
+| ``not-importable``   | A module import is being passed the   |
+|                      | wrong arguments, or not being passed  |
+|                      | non-optional ones                     |
++----------------------+---------------------------------------+

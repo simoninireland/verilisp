@@ -62,11 +62,3 @@ The ``t`` branch is executed if none of the other branches is
 triggered. The values guarding the arms must be constants, not
 expressions: for a more flexible multi-armed conditional see
 :ref:`core-cond`.
-
-
-Compatibility
--------------
-
-``if`` and ``case`` behave exactly as in Common Lisp, with the proviso
-noted above of only allowing simple bodies when encountered in
-expressions.

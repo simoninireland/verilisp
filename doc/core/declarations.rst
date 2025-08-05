@@ -30,36 +30,23 @@ for ``type`` when assigning unsigned integer types, for example:
 
 is equivalent to the declaration above.
 
-The declaration ``as`` can be used to assign a representation to a
+
+Declarations shared with Common Lisp
+------------------------------------
+
+As well as ``type``, Verilisp accepts the ``ignored`` and
+``ignorable`` declarations to mark variables as either definitely or
+possibly not used within their scope. This affects the warning
+messages that are produced during type-checking.
+
+
+Declarations not in Common Lisp
+-------------------------------
+
+The ``as`` declaration can be used to assign a representation to a
 variable, and can take one of the symbols ``register``, ``wire``, and
 ``constant``.
 
 The declaration ``direction`` assigns directions for variables in and
 out of modules, and can take one of the symbols ``in``, ``out``, or
 ``inout``.
-
-The declarations ``ignore`` and ``ignorable`` can be used as in Common
-Lisp to indicate that a variable will not, or may not, be used in its
-scope. This can suppress some warnings.
-
-Declarations all add information to a program that the compiler can
-use. Verilisp will in any case attempt to infer the various attributes
-of variables, and issue warnings if the inferred values are
-incompatible with any provided explicitly by ``declare``.
-
-
-Compatibility
--------------
-
-Verilisp's ``declare`` is entirely compatible with Common Lisp usage,
-but supporting some different annotations. The annotations shared with
-Common Lisp are:
-
-- ``type``
-- ``ignore`` and ``ignorable``
-
-The new annotations are:
-
-- ``as``
-- ``width``
-- ``direction``

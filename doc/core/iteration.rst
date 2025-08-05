@@ -12,13 +12,14 @@ Iteration in Verilisp is built using macros on top of
 
 The most basic iteration construct is provided by Lisp's ``do`` macro,
 which introduces variables with increment operations applied at each
-turn of the iteration, plus a test for exiting the body.
+turn of the iteration, plus a test for exiting the body that can
+contain some code to be executed before exit if required.
 
 .. code-block:: lisp
 
    (do ((i 0 (+1 i))
 	(j 10 (1- j)))
-     ((= i j) return)
+     ((= i j) (incf b))
 
      (incf a))
 
@@ -30,13 +31,16 @@ The variables list may be empty.
 -----------
 
 The ``dotimes`` macro behaves roughly like a simple "for" loop in
-other languages.
+other languages:
 
 .. code-block:: lisp
 
    (let ((sum 0))
      (dotimes (i 10)
        (incf sum i)))
+
+iterates the value of ``i`` from zero to nine inclusive. if the bound
+is less than zero then no iterations occur.
 
 
 ``while`` and ``until``

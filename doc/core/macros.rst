@@ -84,12 +84,10 @@ but use of ``thing`` outside the body of ``expand-things`` will fail.
    things will not work as expected. The ``/vl`` suffix is a clue that
    the code is intended for Verilisp.
 
+.. warning::
 
-Compatibility
--------------
-
-There are some significant differences between Verilisp macros and
-"normal" Lisp macros, both in the way they're implemented (which is
-largely invisible to the Verilisp programmer) and the way they're
-expanded (which can cause confusion in complicated cases). See
-:ref:`writing-macros` for more details.
+   There are some significant differences between Verilisp macros and
+   "normal" Lisp macros, both in the way they're implemented (which is
+   largely invisible to the Verilisp programmer) and the way they're
+   expanded (which can cause confusion in complicated cases). See
+   :ref:`writing-macros` for more details.

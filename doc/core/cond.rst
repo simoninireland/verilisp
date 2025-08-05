@@ -25,10 +25,3 @@ The tests can be totally unrelated to each other, as shown above.
    While ``cond`` can be used as an expression (because it expands
    into ``if``), this needs care: each arm would need to return a
    value in a single expression in order to be accepted.
-
-
-Compatibility
--------------
-
-``cond`` behaves exactly as in Common Lisp, with the proviso mentioned
-above about its use in expressions.

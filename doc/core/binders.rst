@@ -25,9 +25,3 @@ body.
    using :ref:`core-declarations`. Verilisp will attempt to infer the
    information is needs for compilation, and will check that any
    explicit declarations match the requirements it infers.
-
-
-Compatibility
--------------
-
-``let`` is entirely compatible with Common Lisp.

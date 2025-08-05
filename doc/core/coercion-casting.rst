@@ -10,8 +10,8 @@ value or expression.
 Coercion
 --------
 
-Changing the type of a value is a *coercion*, and is performed by the
-``coerce`` form.
+Changing the representation of a value to match a given type is a
+*coercion*, and is performed by the ``coerce`` form.
 
 .. code-block:: lisp
 
@@ -31,6 +31,12 @@ Coercing will signal a ``PRECISION-MISMATCH`` warning if there is a
 danger that the value being coerced can't be guaranteed to fit into
 the type requested.
 
+.. note::
+
+   The behaviour of ``coerce`` involves specific changes in
+   representation that are left unspecified in Common Lisp. See the
+   implementation note on :ref:`implementation-coercion` for details
+   if required.
 
 Casting
 -------
@@ -98,13 +104,3 @@ Verilisp that a particular set of bits represents a signed number.
    As a rule of thumb, use ``the`` when extracting a bit-pattern from
    a larger set of bits, and ``coerce`` when changing the type of an
    entire variable.
-
-
-Compatibility
--------------
-
-The behaviours of ``coerce`` and ``the`` match their behaviours in
-Common Lisp. However, in Verilisp, the behaviour of ``coerce``
-involves specific changes in representation that are left unspecified
-in Common Lisp. See the implementation note on
-:ref:`implementation-coercion` for details if required.

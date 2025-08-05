@@ -40,6 +40,11 @@ Assignment to several slices of bits within a variable:
 ``(setq a 1)`` and ``(setf a 1)`` are equivalent. For the other
 generalised places, see under their appropriate access operators.
 
+.. note::
+
+   It is not (yet) possible to define new generalised places within
+   Verilisp.
+
 There is also a :ref:`parallel assignment <core-psetq>` version of
 ``setq``, as well as operators to :ref:`increment/decrement in place
 <core-incf-decf>`.
@@ -59,11 +64,3 @@ decorated with the ``:sync`` keyword:
    (setq a 24 :sync t)
 
 performs the assignment synchronously.
-
-
-Compatibility
--------------
-
-``setq`` and ``setf`` behave as in Common Lisp, but it is not possible
-to define new generalised places within the language as is possible in
-Lisp by defining new ``setf`` methods.

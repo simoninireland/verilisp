@@ -48,6 +48,7 @@ code into modules.
    core/conditionals
    core/assignment
    core/control-flow
+   core/modules
    core/tagbody
    core/arrays
    core/coercion-casting
@@ -75,3 +76,11 @@ Conditions
    :maxdepth: 1
 
    core/conditions
+
+
+Other features
+
+.. toctree::
+   :maxdepth: 1
+
+   environments
