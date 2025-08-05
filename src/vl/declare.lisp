@@ -25,7 +25,11 @@
 
 Methods on this function should add information about the
 annotation to the current frame of the global environment,
-so use in later passes."))
+so use in later passes.
+
+Unrecognised annotations are ignored with a warning.")
+  (:method (tag args)
+    (warn 'unrecognised-declaration :tag tag)))
 
 
 (defmethod add-frames-sexp ((fun (eql 'declare)) args)
@@ -33,18 +37,7 @@ so use in later passes."))
 	  (with-current-form dec
 	    (destructuring-bind (tag &rest decargs)
 		dec
-
-	      (handler-case
-		  (declare-annotation tag decargs)
-
-		(vl-error (c)
-		  (error c))
-
-		(error ()
-		  ;; other errors are interpreted as an
-		  ;; unkown declaration
-		  ;TODO: Might be too wide?
-		  (warn 'unrecognised-declaration :tag tag))))))
+	      (declare-annotation tag decargs))))
 	args)
 
   ;; return form unaltered
@@ -111,12 +104,12 @@ so use in later passes."))
 
 
 (defmethod declare-annotation ((tag (eql 'ignore)) args)
-  (dolist (n vars)
+  (dolist (n args)
     (ensure-variable-declared-in-current-frame n)
     (set-variable-property n 'ignore t)))
 
 
 (defmethod declare-annotation ((tag (eql 'ignorable)) args)
-  (dolist (n vars)
+  (dolist (n args)
     (ensure-variable-declared-in-current-frame n)
     (set-variable-property n 'ignorable t)))
