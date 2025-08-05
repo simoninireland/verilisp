@@ -79,6 +79,7 @@ Conditions
 
 
 Other features
+--------------
 
 .. toctree::
    :maxdepth: 1
