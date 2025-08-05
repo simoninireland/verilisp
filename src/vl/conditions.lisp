@@ -278,10 +278,15 @@ They do not need to be globally unique."))
   ((modname
     :documentation "The module."
     :initarg :module
-    :reader module))
+    :reader module)
+   (modargs
+    :documentation "The module arguments and parameters supplied."
+    :initarg :args
+    :reader arguments))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Module ~a can't be imported"
-					       (module c))
+	     (format-condition-context (format nil "Module ~a can't be imported with arguments ~a"
+					       (module c)
+					       (arguments c))
 				       c str)))
   (:documentation "Condition signalled when a module can't be imported.
 

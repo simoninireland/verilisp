@@ -184,10 +184,8 @@ This is used for setting defaults."
 ;;---------- Common properties ----------
 
 (defun get-type (n)
-  "Return the type of N.
-
-This is the assigned type if there is one."
-  (or (variable-property n 'type)))
+  "Return the type of N."
+  (variable-property n 'type))
 
 
 (defun get-representation (n)

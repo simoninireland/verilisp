@@ -36,25 +36,27 @@ a DUPLICATE-MODULE warning."
     ;; test whether the module already exists
     (when (variable-declared-p modname)
       ;; variable exists, delete it to allow re-definition
-      (warn 'duplicate-module :name modname)
-      (forget-variable name))
+      (warn 'duplicate-module :module modname)
+      (forget-variable modname))
 
     (declare-variable modname `((type ,intf)
-				(initial-value ,code)))))
+				(initial-value ,code)
+				(as module)))))
 
 
 (defun module-declared-p (modname)
   "Test whether MODNAME is declared as a module in the current environment."
   (in-global-environment
    (let ((ty (get-type modname)))
-     (subtype-p ty 'module))))
+     (and (not (null ty))
+	  (subtype-p ty 'module)))))
 
 
 (defun get-module (modname)
   "Return the module code for MODNAME.
 
 This will typically have been set by DEFMODULE/VL and so will have been
-type-checked, macro-expanded, and possibly had other passes applied."
+type-checked, macro-expanded, and had other passes applied."
   (if (module-declared-p modname)
       (in-global-environment
 	(get-initial-value modname))
@@ -78,10 +80,18 @@ corresponding module body to be synthesised."
 
 (defun get-modules-for-synthesis ()
   "Return an alist consisting of module names and their declarations."
-  (decls (filter-environment (lambda (n env)
-			       (and (module-declared-p n)
-				    (not (null (get-initial-value n)))))
-			     *global-environment*)))
+  (declare (optimize debug))
+
+  (in-global-environment
+    (let ((env (filter-environment (lambda (n env)
+				     (and (module-declared-p n)
+					  (not (null (get-initial-value n :default nil)))))
+				   (current-frame))))
+
+      (mapcar (lambda (n)
+		(list n
+		      (get-module n)))
+	      (get-environment-names env)))))
 
 
 ;; ---------- Module declaration ----------
