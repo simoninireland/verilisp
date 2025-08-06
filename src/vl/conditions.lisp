@@ -244,7 +244,7 @@ used as targets for GO forms."))
 				       c str)))
   (:documentation "Condition signalled when a macro is re-defined.
 
-This is acceptable, and is just a warning in case it's not intended."))
+This is just a warning in case the re-definition is unintended."))
 
 
 (define-condition duplicate-module (vl-warning)
@@ -253,10 +253,12 @@ This is acceptable, and is just a warning in case it's not intended."))
     :initarg :module
     :reader module))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Duplicate module ~a"
+	     (format-condition-context (format nil "Re-defining module ~a"
 					       (module c))
 				       c str)))
-  (:documentation "Condition signalled when a module is re-defined."))
+  (:documentation "Condition signalled when a module is re-defined.
+
+This can be ignored if the re-definition is deliberate."))
 
 
 (define-condition duplicate-state (vl-error)
@@ -506,28 +508,21 @@ cause downstream errors if the inferred type is incorrect, but that will
 only happen when the types are being used inconsistently."))
 
 
-(define-condition state-machine-inferred (vl-warning)
-  ((given
-    :documentation "The number of states in the machine as specified."
-    :initarg :given
-    :reader given-states)
-   (inferred
-    :documentation "The number of states inferred."
-    :initarg :inferred
-    :reader inferred-states))
+(define-condition resources-created (vl-warning)
+  ((description
+    :documentation "A description of the resources created.."
+    :initarg :description
+    :reader description))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Inferred state machine has ~a states (~a in original code)"
-					       (inferred-states c)
-					       (given-states c))
+	     (format-condition-context (format nil "Resources created: ~a"
+					       (description c))
 				       c str)))
-  (:documentation "Condition signalled when a state machine is inferred.
+  (:documentation "Condition signalled when resources are created..
 
-This is a condition that doesn't necessarily indicte a problem, but announces
-how many states have been inferred for a state machine. This will never be less
-than the number in the code, but will frequently be more due to constructs
-introduced by loops, dependencies, and so on. This may be important where
-the timing of the final system is critical, since each state requires its own
-clock cycle."))
+Several Verilisp constructs construct resources 'covertly', which can
+have an effect on the size and speed of the synthesised circuit. This
+warning is used to communicate these changes so they can be reviewd in
+cases where resource utilisation is critical."))
 
 
 (define-condition unused-variable (vl-warning)

@@ -178,6 +178,6 @@
    #:state-machine-mismatch
    #:unreachable-code
    #:type-inferred
-   #:state-machine-inferred
+   #:resources-created
    #:representation-mismatch
    #:no-local-frame))

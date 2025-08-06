@@ -88,7 +88,7 @@
    #:precision-mismatch
    #:bitfield-mismatch
    #:shape-mismatch
-   #:state-machine-mismatch
+   #:resources-created
    #:type-inferred
    #:representation-mismatch
    #:no-local-frame))

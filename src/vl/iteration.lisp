@@ -67,6 +67,15 @@ the increments to the variables being executed every time."
     (destructuring-bind (var-decls steppers)
 	(generate-do-vars vars)
 
+      ;; warn about extra resources
+      (when (> (length var-decls) 0)
+	(warn 'resources-created
+	      :description (format nil "DO form created ~a new variable~a"
+				   (length var-decls)
+				   (if (> (length var-decls) 1)
+				       "s"
+				       ""))))
+
       (with-gensyms (loop-head loop-body loop-end)
 	(let ((loop-body `(tagbody
 			     ;; initialise any variables declared
@@ -77,7 +86,7 @@ the increments to the variables being executed every time."
 					       `(setq ,n ,v)))
 					   var-decls))
 
-			   ,loop-head
+			     ,loop-head
 			     ;; run test to determine whether we exit
 			     (if ,end-test
 				 (progn
@@ -85,7 +94,7 @@ the increments to the variables being executed every time."
 				   ,@end-body
 				   (go ,loop-end)))
 
-			   ,loop-body
+			     ,loop-body
 			     ;; run the loop body
 			     ,@body
 
@@ -96,11 +105,14 @@ the increments to the variables being executed every time."
 			     ;; return to head of the loop
 			     (go ,loop-head)
 
-			   ,loop-end)))
+			     ,loop-end)))
 
 	  (if var-decls
-	      ;; form introduces variables, declare them
+	      ;; form introduces variables, declare them and declare
+	      ;; them ignorable in the body
 	      `(let ,var-decls
+		 (declare (ignorable ,@(mapcar #'car var-decls)))
+
 		 ,loop-body)
 
 	      ;; no new variables
@@ -115,7 +127,7 @@ the increments to the variables being executed every time."
 BODY is not run if CONDITION is already true."
   (with-gensyms (loop-head loop-end)
     `(tagbody
-      ,loop-head
+	,loop-head
 	;; exit if condition isn't met
 	(if (not ,condition)
 	    (go ,loop-end))
@@ -124,7 +136,7 @@ BODY is not run if CONDITION is already true."
 	,@body
 	(go ,loop-head)
 
-      ,loop-end)))
+	,loop-end)))
 
 
 (defcoremacro/vl until (condition &body body)
