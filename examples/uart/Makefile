@@ -26,9 +26,9 @@ include ../icestick.mk
 TARGET = counter.bin
 
 # Sources
-SOURCES = uart.lisp counter.lisp
-CONFIG = uart.pcf
-OBJECT = uart.v
+SOURCES = uart.lisp flasher.lisp counter.lisp
+CONFIG = counter.pcf
+OBJECT = counter.v
 
 
 # ---------- Tools ----------

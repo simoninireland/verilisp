@@ -53,21 +53,23 @@
 
   (let ((rx-clk-divider clk-divide)
 	(tx-clk-divider clk-divide)
-	rx-out rx-data rx-countdown rx-bits-remaining
-	tx-out tx-data tx-countdown tx-bits-remaining)
+	rx-data rx-countdown rx-bits-remaining
+	rx-status-receiving-p rx-status-received-p rx-status-error-p rx-status-idle-p
+	tx-data (tx-out 1) tx-countdown tx-bits-remaining
+	tx-status-idle-p)
     (declare (type (unsigned-byte 10) rx-clk-divider tx-clk-divider)
 	     (type (unsigned-byte 5) rx-countdown tx-countdown)
 	     (type (unsigned-byte 3) rx-bits-remaining tx-bits-remaining))
 
-    (setq rx-byte rx-data)
+    ;; wire externally visible flags to internal status wires
+    ;; (setq received-p rx-status-received-p)
+    ;; (setq receive-error-p rx-status-error-p)
+    ;; (setq receiving-p (not rx-status-idle-p))
+    ;; (setq rx-byte rx-data)
     (setq tx tx-out)
+    (setq transmitting-p (not tx-status-idle-p))
 
     (@ (posedge clk)
-       ;; receive countdown
-       (decf rx-clk-divider)
-       (when (0= rx-clk-divider)
-	 (setq rx-clk-divider clk-divide)
-	 (decf rx-countdown))
 
        ;; transmit countdown
        (decf tx-clk-divider)
@@ -75,69 +77,14 @@
 	 (setq tx-clk-divider clk-divide)
 	 (decf tx-countdown))
 
-       ;; receiving state machine
-       (tagbody
-	rx-idle
-	  (setq receiving-p 0)
-	  (setq received-p 0)
-	  (setq receive-error-p 0)
-
-	  ;; wait for low on rx to signal start of data
-	  (while (0/= rx))
-
-	  (setq receiving-p 1)
-	  (setq rx-clk-divider clk-divide)
-	  (setq rx-countdown 2)
-
-	rx-check-start
-	  (if (0= rx-countdown)
-	      (if (0= rx)
-		  ;; pulse still low
-		  (progn
-		    (setq rx-countdown 4)
-		    (setq rx-bits-remaining 8)
-		    (go rx-read-bits))
-
-		  ;; pulse unexpectedly went high, error
-		  (go rx-error)))
-
-	rx-read-bits
-	  (if (0= rx-countdown)
-	      (progn
-		(setq rx-data (make-bitfields rx (bref rx-data 7 :end 1)))
-		(setq rx-countdown 4)
-		(decf rx-bits-remaining)
-		(if (0= rx-bits-remaining)
-		    (go rx-check-stop))))
-
-	rx-check-stop
-	  (if (0= rx-countdown)
-	      ;; receive should be high
-	      (if rx
-		  (go rx-received)
-		  (go rx-error)))
-
-	rx-delay-restart
-	  (if (0= rx-countdown)
-	      (go rx-idle))
-
-	rx-error
-	  (setq receive-error-p 1)
-	  (setq rx-countdown 8)
-	  (go rx-delay-restart)
-
-	rx-received
-	  (setq received-p 1)
-	  (go rx-idle))
-
        ;; transmitting state machine
        (tagbody
 	tx-idle
-	  (setq transmitting-p 0)
+	  (setq tx-status-idle-p 1)
 
 	  (until (0/= transmit))
 
-	  (setq transmitting-p 0)
+	  (setq tx-status-idle-p 0)
 	  (setq tx-data tx-byte)
 	  (setq tx-clk-divider clk-divide)
 	  (setq tx-countdown 4)
@@ -151,13 +98,83 @@
 		    (decf tx-bits-remaining)
 		    (setq tx-out (bref tx-data 0))
 		    (setq tx-data (make-bitfields 0 (bref tx-data 7 :end 1)))
-		    (setq tx-countdown 4))
+		    (setq tx-countdown 4)
+		    (go tx-sending))
 
 		  (progn
 		    (setq tx-out 1)
 		    (setq tx-countdown 8)
-		    (go tx-delay-restart))))
+		    (go tx-delay-restart)))
+
+	      (go tx-sending))
 
 	tx-delay-restart
 	  (if (0= tx-countdown)
-	      (go tx-idle))))))
+	      (go tx-idle)
+	      (go tx-delay-restart)))
+
+       ;; receive countdown
+       ;; (decf rx-clk-divider)
+       ;; (when (0= rx-clk-divider)
+       ;;	 (setq rx-clk-divider clk-divide)
+       ;;	 (decf rx-countdown))
+
+       ;; ;; receiving state machine
+       ;; (tagbody
+       ;;	rx-idle
+       ;;	  (setq rx-status-receiving-p 0)
+       ;;	  (setq rx-status-error-p 0)
+       ;;	  (setq rx-status-idle-p 1)
+
+       ;;	  ;; wait for low on rx to signal start of data
+       ;;	  (while (0/= rx))
+
+       ;;	  (setq rx-status-idle-p 0)
+       ;;	  (setq rx-status-receiving-p 1)
+       ;;	  (setq rx-clk-divider clk-divide)
+       ;;	  (setq rx-countdown 2)
+
+       ;;	rx-check-start
+       ;;	  (if (0= rx-countdown)
+       ;;	      (if (0= rx)
+       ;;		  ;; pulse still low
+       ;;		  (progn
+       ;;		    (setq rx-countdown 4)
+       ;;		    (setq rx-bits-remaining 8)
+       ;;		    (go rx-read-bits))
+
+       ;;		  ;; pulse unexpectedly went high, error
+       ;;		  (go rx-error)))
+
+       ;;	rx-read-bits
+       ;;	  (if (0= rx-countdown)
+       ;;	      (progn
+       ;;		(setq rx-data (make-bitfields rx (bref rx-data 7 :end 1)))
+       ;;		(setq rx-countdown 4)
+       ;;		(decf rx-bits-remaining)
+       ;;		(if (0= rx-bits-remaining)
+       ;;		    (go rx-check-stop))))
+
+       ;;	rx-check-stop
+       ;;	  (if (0= rx-countdown)
+       ;;	      ;; receive should be high
+       ;;	      (if rx
+       ;;		  (go rx-received)
+       ;;		  (go rx-error)))
+
+       ;;	rx-delay-restart
+       ;;	  (if (0= rx-countdown)
+       ;;	      (go rx-idle))
+
+       ;;	rx-error
+       ;;	  (setq rx-status-receiving-p 0)
+       ;;	  (setq rx-status-error-p 1)
+       ;;	  (setq rx-countdown 8)
+       ;;	  (go rx-delay-restart)
+
+       ;;	rx-received
+       ;;	  (setq rx-status-received-p 0)
+       ;;	  (setq rx-status-receiving-p 0)
+       ;;	  (go rx-idle))
+
+       )))
