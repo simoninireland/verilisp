@@ -104,21 +104,32 @@ updates. Also note that it only works for variables, not for
 generalised places."
   (let* ((var-val-pairs (adjacent-pairs var-vals))
 	 (vars (mapcar #'car var-val-pairs))
-	 (vals (mapcar #'cadr var-val-pairs))
-	 (tempvars (mapcar #'gensym (mapcar #'symbol-name vars))))
+	 (vals (mapcar #'cadr var-val-pairs)))
 
-    (with-gensyms (temps reals)
-      `(let ,tempvars
-	 (tagbody
-	    ,temps
-	    ,@(mapcar (lambda (tempvar val)
-			`(setq ,tempvar ,val))
-		      tempvars vals)
+    (if (= (length vars) 1)
+	;; single assignment, replace with SETQ
+	`(setq ,(car vars) ,(car vals))
 
-	    ,reals
-	    ,@(mapcar (lambda (var tempvar)
-			`(setq ,var ,tempvar))
-		      vars tempvars))))))
+	;; multiple assignments, expand
+	(progn
+	  ;; warn about the temporary variables
+	  (warn 'resources-created
+		:description (format nil "PSETQ form created ~a new variables"
+				     (length vars)))
+
+	  (let ((tempvars (mapcar #'gensym (mapcar #'symbol-name vars))))
+	    (with-gensyms (temps reals)
+	      `(let ,tempvars
+		 (tagbody
+		    ,temps
+		    ,@(mapcar (lambda (tempvar val)
+				`(setq ,tempvar ,val))
+			      tempvars vals)
+
+		    ,reals
+		    ,@(mapcar (lambda (var tempvar)
+				`(setq ,var ,tempvar))
+			      vars tempvars)))))))))
 
 
 ;; ---------- setf (generalised places) ----------

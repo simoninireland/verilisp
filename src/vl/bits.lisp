@@ -77,7 +77,8 @@
 	       (read-variables val))
 
 	(destructuring-bind (psel &rest pselargs)
-	    (read-variables-sexp-setf psel val pselargs)))))
+	    place
+	  (read-variables-sexp-setf psel val pselargs)))))
 
 
 (defmethod generalised-place-sexp-p ((selector (eql 'bref)) selectorargs)

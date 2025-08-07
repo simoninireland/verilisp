@@ -113,7 +113,8 @@ Methods on this function should construct a state machine for
 FUN applied to ARGS, integrate it into CURRENT-STATE, and then
 proceed to parse FORMS (typically by calling PARSE-TAGBODY-FORMS).
 
-EXIT-STATE is the 'fall-through' state that the form may use.
+EXIT-STATE is the 'fall-through' state that the form should transition
+to when it exits
 
 Returns a list consisting of a list of the states created, with
 the entry state first, and a boolean indicating whether the
@@ -143,7 +144,23 @@ form fell-through and should therefore continue to EXIT-STATE.")
 	    trailing-states)))
 
 
+(defmethod parse-tagbody-forms-sexp ((fun (eql 'progn)) args forms current-state exit-state)
+  (let* ((trailing-states (parse-tagbody-forms forms
+					       nil exit-state))
+	 (trailing-state (if trailing-states
+			     (car trailing-states)
+			     exit-state))
+	 (trailing-label (label trailing-state))
+	 (nested-states (parse-tagbody-forms args
+					     current-state
+					     trailing-state)))
+    (append nested-states
+	    trailing-states)))
+
+
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'if)) args forms current-state exit-state)
+  (declare (optimize debug))
+
   (destructuring-bind (condition then-branch &rest else-branch)
       args
 
@@ -315,7 +332,13 @@ Return a list of of states created, initial state first."
 
 
 (defun build-state-machine (forms)
-  "Parse FORMS as the body of a TAGBODY, building a state machine."
+  "Parse FORMS as the body of a TAGBODY, building a state machine.
+
+The resulting machien is necessarily 'top-level', not contained in
+another machine. It has a passivating state added to the end, whcih it
+will remain in if it ever gets to that point. This allows machines to
+be built that run once and then stop. Use explicit GO forms, or
+looping macros like FOREVER, to keep the machine running."
   (declare (optimize debug))
 
   (let* ((passive-state (make-instance 'state))
@@ -331,15 +354,21 @@ Return a list of of states created, initial state first."
 A state is unnecessary if it is empty or consists purely of a GO to another state."
   (declare (optimize debug))
 
-  (flet ((merge-states (states m)
-	   (if (and (not (null (body m)))
-		    (= (length (body m)) 1)
-		    (eql (caar (body m)) 'go))
+  (labels ((mergeable-state (m)
+	     (let ((b (body m)))
+	       (if (and (not (null b))
+			(= (length b) 1)
+			(eql (caar b) 'go))
 
-	       ;; state is just a jump, match it to the jump target
-	       (destructuring-bind (fun target)
-		   (car (body m))
+		   ;; mergeable, return its target state
+		   (destructuring-bind (fun target)
+		       (car b)
+		     target))))
 
+	   (merge-states (states m)
+	     (if-let ((target (mergeable-state m)))
+	       (progn
+		 ;; state is mergeable
 		 ;; if target is merged itself, use the merged state
 		 (if-let ((m (assoc target states)))
 		   (setq target (cadr m)))
@@ -354,15 +383,20 @@ A state is unnecessary if it is empty or consists purely of a GO to another stat
 
 
 (defun get-label-from-merged-states (label merged-states)
-  "Return the label that should be used for LABEL under MERGED-STATES."
+  "Return the label that should be used for LABEL under MERGED-STATES.
+
+Return LABEL if the the state is not merged."
   (if-let ((m (assoc label merged-states)))
     (get-label-from-merged-states (cadr m) merged-states)
     label))
 
 
-(defun synthesise-state-machine (machine)
-  "Return the code for MACHINE as a state machine."
-  (let* ((merged-states (merge-state-machine-empty-states machine))
+(defun synthesise-state-machine (args)
+  "Return the code for ARGS as a state machine."
+  (declare (optimize debug))
+
+  (let* ((machine (build-state-machine args))
+	 (merged-states (merge-state-machine-empty-states machine))
 	 (state-labels (remove-if (lambda (l)
 				    (assoc l merged-states))
 				  (mapcar #'label machine)))
@@ -370,17 +404,26 @@ A state is unnecessary if it is empty or consists purely of a GO to another stat
 			      (not (member (label m)
 					   state-labels)))
 			    machine))
-	 (decls (mapcar (lambda (label index)
-			  `(,label ,index))
-			state-labels
-			(iota (length state-labels))))
-	 (declaration `(declare (as constant ,@state-labels)))
+	 (label-decls (mapcar (lambda (label index)
+				`(,label ,index))
+			      state-labels
+			      (iota (length state-labels))))
+	 (declaration `(declare (as constant ,@state-labels)
+				(ignorable ,@state-labels)))
 	 (clauses (foldr (lambda (form state)
 			   (let ((l (label state))
 				 (b (body state)))
 			     (append form `((,l
 					     ,@b)))))
 			 states '())))
+
+    ;; warn about the number of states inferred if different from that specified
+    (let ((given (count-tagbody-forms args))
+	  (inferred (length clauses)))
+      (when (/= given inferred)
+	(warn 'resources-created
+	      :description (format nil "TAGBODY expanded to ~a states (from ~a in the original source code)"
+				   inferred given))))
 
     (with-gensyms (state-variable)
       ;; record the current state machine variable
@@ -392,7 +435,7 @@ A state is unnecessary if it is empty or consists purely of a GO to another stat
 						 (initial-value ,merged-states)))
 
       ;; synthesise the machine
-      `(let ,decls
+      `(let ,label-decls
 	 ,declaration
 
 	 (let ((,state-variable ,(car state-labels)))
@@ -406,31 +449,47 @@ A state is unnecessary if it is empty or consists purely of a GO to another stat
 (defmethod transform-sexp ((fun (eql 'tagbody)) args)
   (declare (optimize debug))
 
-  (let ((machine (build-state-machine args)))
+  (destructuring-bind (newbody newenv)
+      (float-let-blocks (with-implicit-tagbody args))
 
-    ;; warn about the number of states inferred if different from that specified
-    (let ((given (count-tagbody-forms args))
-	  (inferred (length machine)))
-      (when (/= given inferred)
-	(warn 'state-machine-inferred :given given
-				      :inferred inferred)))
+    ;; we hold on to the NEWENV frame because it contains all the information
+    ;; we've already extracted about the variables -- and these were the only
+    ;; ones in scope when the code was analysed, with others beng created here.
 
     (with-new-frame
-      (let ((form (synthesise-state-machine machine)))
-	(let* ((p (expand/vl form))
+      (let* ((newdecls (if newenv
+			   (mapcar (lambda (np)
+				     (destructuring-bind (n props)
+					 np
+				       (list n
+					     (get-environment-property n 'initial-value newenv :default 0))))
+				   (decls newenv))))
+	     (form `(let ,newdecls
+		      ,(synthesise-state-machine newbody))))
+
+	(let* ((p (add-frames form))
 	       (q (transform p)))
-	  (typecheck q)
+	  (break)
+	  ;;(typecheck q)
 	  q)))))
 
 
 ;; ---------- GO ----------
 
 (defmethod compute-type-sexp ((fun (eql 'go)) args)
-  (let ((label (car args)))
+  (declare (optimize debug))
+
+  (let* ((label (car args))
+	 (merged-states (if (variable-declared-p 'tagbody-merged-states)
+			    (get-initial-value 'tagbody-merged-states)))
+
+	 ;; re-write label if we have a merge table
+	 (state-label (if merged-states
+			  (get-label-from-merged-states label merged-states)
+			  label)))
+
     ;; ensure label is in scope
-    (unless (variable-declared-p label)
-      (error 'unknown-state :label label))
-    (unless (eql (get-representation label) 'label)
+    (unless (variable-declared-p state-label)
       (error 'unknown-state :label label))
 
     ;; GO doesn't really have a type

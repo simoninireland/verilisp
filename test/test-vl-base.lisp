@@ -80,8 +80,7 @@
       (equal (vl::get-frame-declaring 'a env2) env1)
       (equal (vl::get-frame-declaring 'b env1) env1)
 
-      (signals (vl::unknown-variable)
-	(vl::get-frame-declaring 'c env2)))))
+      (is (null (vl::get-frame-declaring 'c env2))))))
 
 
 (test test-set-property

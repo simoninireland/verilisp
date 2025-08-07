@@ -60,8 +60,9 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 
 (defun compute-let-local-frame (decls)
   "Populate the local frame of DECLS."
-  (with-local-frame decls
-    (mapc #'add-decl-to-frame decls)))
+  (unless (null decls)
+    (with-local-frame decls
+      (mapc #'add-decl-to-frame decls))))
 
 
 (defmethod add-frames-sexp ((fun (eql 'let)) args)
@@ -69,13 +70,13 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 
   (destructuring-bind (decls &rest body)
       args
-    (add-local-frame-to-decls decls)
-    (compute-let-local-frame decls)
+    (let ((decls (add-local-frame-to-decls decls)))
+      (compute-let-local-frame decls)
 
-    ;; return the form
-    `(let ,decls
-       ,@(with-local-frame decls
-	   (mapcar #'add-frames body)))))
+      ;; return the form
+      `(let ,decls
+	 ,@(with-local-frame decls
+	     (mapcar #'add-frames body))))))
 
 
 ;; ---------- Typechecking ----------
@@ -208,6 +209,7 @@ The name is the first element, whether or not DECL is a list."
 
 			       ;; represent as a wire
 			       'wire)))))
+
 	    (if (and (or read written)
 		     ignored)
 		;; variable is used despire being marked as ignored
@@ -363,6 +365,16 @@ The name is the first element, whether or not DECL is a list."
 
 ;; ---------- Floating ----------
 
+(defun float-initial-values (newenv)
+  "Return a list of assignments to be made for the initial values in NEWENV."
+  (let ((regs (remove-if (lambda (n)
+			   (not (eql (get-representation n) 'register)))
+			 (variables-declared-in-current-frame))))
+    (mapcar (lambda (n)
+	      `(setq ,n ,(get-initial-value n :default 0)))
+	    regs)))
+
+
 (defmethod float-let-blocks-sexp ((fun (eql 'let)) args)
   (declare (optimize debug))
 
@@ -380,7 +392,20 @@ The name is the first element, whether or not DECL is a list."
 	(add-frame-to-environment (current-frame) newenv t)
 
 	;; return the re-written body and the new environment
-	(list newbody newenv)))))
+	(if (in-module-context-p)
+	    (list newbody newenv)
+
+	    ;; get any initial value assignments to be added
+	    (let ((ivs (float-initial-values newenv)))
+	      (list (if ivs
+			;; initial values, prepend them to the new body
+			`(progn
+			   ,@ivs
+			   ,newbody)
+
+			;; no initial values, return the body
+			newbody)
+		    newenv)))))))
 
 
 ;; ---------- PROGN simplification ----------
@@ -446,7 +471,7 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
   "Synthesise a register N within a LET block."
   (declare (optimize debug))
 
-  (let ((v (get-initial-value n)))
+  (let ((v (get-initial-value n :default 0)))
     (as-literal "reg ")
     (let* ((type (get-type n))
 	   (width (if (array-type-p type)
@@ -477,7 +502,7 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 
 (defun synthesise-wire (n)
   "Synthesise a wire N a LET block."
-  (let ((v (get-initial-value n)))
+  (let ((v (get-initial-value n :default 0)))
     (let* ((type (get-type n))
 	   (width (if (array-type-p type)
 		      ;; width is the width of the element type

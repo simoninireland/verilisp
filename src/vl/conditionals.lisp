@@ -123,7 +123,7 @@ The value of the clause should have a type compatible with TY.
 Return the type of the clause body."
   (destructuring-bind (val &rest body)
       clause
-
+    (compute-type val)
     (compute-type (with-implicit-progn body))))
 
 

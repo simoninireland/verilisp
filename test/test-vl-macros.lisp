@@ -131,6 +131,8 @@
 
 (test test-local-macro
   "Test we can declare local macros using MACROLET/VL."
+  (vl::clear-global-environment)
+
   (vl::defmacro/vl test-locals (z &body body)
     (vl::macrolet/vl ((l1 (a)
 			  `(+ ,a ,z))
@@ -169,6 +171,8 @@
 
 (test test-nested-local-macro
   "Test we get the right versions of nested local macros."
+  (vl::clear-global-environment)
+
   (vl::defmacro/vl test-locals (b &body body)
     (vl::macrolet/vl ((l1 (a)
 			  `(+ ,a ,b)))

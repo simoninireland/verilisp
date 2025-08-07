@@ -21,9 +21,12 @@
 
 
 (defmethod compute-type ((form symbol))
-  (let ((f (get-frame-declaring form (current-frame))))
+  (if-let ((f (get-frame-declaring form (current-frame))))
     (or (get-frame-property form 'type f :default nil)
-	`(type-of ,form ,f))))
+	`(type-of ,form ,f))
+
+     ;; not declared
+    (error 'unknown-variable :variable form)))
 
 
 (defmethod read-variables ((form symbol))

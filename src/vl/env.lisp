@@ -182,17 +182,13 @@ An UNKNOWN-VARIABLE error is signalled if N is undefined."
 
 
 (defun get-frame-declaring (n env)
-  "Return the shallowest frame in ENV that declares N.
-
-An UNKNOWN-VARIABLE error is signalled if N is undefined."
+  "Return the shallowest frame in ENV that declares N."
   (if (variable-declared-in-frame-p n env)
       env
 
       (if-let ((penv (parent-frame env)))
-	(get-frame-declaring n penv)
+	(get-frame-declaring n penv))))
 
-	;; we ran out of frames to search
-	(error 'unknown-variable :variable n))))
 
 
 (defun forget-frame-variable (n env)
@@ -218,7 +214,11 @@ N can be a symbol (usually) or a string. In the latter case the
 variable is checked by string equality aginst the symbol name.
 
 An UNKNOWN-VARIABLE error is signalled if N is undefined."
-  (get-frame-properties n (get-frame-declaring n env)))
+  (if-let ((f (get-frame-declaring n env)))
+    (get-frame-properties n f)
+
+     ;; not declared
+    (error 'unknown-variable :variable n)))
 
 
 (defun get-environment-names (env)
@@ -247,14 +247,22 @@ returned: this can be changed by defining the :DEFAULT argument."
 
 (defun set-environment-properties (n props env)
   "Replace the properties of N in ENV with PROPS."
-  (set-frame-properties n props (get-frame-declaring n env)))
+  (if-let ((f (get-frame-declaring n env)))
+    (set-frame-properties n props f)
+
+    ;; not declared
+    (error 'unknown-variable :variable n)))
 
 
 (defun set-environment-property (n prop v env)
   "Set the value of PROP of N in ENV to V.
 
 This affects the shallowest declaration of N."
-  (set-frame-property n prop v (get-frame-declaring n env)))
+  (if-let ((f (get-frame-declaring n env)))
+    (set-frame-property n prop v f)
+
+    ;; not declared
+    (error 'unknown-variable :variable n)))
 
 
 (defun variable-declared-in-environment-p (n env)
@@ -293,7 +301,13 @@ Signals a DUPLICATE-VARIABLE error if the variable already exists in this frame.
   "Forget the definition of NAME in ENV.
 
   Returns the name of the variable forgotten."
-  (forget-frame-variable name (get-frame-declaring name env)))
+  (if-let ((f (get-frame-declaring name env)))
+    (forget-frame-variable name f)
+
+
+     ;; not declared
+    (error 'unknown-variable :variable n)))
+
 
 
 (defun add-frame-to-environment (f env &optional at-start)

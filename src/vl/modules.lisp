@@ -210,15 +210,7 @@ Signal VALUE-MISMATCH as an error if not."
 
       ;; add all the names
       (dolist (args (list reqs opts keys))
-	(mapc #'add-decl-to-frame args))
-
-      ;; mark representations
-      (dolist (n reqs)
-	(set-variable-property n 'as 'wire))
-      (dolist (n (mapcar #'safe-car opts))
-	(set-variable-property n 'as 'wire))
-      (dolist (n (mapcar #'safe-car keys))
-	(set-variable-property n 'as 'parameter)))))
+	(mapc #'add-decl-to-frame args)))))
 
 
 (defun compute-module-interface-type (decls)
@@ -241,14 +233,35 @@ Signal VALUE-MISMATCH as an error if not."
 		 (mapcar #'add-frames body)))))
 
 
+(defun compute-module-env (decls)
+  "Compute the types of the arguments and parameters."
+  (dolist (n (variables-declared-in-current-frame))
+    (let* ((ty (or (variable-property n 'type :default nil)
+		   '(unsigned-byte 1))))
+      (add-type-constraint n ty)))
+
+  (destructuring-bind (reqs opts keys)
+      (parse-module-lambda-list decls)
+    (dolist (n (mapcar #'safe-car keys))
+	(set-variable-property n 'as 'parameter)))
+
+
+  )
+
+
 (defmethod compute-type-sexp ((fun (eql 'module)) args)
+  (declare (optimize debug))
+
   (destructuring-bind (modname decls &rest body)
       args
 
     (with-local-frame decls
+      (compute-module-env decls)
+
+      (break)
       ;; typecheck the body of the module in its environment
       (compute-type (with-implicit-progn body))
-
+      (break)
       ;; return the interface type
       (compute-module-interface-type decls))))
 
@@ -265,7 +278,7 @@ Signal VALUE-MISMATCH as an error if not."
 	  (if (member n (module-arguments intf))
 	      ;; constrain the variable's type (which must be representable)
 	      (let* ((constraints (get-type-constraints n))
-		     (lubty (if constraints (apply #'lurb constraints))))
+		     (lubty (if constraints (apply #'lub constraints))))
 
 		(let ((ty (get-type n)))
 		  (if ty
@@ -289,7 +302,8 @@ Signal VALUE-MISMATCH as an error if not."
 		      (apply-type-constraints v))))))))
 
       ;; cascade into the body
-      (apply-type-constraints (with-implicit-progn body)))))
+      (apply-type-constraints (with-implicit-progn body))
+      (break))))
 
 
 (defmethod read-variables-sexp ((fun (eql 'module)) args)
@@ -452,49 +466,51 @@ Signal VALUE-MISMATCH as an error if not."
 
   (destructuring-bind (modname decls &rest body)
       args
-
     (with-local-frame decls
-      (as-literal "module ")
-      (synthesise modname)
 
-      ;; parameters
-      (if-let ((params (get-frame-names (filter-frame (lambda (n env)
-							(eql (get-frame-property n 'as env)
-							     'parameter))
-						      (current-frame)))))
-	  (as-argument-list params :before " #(" :after ")"
-				   :sep ", "
-				   :process #'synthesise-param))
+      (destructuring-bind (reqs opts keys)
+	  (parse-module-lambda-list decls)
 
-      ;; arguments
-      (if-let ((args (get-frame-names (filter-frame (lambda (n env)
-						      (member (get-frame-property n 'as env)
-							      '(wire register)))
-					  (current-frame)))))
-	(as-argument-list args :before "(" :after ");"
-			       :sep ", "
-			       :process #'synthesise-arg))
-      (as-blank-line)
+	(as-literal "module ")
+	(synthesise modname)
 
-      ;; body
-      (with-indentation
-	(synthesise `(progn ,@body)))
+	;; parameters
+	(as-argument-list (mapcar 'safe-car keys)
+			  :before " #(" :after ")"
+			  :sep ", "
+			  :process #'synthesise-param)
 
-      ;; late initialisation (if any)
-      (when (module-late-initialisation-p)
+	;; arguments
+	(as-argument-list (append reqs (mapcar #'safe-car opts))
+			  :before "(" :after ");"
+			  :sep ", "
+			  :process #'synthesise-arg)
 	(as-blank-line)
-	(as-literal "initial begin" :newline t)
-	(with-indentation
-	  (run-module-late-initialisation))
-	(as-literal "end" :newline t))
 
-      (as-blank-line)
-      (as-literal "endmodule // ")
-      (as-literal (format nil "~(~a~)" (ensure-legal-identifier modname)) :newline t)
-      (as-blank-line))))
+	;; body
+	(with-indentation
+	  (synthesise `(progn ,@body)))
+
+	;; late initialisation (if any)
+	(when (module-late-initialisation-p)
+	  (as-blank-line)
+	  (as-literal "initial begin" :newline t)
+	  (with-indentation
+	    (run-module-late-initialisation))
+	  (as-literal "end" :newline t))
+
+	(as-blank-line)
+	(as-literal "endmodule // ")
+	(as-literal (format nil "~(~a~)" (ensure-legal-identifier modname)) :newline t)
+	(as-blank-line)))))
 
 
 ;; ---------- Module instanciation ----------
+
+(defun module-argument-name-to-keyword (n)
+  "Return the keyword form of N, as used in a MAKE-INSTANCE call."
+  (make-keyword n))
+
 
 (defmethod compute-type-sexp ((fun (eql 'make-instance)) args)
   (declare (optimize debug))
@@ -510,19 +526,13 @@ Signal VALUE-MISMATCH as an error if not."
     (let ((intf (get-module-interface modname))
 	  (modargs (adjacent-pairs initargs)))
 
-      (with-frame (module-frame intf)
-
-	(dolist (n (module-arguments intf))
-	  (let ((v (cadr (assoc (module-argument-name-to-keyword n) modargs)))
-		(ty (get-type n)))
-	    (if (and (not (null v))
+      (dolist (n (module-arguments intf))
+	(let ((v (cadr (assoc (module-argument-name-to-keyword n) modargs)))
+	      (ty (with-frame (module-frame intf)
+		    (get-type n))))
+	  (when (and (not (null v))
 		     (symbolp v))
-		(add-type-constraint v ty))))))))
-
-
-(defun module-argument-name-to-keyword (n)
-  "Return the keyword form of N, as used in a MAKE-INSTANCE call."
-  (make-keyword n))
+	    (add-type-constraint v ty)))))))
 
 
 (defun ensure-module-arguments-match-interface (modname initargs intf)
@@ -536,8 +546,8 @@ Signal VALUE-MISMATCH as an error if not."
       ;; make sure there are no duplicate arguments
       (unless (set-p ks)
 	(error 'not-importable :module modname
-			:hint "Check for duplicate arguments"))
-
+			       :args initargs
+			       :hint "Check for duplicate arguments"))
 
       ;; make sure all required arguments are present
       (unless (every (lambda (n)
@@ -545,6 +555,7 @@ Signal VALUE-MISMATCH as an error if not."
 			       ks))
 		     (module-required-arguments intf))
 	(error 'not-importable :module modname
+			       :args initargs
 			       :hint "Make sure all required arguments are provided"))
 
       ;; make sure all arguments are in the interface
@@ -555,7 +566,8 @@ Signal VALUE-MISMATCH as an error if not."
 					     (module-parameters intf)))))
 		     ks)
 	(error 'not-importable :module modname
-			       :hint "Make sure all arguments are declare on the interface")))))
+			       :args initargs
+			       :hint "Make sure all arguments are declared on the interface")))))
 
 
 (defmethod apply-type-constraints-sexp ((fun (eql 'make-instance)) args)
@@ -572,19 +584,21 @@ Signal VALUE-MISMATCH as an error if not."
     (let ((intf (get-module-interface modname)))
       (ensure-module-arguments-match-interface modname initargs intf)
 
-      (with-frame (module-frame intf)
-	(let ((kv (adjacent-pairs initargs)))
+      (let ((kv (adjacent-pairs initargs)))
+	;; required arguments
+	(dolist (n (module-required-arguments intf))
+	  (let ((v (cadr (assoc (module-argument-name-to-keyword n) kv)))
+		(ty (with-frame (module-frame intf)
+		      (get-type n))))
+	    (ensure-subtype (compute-type v) ty)))
 
-	  ;; required arguments
-	  (dolist (n (module-required-arguments intf))
-	    (let ((v (cadr (assoc (module-argument-name-to-keyword n) kv))))
-	      (ensure-subtype (compute-type v) (get-type n))))
-
-	  ;; optional arguments
-	  (dolist (n (module-required-arguments intf))
-	    (if-let ((m (assoc (module-argument-name-to-keyword n) kv)))
-	      (let ((v (cadr m)))
-		(ensure-subtype (compute-type v) (get-type n))))))))))
+	;; optional arguments
+	(dolist (n (module-required-arguments intf))
+	  (if-let ((m (assoc (module-argument-name-to-keyword n) kv)))
+	    (let ((v (cadr m))
+		  (ty (with-frame (module-frame intf)
+			(get-type n))))
+	      (ensure-subtype (compute-type v) ty))))))))
 
 
 (defmethod read-variables-sexp ((fun (eql 'make-instance)) args)
@@ -617,7 +631,7 @@ Signal VALUE-MISMATCH as an error if not."
       (as-literal ".")
       (synthesise n)
       (as-literal "(")
-      (synthesise v)
+      (synthesise (eval-in-static-environment v))
       (as-literal ")"))))
 
 

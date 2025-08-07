@@ -107,16 +107,17 @@ of a larger compilation process."
   (declare (optimize debug))
 
   (let* ((expanded (expand-macros-in-environment form))
-	 (framed (add-frames (copy-tree expanded))))
+	 (framed (add-frames (copy-tree expanded)))
+	 (transformed (transform framed)))
 
-    framed))
+    transformed))
 
 
 (defun elaborate/vl (form)
   "Elaborate FORM as a module.
 
 FORM should be a program in core Verilisp, with macros expanded
-and frames applied, as done by EXCAND/VL.
+and frames applied, as done by EXPAND/VL.
 
 This function runs all the relevant compiler nanopasses, returning a
 list consisting of the module interface type and the fully-elaborated
@@ -130,8 +131,8 @@ of a larger compilation process."
   (let* ((intf (typecheck form)))
 
     ;; simplify
-    (let* ((transformed (transform form))
-	   (floated (car (float-let-blocks transformed)))
+    (let* (;;(transformed (transform form))
+	   (floated (car (float-let-blocks form)))
 	   (simplified (simplify-progn floated)))
 
       (list intf simplified))))

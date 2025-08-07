@@ -324,7 +324,7 @@
 (test test-tagbody-forever-looping
   "Test we can generate a loop using FOREVER (a nested TAGBODY)."
   (let ((p (vl::expand/vl '(let (out
-			       (counter 1))
+				 (counter 1))
 			    (declare (type (unsigned-byte 8) counter))
 			    (tagbody
 			       (forever
