@@ -45,30 +45,39 @@
 
 (defmethod lub-type ((ty1tag (eql 'array)) ty1args
 		     (ty2tag (eql 'array)) ty2args)
-  (destructuring-bind (ety1 &optional esh1)
-	     ty1args
-    (destructuring-bind (ety2 &optional esh2)
-	ty2args
+  (cond ((null ty1args)
+	 (if (null ty2args)
+	     'array
+	     (construct-type ty2tag ty2args)))
 
-      (let ((evty1 (eval-type ety1))
-	    (evty2 (eval-type ety2))
-	    (sh (cond ((and (null esh1)
-			    (null esh2))
-		       '(0))
+	 ((null ty2args)
+	  (construct-type ty1tag ty1args))
 
-		      ((null esh1)
-		       esh2)
-		      ((null esh2)
+	 (t
+	  (destructuring-bind (ety1 &optional esh1)
+	      ty1args
+	    (destructuring-bind (ety2 &optional esh2)
+		ty2args
 
-		       esh1)
+	      (let ((evty1 (eval-type ety1))
+		    (evty2 (eval-type ety2))
+		    (sh (cond ((and (null esh1)
+				    (null esh2))
+			       '(0))
 
-		      (t
-		       ;; maximum of the two lengths
-		       ;; TODO: need to fix the shapes for multiple dimensions
-		       (list (max (car esh1) (car esh2)))))))
+			      ((null esh1)
+			       esh2)
+			      ((null esh2)
 
-	;; LUB has the LUB element type
-	`(array ,(lub evty1 evty2) ,sh)))))
+			       esh1)
+
+			      (t
+			       ;; maximum of the two lengths
+			       ;; TODO: need to fix the shapes for multiple dimensions
+			       (list (max (car esh1) (car esh2)))))))
+
+		;; LUB has the LUB element type
+		`(array ,(lub evty1 evty2) ,sh)))))))
 
 
 (defmethod representable-type-sexp-p ((tytag (eql 'array)) tyargs)
@@ -154,9 +163,9 @@ Verilisp, but don't *require* it."
 
     ;; initialise type from the initial element unless an explicit element type is provided
     (unless element-type
-      (setq element-type (compute-type initial-element))
+      (setq element-type (compute-type initial-element)))
 
-    `(array ,element-type ,shape))))
+    `(array ,element-type ,shape)))
 
 
 (defmethod apply-type-constraints-sexp ((fun (eql 'make-array)) args)
@@ -188,6 +197,9 @@ Verilisp, but don't *require* it."
 (defmethod read-variables-sexp ((fun (eql 'make-array)) args)
   ;; can't have any free variables (I don't think)
   '())
+
+
+(defmethod compute-dependencies-sexp ((fun (eql 'make-array)) args))
 
 
 (defun rebuild-options (ns vs)
@@ -294,33 +306,12 @@ probably should, for those that are statically determined."
 
   (destructuring-bind (place &rest indices)
       args
-    (let ((ty (eval-type (compute-type place))))
-      ;; the type is the type of the elements
+
+    (let ((ty (compute-type place)))
+      ;; constrain the variable
+      (add-type-constraint place `array)
+
       (element-type-of-array ty))))
-
-
-(defmethod compute-type-sexp-setf ((selector (eql 'aref)) val selectorargs)
-  (destructuring-bind (place &rest indices)
-      selectorargs
-    (if (symbolp place)
-	(let ((ty (compute-type val)))
-	  ;; constrain the variable
-	  (add-type-constraint place `(array ,ty))
-
-	  ;; mark as written
-	  (set-variable-property place 'written t)
-
-	  ;; add dependencies from the value and indices
-	  (add-dependencies place (read-variables val))
-	  (let ((rvs (foldr #'union (mapcar #'read-variables indices) '())))
-	    (add-dependencies place rvs))
-
-	  ty)
-
-	;; complex place, recurse
-	(destructuring-bind (psel &rest pselargs)
-	    place
-	  (compute-type-sext-setf psel val pselargs)))))
 
 
 (defmethod apply-type-constraints-sexp ((fun (eql 'aref)) args)
@@ -347,18 +338,42 @@ probably should, for those that are statically determined."
       (union place-rws indices-rws))))
 
 
-(defmethod read-variables-sexp-setf ((selector (eql 'aref)) val selectorargs)
+(defmethod compute-dependencies-sexp ((fun (eql 'aref)) args)
+  (dolist (n (read-variables `(bref ,@args)))
+    (set-variable-property n 'read t)))
+
+
+(defmethod read-variables-setf ((selector (eql 'aref)) val selectorargs)
   (declare (optimize debug))
 
   (destructuring-bind (place &rest indices)
       selectorargs
 
-    (if (symbolp place)
-	(union (foldr #'union (mapcar #'read-variables indices) '())
-	       (read-variables val))
+    (let ((val-indices	(union (foldr #'union (mapcar #'read-variables indices) '())
+			       (read-variables val))))
+      (if (symbolp place)
+	  val-indices
 
+	  (destructuring-bind (psel &rest pselargs)
+	      place
+	    (union val-indices
+		   (read-variables-setf psel val pselargs)))))))
+
+
+(defmethod written-variables-setf ((selector (eql 'aref)) val selectorargs)
+  (declare (optimize debug))
+
+  (destructuring-bind (place &rest indices)
+      selectorargs
+
+    (if (listp place)
+	;; complex place, recurse into it
 	(destructuring-bind (psel &rest pselargs)
-	    (read-variables-sexp-setf psel val pselargs)))))
+	    place
+	  (written-variables-setf psel val pselargs))
+
+	;; variable, this is written to
+	(list place))))
 
 
 (defmethod generalised-place-sexp-p ((selector (eql 'aref)) selectorargs)
