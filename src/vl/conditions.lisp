@@ -514,10 +514,10 @@ only happen when the types are being used inconsistently."))
     :initarg :description
     :reader description))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Resources created: ~a"
+	     (format-condition-context (format nil "Resource warning: ~a"
 					       (description c))
 				       c str)))
-  (:documentation "Condition signalled when resources are created..
+  (:documentation "Condition signalled when resources are created.
 
 Several Verilisp constructs construct resources 'covertly', which can
 have an effect on the size and speed of the synthesised circuit. This

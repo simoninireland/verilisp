@@ -42,11 +42,86 @@ The default is to combine all the variables in the arguments.")
     (foldr #'union (mapcar #'read-variables args) '())))
 
 
-(defgeneric read-variables-sexp-setf (selector val selectorargs)
-  (:documentation "Return all variables that are read in an assignment..
+(defgeneric read-variables-setf (selector val selectorargs)
+  (:documentation "Return all variables that are read in an assignment.
 
 Methods on this function should return a set consisting of the
 variables that could be read while using FORM as a generalised place."))
+
+
+(defgeneric written-variables-setf (selector val selectorargs)
+  (:documentation "Return all variables that are written in an assignment.
+
+Methods on this function should return a set consisting of the
+variables that could be written while using FORM as a generalised place."))
+
+
+;; ---------- Dependencies ----------
+
+(defgeneric compute-dependencies (form)
+  (:documentation "Annotate the environment with the dependencies of FORM.
+
+The dependencies are the variables read and written in computing FORM.")
+  (:method (form))
+  (:method ((form list))
+    (destructuring-bind (fun &rest args)
+	form
+
+      (with-current-form form
+	(with-recover-on-error
+	    ;; leave dependencies unchanged on error
+	    t
+
+	  (compute-dependencies-sexp fun args))))))
+
+
+(defgeneric compute-dependencies-sexp (fun args)
+  (:documentation "Compute dependencies in FUN applied to ARGS.
+
+The default maps COMPUTE-DEPENDENCIES across ARGS.")
+  (:method (fun args)
+    (mapc #'compute-dependencies args)))
+
+
+(defun add-dependencies (n deps)
+  "Add variables DEPS as dependencies for N.
+
+A dependency is a variable that's read in assigning values to N."
+  (let ((old-deps (variable-property n 'depends-on)))
+    (set-variable-property n 'depends-on (union deps old-deps)))
+
+  ;; any variables we depend on are read by definition
+  (dolist (m deps)
+    (set-variable-property m 'read t)))
+
+
+(defun traverse-dependencies (ns)
+  "Traverse the dependencies for the variables NS.
+
+NS can be a variable name or a list of variables.
+
+Return the dependencies of the NS, and all the dependencies of those
+dependencies, and so on recursively. Constants do not count as
+dependencies as they can't be updated."
+
+  ;; get the direct dependencies
+  (let ((direct (foldr #'union
+		       (mapcar (lambda (n)
+				 (variable-property n 'depends-on :default nil))
+			       (if (listp ns)
+				   ns
+				   (list ns)))
+		       '())))
+
+    ;; traverse to further dependencies
+    (foldr #'union (mapcar (lambda (n)
+			     (if (static-constant-p n)
+				 nil
+				 (union (list n)
+					(variable-property n 'depends-on :default nil
+							   ))))
+			   direct)
+	   '())))
 
 
 ;; ---------- Variable re-writing ----------
@@ -86,27 +161,6 @@ method to change this behaviour.")
 	    `(,fun ,@args))))
 
 
-;; ---------- Constant folding ----------
-
-(defgeneric fold-constant-expressions (form)
-  (:documentation "Fold constants in expression FORM.
-
-This folds and simplifies expressions, eliminating any
-calculations that can be done early.")
-  (:method (form)
-    form)
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (fold-constant-expressions-sexp fun args))))
-
-
-(defgeneric fold-constant-expressions-sexp (fun args)
-  (:documentation "Fold constant expressions in FUN applied to ARGS.")
-  (:method (fun args)
-    (cons fun (mapcar #'fold-constant-expressions args))))
-
-
 ;; ---------- Applying and removing frames ----------
 
 (defgeneric add-frames (form)
@@ -116,9 +170,8 @@ calculations that can be done early.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
-      (with-unknown-forms
-	(with-current-form form
-	  (add-frames-sexp fun args))))))
+      (with-current-form form
+	(add-frames-sexp fun args)))))
 
 
 (defgeneric add-frames-sexp (fun args)
@@ -219,7 +272,11 @@ removed."
     (destructuring-bind (fun &rest args)
 	form
       (with-current-form form
-	(apply-type-constraints-sexp fun args)))))
+	(with-recover-on-error
+	    ;; leave the constraints alone on error
+	    t
+
+	  (apply-type-constraints-sexp fun args))))))
 
 
 (defgeneric apply-type-constraints-sexp (fun args)
@@ -236,20 +293,14 @@ upon FUN.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
-      (with-unknown-forms
-	(with-current-form form
-	  (compute-type-sexp fun args))))))
+      (with-current-form form
+	(compute-type-sexp fun args)))))
 
 
 (defgeneric compute-type-sexp (fun args)
-  (:documentation "Compute the type of the application of FUN to ARGS."))
-
-
-(defgeneric compute-type-sexp-setf (selector val selectorargs)
-  (:documentation "Compute the type of a SETF form allowing generalised places.
-
-This matches a form (SETF (SELECTOR SELECTORARGS) VAL) and allows
-different selectors to be used as generalised places."))
+  (:documentation "Compute the type of the application of FUN to ARGS.")
+  (:method (fun args)
+    (error 'unknown-form :form `(,fun ,args))))
 
 
 (defun typecheck (form)
@@ -260,9 +311,6 @@ constraints needed to infer the types of variables."
   (let ((ty (compute-type form)))
     ;; check any remaining constraints after inference
     (apply-type-constraints form)
-
-    ;; infer representations on the tree
-    (infer-representation form)
 
     ty))
 
@@ -276,10 +324,8 @@ Generalised places can appear as the target of SETF forms. (In other
 languages they are sometimes referred to as *lvalues*.) This is
 separate, but related to, their type: a generalised place has a type,
 but is also SETF-able.")
-  (:method ((form integer))
+  (:method (form)
     nil)
-  (:method ((form symbol))
-    (writeable-p form))
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
@@ -293,49 +339,6 @@ Methods on this function should identify those forms that are generalised places
 Usually this will only involve examining SELECTOR.")
   (:method (selector selectorargs)
     nil))
-
-
-;; ---------- Dependencies ----------
-
-(defun add-dependencies (n deps)
-  "Add variables DEPS as dependencies for N.
-
-A dependency is a variable that's read in assigning values to N."
-  (let ((old-deps (variable-property n 'depends-on)))
-    (set-variable-property n 'depends-on (union deps old-deps)))
-
-  ;; any variables we depend on are read by definition
-  (dolist (m deps)
-    (set-variable-property m 'read t)))
-
-
-(defun traverse-dependencies (ns)
-  "Traverse the dependencies for the variables NS.
-
-NS can be a variable name or a list of variables.
-
-Return the dependencies of the NS, and all the dependencies of those
-dependencies, and so on recursively. Constants do not count as
-dependencies as they can't be updated."
-
-  ;; get the direct dependencies
-  (let ((direct (foldr #'union
-		       (mapcar (lambda (n)
-				 (variable-property n 'depends-on :default nil))
-			       (if (listp ns)
-				   ns
-				   (list ns)))
-		       '())))
-
-    ;; traverse to further dependencies
-    (foldr #'union (mapcar (lambda (n)
-			     (if (static-constant-p n)
-				 nil
-				 (union (list n)
-					(variable-property n 'depends-on :default nil
-							   ))))
-			   direct)
-	   '())))
 
 
 ;; ---------- Representation inference ----------
@@ -520,7 +523,9 @@ The default recurses into ARGS.")
 
 
 (defgeneric synthesise-sexp (fun args)
-  (:documentation "Write the synthesised Verilog of FUN called with ARGS in the current environment."))
+  (:documentation "Write the synthesised Verilog of FUN called with ARGS in the current environment.")
+  (:method (fun args)
+    (error 'unknown-form :form `(,fun ,args))))
 
 
 ;; ---------- Lispification ----------

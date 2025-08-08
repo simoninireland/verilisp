@@ -44,8 +44,8 @@
 
 ;; ---------- TAGBODY ----------
 
-(defun state-marker-p (form)
-  "Test whether FORM is a new state marker.
+(defun state-label-p (form)
+  "Test whether FORM is a new state label.
 
 This simply tests whether FORM is a symbol."
   (symbolp form))
@@ -56,7 +56,7 @@ This simply tests whether FORM is a symbol."
 
 Return a list of lists, each element being a state label and the state body."
   (flet ((extract-state (states form)
-	   (if (state-marker-p form)
+	   (if (state-label-p form)
 	       ;; new state
 	       (cons (list form) states)
 
@@ -100,10 +100,19 @@ Return a list of lists, each element being a state label and the state body."
 
 (defmethod read-variables-sexp ((fun (eql 'tagbody)) args)
   (foldr (lambda (deps form)
-	   (if (symbolp form)
+	   (if (state-label-p form)
 	       deps
 	       (union deps (read-variables form))))
 	 args '()))
+
+
+(defmethod compute-dependencies-sexp ((fun (eql 'tagbody)) args)
+  (let* ((states (extract-states args))
+	 (state-bodies (mapcar #'cdr states)))
+
+    ;; compute-type the bodies
+    (dolist (b state-bodies)
+      (compute-dependencies (with-implicit-progn b)))))
 
 
 (defgeneric parse-tagbody-forms-sexp (fun args forms current-state exit-state)
@@ -240,7 +249,7 @@ form fell-through and should therefore continue to EXIT-STATE.")
 
     ;; check whether there is unreachable code on this path
     (if (not (or (null forms)
-		 (state-marker-p (car forms))))
+		 (state-label-p (car forms))))
 	(progn
 	  ;; next form does not start a new state
 	  (warn 'unreachable-code :hint "Check the logic")
@@ -248,7 +257,7 @@ form fell-through and should therefore continue to EXIT-STATE.")
 	  ;; skip to the next state marker
 	  (do ()
 	      ((or (null forms)
-		   (state-marker-p (car forms)))
+		   (state-label-p (car forms)))
 	       forms)
 	    (setq forms (cdr forms)))))
 
@@ -268,11 +277,11 @@ form fell-through and should therefore continue to EXIT-STATE.")
 
     ;; count the state markers in the forms
     (dolist (form forms)
-      (when (state-marker-p form)
+      (when (state-label-p form)
 	(incf states)))
 
     ;; add one if the initial state wasn't labelled
-    (unless (state-marker-p (car forms))
+    (unless (state-label-p (car forms))
       (incf states))
 
     states))
@@ -302,7 +311,7 @@ Return a list of of states created, initial state first."
       (destructuring-bind (form &rest rest)
 	  forms
 
-	(if (state-marker-p form)
+	(if (state-label-p form)
 	    ;; new state marker, create a new state
 	    (let ((new-state (make-instance 'state :label form)))
 	      (if current-state
@@ -435,16 +444,16 @@ Return LABEL if the the state is not merged."
 						 (initial-value ,merged-states)))
 
       ;; synthesise the machine
-      `(let ,label-decls
-	 ,declaration
+      (add-frames `(let ,label-decls
+		     ,declaration
 
-	 (let ((,state-variable ,(car state-labels)))
-	   (case ,state-variable
-	     ,@clauses))))))
+		     (let ((,state-variable ,(car state-labels)))
+		       (declare (type (unsigned-byte ,(bits-for-integer (length state-labels))) ,state-variable)
+				(as register ,state-variable))
 
+		       (case ,state-variable
+			 ,@clauses)))))))
 
-;; TAGBODY/GO is transformed away into a CASE-based state machine, so
-;; the forms have no synthesis functions.
 
 (defmethod transform-sexp ((fun (eql 'tagbody)) args)
   (declare (optimize debug))
@@ -454,24 +463,28 @@ Return LABEL if the the state is not merged."
 
     ;; we hold on to the NEWENV frame because it contains all the information
     ;; we've already extracted about the variables -- and these were the only
-    ;; ones in scope when the code was analysed, with others beng created here.
+    ;; ones in scope when the code was analysed, with others beng created
+    ;; by SYNTHESISE-STATE-MACHINE. which adds the necessary types and
+    ;; representations directly
 
     (with-new-frame
-      (let* ((newdecls (if newenv
-			   (mapcar (lambda (np)
-				     (destructuring-bind (n props)
-					 np
-				       (list n
-					     (get-environment-property n 'initial-value newenv :default 0))))
-				   (decls newenv))))
-	     (form `(let ,newdecls
-		      ,(synthesise-state-machine newbody))))
+      (let ((p (if newenv
+		   ;; float the locally-declared varables around the state machine
+		   (let ((newdecls (add-local-frame-to-decls
+				    (mapcar (lambda (np)
+					      (destructuring-bind (n props)
+						  np
+						(list n
+						      (get-environment-property n 'initial-value newenv :default 0))))
+					    (decls newenv))
+				    newenv)))
+		     `(let ,newdecls
+			,(synthesise-state-machine newbody)))
 
-	(let* ((p (add-frames form))
-	       (q (transform p)))
-	  (break)
-	  ;;(typecheck q)
-	  q)))))
+		   ;; no locally-declared variables in body
+		   (synthesise-state-machine newbody))))
+
+	(transform p)))))
 
 
 ;; ---------- GO ----------
@@ -494,6 +507,9 @@ Return LABEL if the the state is not merged."
 
     ;; GO doesn't really have a type
     t))
+
+
+(defmethod compute-dependencies-sexp ((fun (eql 'go)) args))
 
 
 (defmethod read-variables-sexp ((fun (eql 'go)) args)

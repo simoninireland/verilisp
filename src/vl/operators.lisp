@@ -49,41 +49,12 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
       (ensure-fixed-width ty))))
 
 
-(defun fold-constant-expressions-addition (fun args)
-  "Fold expressions in addition operator FUN applied to ARGS."
-  (labels ((fold-constants (total l)
-	     (if (null l)
-		 (list total '())
-		 (let ((v (car l)))
-		   (if (integerp v)
-		       ;; fold-in the constant, reduce the rest
-		       (let ((s (apply fun (list v total))))
-			 (fold-constants s (cdr l)))
-
-		       ;; reduce the rest with the non-constant on the front
-		       (destructuring-bind (ct cl)
-			   (fold-constants total (cdr l))
-			 (list ct (cons v cl))))))))
-
-    (destructuring-bind (total remaining)
-	(fold-constants 0 args)
-      (if (null remaining)
-	  total
-	  (if (= total 0)
-	      `(,fun ,@remaining)
-	      `(,fun ,total ,@remaining ))))))
-
-
 (defmethod compute-type-sexp ((fun (eql '+)) args)
   (compute-type-addition args))
 
 
 (defmethod apply-type-constraints-sexp ((fun (eql '+)) args)
   (apply-type-constraints-addition args))
-
-
-(defmethod fold-constant-expressions-sexp ((fun (eql '+)) args)
-  (fold-constant-expressions-addition '+ args))
 
 
 (defmethod synthesise-sexp ((fun (eql '+)) args)
@@ -111,10 +82,6 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 
 (defmethod apply-type-constraints-sexp ((fun (eql '-)) args)
   (apply-type-constraints-addition args))
-
-
-(defmethod fold-constant-expressions-sexp ((fun (eql '-)) args)
-  (fold-constant-expressions-addition '- args))
 
 
 (defmethod synthesise-sexp ((fun (eql '-)) args)
@@ -168,15 +135,6 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 			  (1- (ash 1 (bitwidth tyoffset))))))))
 
 
-(defmethod fold-constant-expressions-sexp ((fun (eql '<<)) args)
-  (destructuring-bind (val offset)
-      args
-    (if (and (integerp val)
-	     (integerp offset))
-	(ash val offset)
-	`('<< ,val ,offset))))
-
-
 (defmethod synthesise-sexp ((fun (eql '<<)) args)
   (as-infix '<< args))
 
@@ -203,15 +161,6 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
       ;; use the width of the value as the maximum width, since
       ;; shifting right can only make it smaller
       `(unsigned-byte ,(bitwidth tyval)))))
-
-
-(defmethod fold-constant-expressions-sexp ((fun (eql '>>)) args)
-  (destructuring-bind (val offset)
-      args
-    (if (and (integerp val)
-	     (integerp offset))
-	(ash val (- offset))
-	`('<< ,val ,offset))))
 
 
 (defmethod synthesise-sexp ((fun (eql '>>)) args)

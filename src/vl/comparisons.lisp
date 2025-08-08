@@ -36,7 +36,7 @@ in many applications."
 (defmethod apply-type-constraints-sexp ((fun (eql 'asserted-p)) args)
   (destructuring-bind (v)
       args
-    (compute-type v)))
+    (ensure-fixed-width (compute-type v))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'asserted-p)) args)
@@ -78,9 +78,11 @@ Use VERILOG-OPERATOR if provided for synthesis."
 	 (as-literal ")")))))
 
 
+;; equality
 (define-fixed-width-binary-maths-comparator = "==")
 (define-fixed-width-binary-maths-comparator /= "!=")
 
+;; ordering
 (define-fixed-width-binary-maths-comparator <)
 (define-fixed-width-binary-maths-comparator <=)
 (define-fixed-width-binary-maths-comparator >)

@@ -84,21 +84,18 @@
   (let ((errors 0))
 
     (handler-bind
-	((vl::unknown-variable (lambda (condition)
-				 (declare (ignore condition))
-				 ;; record the error
-				 (incf errors)
+	((vl::vl-error (lambda (condition)
+			 ;; record the error
+			 (incf errors)
 
-				 ;; jump back in for the next element
-				 (vl::recover))))
+			 ;; jump back in for the next element
+			 (vl::recover))))
 
       (let ((ty (vl::typecheck (vl::expand/vl '(let ((a 45)
 						   (b 0)
 						   (c 2))
-					      (setq d 12)
+					      (setq d 123)
 					      8)))))
-
-	;; the type should be that of 8, where we re-started
 	(is (vl::subtype-p ty '(unsigned-byte 4)))))
 
-    (is (= errors 2)))) ;; one from dependencies, one from typecheck
+    (is (= errors 3)))) ;; one from dependencies, two from constraints

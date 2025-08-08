@@ -118,15 +118,14 @@
 
   ;; should catch an unknown form if we typecheck without expanding
   (let ((p (vl::add-frames (copy-tree '(let ((a 1))
-				       (incf a))))))
+					(incf a))))))
     (signals (vl::unknown-form)
       (vl::typecheck p)))
 
   ;; should fail if we try to synthesise
   (let ((p '(when 1 (+ 1 2))))
     (signals (vl::unknown-form)
-      (vl::with-unknown-forms
-	(vl::synthesise p)))))
+      (vl::synthesise p))))
 
 
 (test test-local-macro
@@ -137,7 +136,7 @@
     (vl::macrolet/vl ((l1 (a)
 			  `(+ ,a ,z))
 		      (l2 (a &rest rs)
-			  `(apply #'+ ,a ,@rs)))
+			  `(+ ,a ,@rs)))
 
       `(let (a b c)
 	 ,@body)))
@@ -166,7 +165,7 @@
 
 (test test-nested-macros
   "Test we can nest the same macro."
-  (is (vl::expand/vl '(when a (when b c)))))
+  (is (vl::expand/vl '(let (a b c) (when a (when b c))))))
 
 
 (test test-nested-local-macro

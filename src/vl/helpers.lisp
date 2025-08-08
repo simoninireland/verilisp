@@ -48,45 +48,6 @@ are reported as NOT-SYNTHESISABLE errors."
   `(cons 'tagbody ,body))
 
 
-;; ---------- Unknown forms in Verilisp code ----------
-
-(defun failed-form (condition)
-  "Return the form that can't be handled based on CONDITION.
-
-If CONDITION does not indicate such a failure, return nil.
-
-There is no standard way to retrieve this information, so this
-function is implementation-dependent."
-
-  #+sbcl
-  (if (subtypep (type-of condition) 'sb-pcl::no-applicable-method-error)
-      (car (slot-value condition 'sb-pcl::args))
-
-      ;; condition is not caused by an unknown form
-      nil)
-
-  ;; can't handle other Lisp implementations for now
-  #-sbcl
-  nil)
-
-
-(defmacro with-unknown-forms (&body body)
-  "Run BODY in an environment that traps errors due to unknown forms.
-
-Any unknown forms are reported as UNKNOWN-FORM exceptions. The
-actual way these forms are captured is unfortunately implementation-specific."
-  `(handler-bind ((error #'(lambda (c)
-			     (declare (optimize debug))
-
-			     (if-let ((form (failed-form c)))
-			       ;; we encountered an unknown form, signal it as such
-			       (error 'unknown-form :form form)
-
-			       ;; propagate the condition
-			       (error c)))))
-     ,@body))
-
-
 ;; ---------- Continuing compilation after an error ----------
 
 (defun recover-on-error-report (str)
@@ -107,6 +68,8 @@ errors as warnings and still synthesise code."
   `(restart-case
        (progn
 	 ,@body)
+
+     ;; offer the recovery restart
      (recover ()
        :report recover-on-error-report
        ,recovery)))
@@ -115,5 +78,5 @@ errors as warnings and still synthesise code."
 (defmacro recover ()
   "Run the recovery action.
 
-A RECOVER restart must be available."
+A RECOVER restart must be available in the current dynamic environment."
   `(invoke-restart 'recover))

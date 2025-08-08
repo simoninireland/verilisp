@@ -61,6 +61,9 @@ Unrecognised annotations are ignored with a warning.")
   '())
 
 
+(defmethod compute-dependencies-sexp ((fun (eql 'declare)) args))
+
+
 (defmethod synthesise-sexp ((fun (eql 'declare)) args)
   nil)
 

@@ -79,6 +79,50 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 	     (mapcar #'add-frames body))))))
 
 
+;; ---------- Dependencies ----------
+
+(defun compute-let-dependencies ()
+  "Compute the dependencies of all variables in the current frame."
+  (dolist (n (variables-declared-in-current-frame))
+    (with-recover-on-error
+	;; leave dependencies alone on error
+	t
+
+      (if-let ((v (get-initial-value n)))
+	(add-dependencies n (read-variables v))))))
+
+
+(defmethod compute-dependencies-sexp ((fun (eql 'let)) args)
+  (destructuring-bind (decls &rest body)
+      args
+
+    (with-local-frame decls
+      (compute-let-dependencies)
+
+      (compute-dependencies (with-implicit-progn body)))))
+
+
+;; ---------- Free variables ----------
+
+(defmethod read-variables-sexp ((fun (eql 'let)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (decls &rest body)
+      args
+
+    (with-local-frame decls
+      (let ((lns (variables-declared-in-current-frame)))
+
+	;; compute read variables
+	(let ((decl-rvs (foldr #'union (mapcar #'read-variables
+					       (remove-nulls (mapcar #'get-initial-value lns)))
+			       '()))
+	      (body-rvs (read-variables (with-implicit-progn body))))
+
+	  ;; remove any variables declared in this binder
+	  (set-difference (union decl-rvs body-rvs) lns))))))
+
+
 ;; ---------- Typechecking ----------
 
 (defun name-in-decl (decl)
@@ -90,21 +134,25 @@ The name is the first element, whether or not DECL is a list."
 
 (defun compute-let-env ()
   "Compute the types of the declarations in the current frame."
+  (declare (optimize debug))
+
   (dolist (n (variables-declared-in-current-frame))
     (with-recover-on-error
 	;; leave variable alone
 	nil
 
       ;; constrain the variable with whatever information we have
-      (let* ((v (get-initial-value n))
-	     (rvs (if v (read-variables v)))
-	     (ty (or (variable-property n 'type :default nil)
-		     (if v (compute-type v))
-		     '(unsigned-byte 1))))
+      (let ((ty (or (variable-property n 'type :default nil)
+		    (if-let ((v (get-initial-value n)))
+		      (compute-type v))
+		    '(unsigned-byte 1))))
 
-	(add-type-constraint n ty)
-	(when rvs
-	  (add-dependencies n rvs))))))
+	;; arrays types are known at construction, so don't need to be inferred
+	(if (subtype-p ty 'array)
+	    (set-variable-property n 'type ty))
+
+	;; constrain the variable
+	(add-type-constraint n ty)))))
 
 
 (defmethod compute-type-sexp ((fun (eql 'let)) args)
@@ -226,27 +274,6 @@ The name is the first element, whether or not DECL is a list."
 
 	      ;; update representation if none given
 	      (set-variable-property n 'as rep))))))))
-
-
-;; ---------- Free variables ----------
-
-(defmethod read-variables-sexp ((fun (eql 'let)) args)
-  (declare (optimize debug))
-
-  (destructuring-bind (decls &rest body)
-      args
-
-    (with-local-frame decls
-      (let ((lns (variables-declared-in-current-frame)))
-
-	;; compute read variables
-	(let ((decl-rvs (foldr #'union (mapcar #'read-variables
-					       (remove-nulls (mapcar #'get-initial-value lns)))
-			       '()))
-	      (body-rvs (read-variables (with-implicit-progn body))))
-
-	  ;; remove any variables declared in this binder
-	  (set-difference (union decl-rvs body-rvs) lns))))))
 
 
 ;; ---------- Variable re-writing ----------

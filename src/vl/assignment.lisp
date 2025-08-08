@@ -50,39 +50,40 @@ isn't declared."
 (defmethod compute-type-sexp ((fun (eql 'setq)) args)
   (destructuring-bind (n v &key sync)
       args
-    ;; catch the common mistake of using SETQ when we need SETF
-    (unless (symbolp n)
-      (error 'not-synthesisable :hint "Do you need SETF instead of SETQ?"))
 
-    (let ((ty (compute-type-sexp-setf n v nil)))
+    (let ((ty (compute-type v)))
+      ;; constraint the variable directly
+      (add-type-constraint n ty)
+
       ty)))
-
-
-(defmethod compute-type-sexp-setf ((selector symbol) val selectorargs)
-  (let ((ty (compute-type val)))
-    (add-type-constraint selector ty)
-    (add-dependencies selector (read-variables val))
-    (set-variable-property selector 'written t)
-
-    ty))
 
 
 (defmethod apply-type-constraints-sexp ((fun (eql 'setq)) args)
   (destructuring-bind (n v &key sync)
       args
-    (ensure-writeable n)
-
-    (let ((tyvar (compute-type n))
-	  (tyval (compute-type v)))
-      (ensure-subtype tyval tyvar))))
+    (apply-type-constraints `(setf ,n ,v :sync ,sync))))
 
 
 (defmethod read-variables-sexp ((fun (eql 'setq)) args)
   (read-variables `(setf ,@args)))
 
 
-(defmethod read-variables-sexp-setf ((selector symbol) val selectorargs)
-  (read-variables val))
+(defmethod read-variables-setf ((selector symbol) val selectorargs)
+  (union (list selector)
+	 (read-variables val)))
+
+
+(defmethod compute-dependencies-sexp ((fun (eql 'setq)) args)
+  (destructuring-bind (n v &key sync)
+      args
+
+    ;; catch the common mistake of using SETQ when we need SETF
+    (unless (symbolp n)
+      (error 'not-synthesisable :hint "Do you need SETF instead of SETQ?"))
+
+    (let ((read (read-variables v)))
+      (add-dependencies n read)
+      (set-variable-property n 'written t))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'setq)) args)
@@ -140,29 +141,6 @@ generalised places."
     (error 'not-synthesisable :hint "Make sure the target of the assignment is a generalised, SETF-able, place")))
 
 
-(defmethod compute-type-sexp ((fun (eql 'setf)) args)
-  (destructuring-bind (place val &key sync)
-      args
-    (if (listp place)
-	(destructuring-bind (selector &rest selectorargs)
-	    place
-	  (compute-type-sexp-setf selector val selectorargs))
-
-	;; a SETF to a simple variable is a SETQ
-	(compute-type `(setq ,place ,val :sync ,sync)))))
-
-
-(defmethod apply-type-constraints-sexp ((fun (eql 'setf)) args)
-  (destructuring-bind (place val &key sync)
-      args
-
-    (ensure-generalised-place place)
-
-    (let* ((tyvar (compute-type place))
-	   (tyval (compute-type val)))
-      (ensure-subtype tyval tyvar))))
-
-
 (defmethod read-variables-sexp ((fun (eql 'setf)) args)
   (declare (optimize debug))
   (destructuring-bind (place val &key sync)
@@ -171,11 +149,52 @@ generalised places."
 	(destructuring-bind (selector &rest selectorargs)
 	    place
 
-	  (let ((ty (read-variables-sexp-setf selector val selectorargs)))
-	    ty))
+	  (union (read-variables val)
+		 (read-variables-setf selector val selectorargs)))
 
 	;; a SETF to a simple variable is a SETQ
 	(read-variables val))))
+
+
+(defmethod compute-dependencies-sexp ((fun (eql 'setf)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (place val &key sync)
+      args
+
+    (if (listp place)
+	(destructuring-bind (selector &rest selectorargs)
+	    place
+
+	  (let ((written (written-variables-setf selector val selectorargs))
+		(read (read-variables-setf selector val selectorargs)))
+
+	    (dolist (n written)
+	      (add-dependencies n read)
+	      (set-variable-property n 'written t))))
+
+	;; a SETF applied to a variable is just a SETQ
+	(compute-dependencies `(setq ,place ,val :sync ,sync)))))
+
+
+(defmethod compute-type-sexp ((fun (eql 'setf)) args)
+  (destructuring-bind (place val &key sync)
+      args
+    (compute-type place)
+    (compute-type val)))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'setf)) args)
+  (destructuring-bind (place val &key sync)
+      args
+
+    ;; ensure we can do the assignment
+    (ensure-generalised-place place)
+
+    ;; ensure the types match
+    (let* ((tyvar (compute-type place))
+	   (tyval (compute-type val)))
+      (ensure-subtype tyval tyvar))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'setf)) args)

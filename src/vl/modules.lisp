@@ -243,10 +243,7 @@ Signal VALUE-MISMATCH as an error if not."
   (destructuring-bind (reqs opts keys)
       (parse-module-lambda-list decls)
     (dolist (n (mapcar #'safe-car keys))
-	(set-variable-property n 'as 'parameter)))
-
-
-  )
+	(set-variable-property n 'as 'parameter))))
 
 
 (defmethod compute-type-sexp ((fun (eql 'module)) args)
@@ -258,10 +255,9 @@ Signal VALUE-MISMATCH as an error if not."
     (with-local-frame decls
       (compute-module-env decls)
 
-      (break)
       ;; typecheck the body of the module in its environment
       (compute-type (with-implicit-progn body))
-      (break)
+
       ;; return the interface type
       (compute-module-interface-type decls))))
 
@@ -302,12 +298,19 @@ Signal VALUE-MISMATCH as an error if not."
 		      (apply-type-constraints v))))))))
 
       ;; cascade into the body
-      (apply-type-constraints (with-implicit-progn body))
-      (break))))
+      (apply-type-constraints (with-implicit-progn body)))))
 
 
 (defmethod read-variables-sexp ((fun (eql 'module)) args)
   '())
+
+
+(defmethod compute-dependencies-sexp ((fun (eql 'module)) args)
+  (destructuring-bind (modname decls &rest body)
+      args
+
+    (with-local-frame decls
+      (compute-dependencies (with-implicit-progn body)))))
 
 
 (defmethod infer-representation-sexp ((fun (eql 'module)) args)

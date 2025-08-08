@@ -33,6 +33,23 @@
   (list form))
 
 
+(defmethod read-variables-setf ((selector symbol) val selectorargs)
+  (union (list selector)
+	 (read-variables val)))
+
+
+(defmethod written-variables-setf ((selector symbol) val selectorargs)
+  (list selector))
+
+
+(defmethod compute-dependencies ((form symbol))
+  (set-variable-property form 'read t))
+
+
+(defmethod generalised-place-p ((form symbol))
+  (writeable-p form))
+
+
 (defmethod float-let-blocks ((form symbol))
   (list form '()))
 

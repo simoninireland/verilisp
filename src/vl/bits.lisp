@@ -66,19 +66,40 @@
       (union place-rws sel-rws))))
 
 
-(defmethod read-variables-sexp-setf ((selector (eql 'bref)) val selectorargs)
+(defmethod compute-dependencies-sexp ((fun (eql 'bref)) args)
+  (dolist (n (read-variables `(bref ,@args)))
+    (set-variable-property n 'read t)))
+
+
+(defmethod read-variables-setf ((selector (eql 'bref)) val selectorargs)
   (declare (optimize debug))
 
   (destructuring-bind (place start &key end width)
       selectorargs
 
-    (if (symbolp place)
-	(union (foldr #'union (read-variables (remove-nulls (list start end width))) '())
-	       (read-variables val))
+    (let ((val-width (union (foldr #'union (read-variables (remove-nulls (list start end width))) '())
+			    (read-variables val))))
+      (if (symbolp place)
+	  val-width
 
+	  (destructuring-bind (psel &rest pselargs)
+	      place
+	    (union val-width
+		   (read-variables-setf psel val pselargs)))))))
+
+
+(defmethod written-variables-setf ((selector (eql 'bref)) val selectorargs)
+  (destructuring-bind (place start &key end width)
+      selectorargs
+
+    (if (listp place)
+	;; complex place, recurse into it
 	(destructuring-bind (psel &rest pselargs)
 	    place
-	  (read-variables-sexp-setf psel val pselargs)))))
+	  (written-variables-setf psel val pselargs))
+
+	;; variable, this is written to
+	(list place))))
 
 
 (defmethod generalised-place-sexp-p ((selector (eql 'bref)) selectorargs)
@@ -108,48 +129,13 @@
 	    ;; compute width from start and end
 	    (setq width `(1+ (- ,start ,end)))))
 
-    ;; type depends on the number of bits extracted
-    `(unsigned-byte ,width)))
-
-
-(defmethod compute-type-sexp-setf ((selector (eql 'bref)) val selectorargs)
-  (destructuring-bind (place start &key end width)
-      selectorargs
-
-    ;; check syntax
-    (when (and (not (null width))
-	       (not (null end)))
-      (error 'syntax-error :form `(,selector ,*selectorargs)
-			   :hint "Provide at most one of :END and :WIDTH)"))
-
-    ;; extract width
-    (if (null width)
-	(if (null end)
-	    ;; default to accessing the single START bit
-	    (setq width 1)
-
-	    ;; compute width from start and end
-	    (setq width `(1+ (- ,start ,end)))))
-
     (if (symbolp place)
 	(progn
 	  ;; constrain the written variable
-	  (add-type-constraint place `(unsigned-byte (1+ ,start)))
-
-	  ;; mark as written
-	  (set-variable-property place 'written t)
-
-	  ;; depend on the value and indices
-	  (add-dependencies place (read-variables val))
-	  (if-let ((rvs (foldr #'union (mapcar #'read-variables
-					       (remove-nulls (list start end width)))
-			       '())))
-	    (add-dependencies place rvs)))
+	  (add-type-constraint place `(unsigned-byte (1+ ,start))))
 
 	;; recurse into the complex place
-	(destructuring-bind (psel &rest pselargs)
-	    place
-	  (compute-type-sexp-setf psel val pselargs)))
+	(compute-type place))
 
     ;; type depends on the number of bits extracted
     `(unsigned-byte ,width)))

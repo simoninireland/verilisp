@@ -418,6 +418,7 @@
 	(warnings 0))
 
     (handler-bind ((error (lambda (condition)
+			    (format t "~a~%" condition)
 			    (incf errors)
 			    (recover)))
 
@@ -440,11 +441,11 @@
 	  (let ((p (vl::expand/vl '(let ((mem (make-array '(12)
 					       :element-type (unsigned-byte 8)))
 					 b)
-				    (setq b (aref mem addr-in))))))
+				    ;; b not used (warning)
+				    ;; clk not writeable (error)
+				    (setq clk (aref mem addr-in))))))
 
-	    (vl::subtype-p (vl::typecheck p)
-			   '(unsigned-byte 8))
-	    (vl::synthesise p)))))
+	    (vl::typecheck p)))))
 
-    (is (= errors 0))
+    (is (= errors 1))
     (is (> warnings 0))))

@@ -100,17 +100,23 @@ corresponding module body to be synthesised."
   "Compiler pass to expand FORM into core Verilisp.
 
 This performs macro expansion and frame application, returning
-the expanded, framed, form.
+the expanded, framed, transformed, analysed form.
 
 This function is not usually called directly, but is called as part
 of a larger compilation process."
   (declare (optimize debug))
 
+  ;; expand macros and apply frames
   (let* ((expanded (expand-macros-in-environment form))
-	 (framed (add-frames (copy-tree expanded)))
-	 (transformed (transform framed)))
+	 (framed (add-frames (copy-tree expanded))))
 
-    transformed))
+    ;; compute the dependencies between variables
+    (compute-dependencies framed)
+
+    ;; infer representations on the tree
+    (infer-representation framed)
+
+    framed))
 
 
 (defun elaborate/vl (form)
@@ -131,8 +137,8 @@ of a larger compilation process."
   (let* ((intf (typecheck form)))
 
     ;; simplify
-    (let* (;;(transformed (transform form))
-	   (floated (car (float-let-blocks form)))
+    (let* ((transformed (transform form))
+	   (floated (car (float-let-blocks transformed)))
 	   (simplified (simplify-progn floated)))
 
       (list intf simplified))))

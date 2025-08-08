@@ -77,7 +77,7 @@
   (as-block args :indent nil))
 
 
-;; ---------- Triggered blocks ----------
+;; ---------- Sensitive blocks ----------
 
 (defun combinatorial-trigger-p (form)
   "Test whether FORM is a combinatorial trigger.
@@ -121,12 +121,11 @@ block, and are represented by the symbol *."
     (compute-type (with-implicit-progn body))))
 
 
-(defmethod read-variables-sexp ((fun (eql '@)) args)
-  (declare (optimize debug))
+(defun read-variables-sensitivities (sensitivities)
+  "Return the variables read in the SENSITIVITIES.
 
-  (destructuring-bind (sensitivities &rest body)
-      args
-    (let ((s-rws (if (listp sensitivities)
+This includes all the named variables, and excluses the * wildcard."
+  (let ((rws (if (listp sensitivities)
 		     (cond ((combinatorial-trigger-p sensitivities)
 			    ;; sensitive to everything
 			    '())
@@ -140,11 +139,28 @@ block, and are represented by the symbol *."
 			    (foldr #'union (mapcar #'read-variables sensitivities) '())))
 
 		     ;; an atom
-		     (read-variables sensitivities)))
-	  (v-rws (read-variables (with-implicit-tagbody body))))
+		     (read-variables sensitivities))))
 
-      ;; remove any global sensitivity
-      (union (set-difference s-rws (list '*)) v-rws))))
+    ;; discard any wildcard
+    (set-difference rws (list '*))))
+
+
+(defmethod read-variables-sexp ((fun (eql '@)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (sensitivities &rest body)
+      args
+
+    (let ((s-rws (read-variables-sensitivities sensitivities))
+	  (v-rws (read-variables (with-implicit-tagbody body))))
+      (union s-rws v-rws))))
+
+
+(defmethod compute-dependencies-sexp ((fun (eql '@)) args)
+  (dolist (n (read-variables-sensitivities args))
+    (set-variable-property n 'read t))
+
+  (compute-dependencies (with-implicit-progn args)))
 
 
 (defmethod simplify-progn-sexp ((fun (eql '@)) args)
@@ -189,14 +205,16 @@ block, and are represented by the symbol *."
 
 
 (defmethod compute-type-sexp ((fun (eql 'posedge)) args)
-  (destructuring-bind (pin)
-      args
-    (set-variable-property pin 'read t)
-    'bit))
+  'bit)
 
 
 (defmethod read-variables-sexp ((fun (eql 'posedge)) args)
   (read-variables (car args)))
+
+
+(defmethod compute-dependencies-sexp ((fun (eql 'posedge)) args)
+  (let ((n (car args)))
+    (set-variable-property n 'read t)))
 
 
 (defmethod synthesise-sexp ((fun (eql 'posedge)) args)
@@ -216,6 +234,11 @@ block, and are represented by the symbol *."
 
 (defmethod read-variables-sexp ((fun (eql 'negedge)) args)
   (read-variables (car args)))
+
+
+(defmethod compute-dependencies-sexp ((fun (eql 'negedge)) args)
+  (let ((n (car args)))
+    (set-variable-property n 'read t)))
 
 
 (defmethod synthesise-sexp ((fun (eql 'negedge)) args)

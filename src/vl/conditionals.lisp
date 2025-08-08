@@ -116,24 +116,22 @@
 
 ;; ---------- case ----------
 
-(defun compute-type-clause (clause ty)
+(defun compute-type-clause (clause)
   "Typecheck case CLAUSE.
 
-The value of the clause should have a type compatible with TY.
 Return the type of the clause body."
   (destructuring-bind (val &rest body)
       clause
-    (compute-type val)
+
     (compute-type (with-implicit-progn body))))
 
 
-(defun compute-type-clauses (clauses ty)
+(defun compute-type-clauses (clauses)
   "Typecheck case CLAUSES.
 
-The clauses' test values should be compatible with TY.
 The type is the lub of the clause types."
   (foldr (lambda (tyl clause)
-	   (lub tyl (compute-type-clause clause ty)))
+	   (lub tyl (compute-type-clause clause)))
 	 clauses nil))
 
 
@@ -141,7 +139,7 @@ The type is the lub of the clause types."
   (destructuring-bind (condition &rest clauses)
       args
     (let ((ty (compute-type condition)))
-      (compute-type-clauses clauses ty))))
+      (compute-type-clauses clauses))))
 
 
 (defun constrain-clause (ty clause)
