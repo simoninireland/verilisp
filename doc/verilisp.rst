@@ -85,3 +85,4 @@ Other features
    :maxdepth: 1
 
    environments
+   naming

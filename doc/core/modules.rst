@@ -27,6 +27,11 @@ have decided to declare types for as we can for :ref:`variables
 <core-binders>`. Verilisp will infer the types of arguments, as well
 as their direction into or out of the module.
 
+.. note::
+
+   See :ref:`naming` for a discussion of why ``defmodule/vl`` has this
+   name.
+
 
 Optional arguments
 ------------------

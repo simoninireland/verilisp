@@ -10,8 +10,8 @@ Some notes on the implementation of Verilisp. These aren't needed to
     :maxdepth: 1
 
     implementation/top-level
+    implementation/compiler
     implementation/subtypes
     implementation/tagbody
     implementation/constraints
     implementation/coercion-casting
-    implementation/passes

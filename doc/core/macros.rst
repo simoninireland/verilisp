@@ -41,6 +41,11 @@ Even though this is a Verilisp macro, available only from Verilisp,
 its body is written in Lisp. This means that Verilisp macros can make
 use of *all* Lisp features.
 
+.. note::
+
+   See :ref:`naming` for a discussion of why ``defmacro/vl`` (and
+   indeed ``macrolet/vl``) have the names they do.
+
 
 Local macros
 ------------

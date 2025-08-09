@@ -15,3 +15,9 @@ The main interface to Verilisp is through a small set of operations.
 
 
 .. cl:macro:: defmodule/vl
+
+
+.. cl:macro:: defmacro/vl
+
+
+.. cl:macro:: macrolet/vl
