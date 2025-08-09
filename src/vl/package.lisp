@@ -118,14 +118,25 @@
 
    ;; passes and code functions
    #:add-frames
+   #:add-local-frame-to-decls
+   #:get-local-frame
    #:expand-macros
    #:expand-macros-in-environment
    #:declare-annotation
+   #:compute-dependencies
+   #:add-dependencies
+   #:traverse-dependencies
+   #:infer-representation
    #:compute-type
    #:apply-type-constraints
    #:typecheck
    #:read-variables
-   #:infer-representation
+   #:read-variables-setf
+   #:written-variables-setf
+   #:mark-variable-as-read
+   #:mark-variable-as-written
+   #:variable-read-p
+   #:variable-written-p
    #:rewrite-variables
    #:generalised-place-p
    #:transform
@@ -143,6 +154,7 @@
    #:defmacro/vl
    #:macrolet/vl
    #:expand/vl
+   #:typecheck/vl
    #:elaborate/vl
    #:synthesise/vl
 

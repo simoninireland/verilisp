@@ -24,7 +24,10 @@
 ;; ---------- Free variables ----------
 
 (defgeneric read-variables (form)
-  (:documentation "Return all variables in FORM that are read from.")
+  (:documentation "Return all variables in FORM that are read from.
+
+This function is used for constructing dependencies of variables.
+Return the set of variables as a list.")
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
@@ -45,15 +48,22 @@ The default is to combine all the variables in the arguments.")
 (defgeneric read-variables-setf (selector val selectorargs)
   (:documentation "Return all variables that are read in an assignment.
 
-Methods on this function should return a set consisting of the
-variables that could be read while using FORM as a generalised place."))
+This function needs a method for each generalised place, to determine
+which variables are read in computing an assignment to this place. The
+methods should not return variables that are updated: this is
+provided by WRITTEN-VARIABLES-SETF.
+
+Return the set of variables as a list."))
 
 
 (defgeneric written-variables-setf (selector val selectorargs)
   (:documentation "Return all variables that are written in an assignment.
 
-Methods on this function should return a set consisting of the
-variables that could be written while using FORM as a generalised place."))
+This function needs a method per generalised place, to determine
+which variables are written to during an assignment. The methods
+should not return variables that are only read and not updated.
+
+Return the set of variables as a list."))
 
 
 ;; ---------- Dependencies ----------
@@ -61,7 +71,15 @@ variables that could be written while using FORM as a generalised place."))
 (defgeneric compute-dependencies (form)
   (:documentation "Annotate the environment with the dependencies of FORM.
 
-The dependencies are the variables read and written in computing FORM.")
+Methods on this function should update the dependencies of variables,
+typically in assignments and binders. The function ADD-DEPENDENCIES
+can be called to actually add dependencies to the current frame. The
+dependencies added should be 'direct', in the sense that the variables
+are used in assignments; the TRAVERSE-DEPENDENCIES function can be
+used to trace 'indirect' chains of dependencies.
+
+Methods should also mark variables as read or written to using
+MARK-VARIABLE-AS-READ and MARK-VARIABLE-AS-WRITTEN.")
   (:method (form))
   (:method ((form list))
     (destructuring-bind (fun &rest args)
@@ -93,6 +111,29 @@ A dependency is a variable that's read in assigning values to N."
   ;; any variables we depend on are read by definition
   (dolist (m deps)
     (set-variable-property m 'read t)))
+
+
+(defun mark-variable-as-read (n)
+  "Annotate N as having been read."
+  (set-variable-property n 'read t))
+
+
+(defun variable-read-p (n)
+  "Test whether N is accessed as part of a read operation."
+  (variable-property n 'read))
+
+
+(defun mark-variable-as-written (n)
+  "Annotate N as having been written to."
+  (set-variable-property n 'written t))
+
+
+(defun variable-written-p (n)
+  "Test whether N is updated over its extent.
+
+This does not include the assignment of any initial value, only
+subsequent updates."
+  (variable-property n 'written))
 
 
 (defun traverse-dependencies (ns)
@@ -129,8 +170,9 @@ dependencies as they can't be updated."
 (defgeneric rewrite-variables (form rewrite)
   (:documentation "Re-write free occurrances of variables in FORM.
 
-The re-write rules in REWRITE are an alist mapping variable
-names to their new form. No checks are performed.")
+The REWRITE alist provides the mapping from variables to their new
+forms, whchi may not be variables at all. Methods should only
+rewrite free occurrances, not those that appear under binders.")
   (:method ((form integer) rewrite)
     form)
   (:method ((form symbol) rewrite)
@@ -164,7 +206,13 @@ method to change this behaviour.")
 ;; ---------- Applying and removing frames ----------
 
 (defgeneric add-frames (form)
-  (:documentation "Add frames to forms that need to maintain an environment.")
+  (:documentation "Add frames to FORM .
+
+Frames are used to maintain the lexical environment for the compiler.
+Methods on this function should construct frames, associate them with
+the appropriate binders so they can be applied in other passes, and
+populate them with the variables being declared. These declarations
+will then be used by, and extended by, other passes.")
   (:method (form)
     form)
   (:method ((form list))
@@ -195,6 +243,12 @@ the frame automatically in other methods.")
 
 (defun add-local-frame-to-decls (decls &optional (f (make-frame)))
   "Add a local frame F to DECLS.
+
+Lisp binders typically store declarations as an alist. This function
+exploits this commonality by adding a Verilisp frame to the alist
+that can then be attached and populated. The macro WITH-LOCAL-FRAME
+lets code access the 'real' declarations within an environment
+extended with this frame.
 
 A new, empty, frame is added if F is omitted.
 
@@ -244,27 +298,39 @@ been added to the end destructively."
 
 DECLS should be a variable holding the declarations, which is re-bound
 within BODY to hold only the 'real' declarations with the local frame
-removed."
+removed and attached to the current environment. The original
+environment is restored on leaving BODY."
 
   ;; ensure we get passed a variable name, not an expression
   (unless (symbolp decls)
     (error "Non-symbol ~a passed to WITH-LOCAL-FRAME" decls))
 
   ;; extract frame and decls, and run BODY in a suitable environment
-  (with-gensyms (f-decls cached-frame)
-    `(let* ((,f-decls (get-local-frame-and-decls ,decls))
-	    (,cached-frame (car ,f-decls)))
-       (with-frame ,cached-frame
-	 (let ((,decls (cadr ,f-decls)))
+  (with-gensyms (real-decls local-frame)
+    `(destructuring-bind (real-decls local-frame)
+	 (get-local-frame-and-decls ,decls)
+
+       ;; attach local frame to environment
+       (with-frame ,local-frame
+
+	 ;; re-declare remaining DECLS (without local frame)
+	 (let ((,decls ,real-decls))
 	   (declare (ignorable ,decls))
 
+	   ;; run body with these decls
 	   ,@body)))))
 
 
 ;; ---------- Type checking and inference ----------
 
 (defgeneric apply-type-constraints (form)
-  (:documentation "Evaluate type constraints to constraining variables in FORM.")
+  (:documentation "Evaluate type constraints to constraining variables in FORM.
+
+This pass is called after type-checking and inference, meaning that
+the environment will be populated with explicit and inferred types
+and other information. Functions on this method should check this
+information to decide whether necessary constraints are met, and
+signal warnings or errors appropriately.")
   (:method (form)
     nil)
 
@@ -289,7 +355,21 @@ upon FUN.")
 
 
 (defgeneric compute-type (form)
-  (:documentation "Compute the type of FORM.")
+  (:documentation "Compute the type of FORM.
+
+Methods on this function should add type constraints to the
+environment for the variables they use. ADD-TYPE-CONSTRAINTS adds the
+constraint to the environment. Methods for binders should solve
+(if possible) these constraints for the locally-declared variables.
+Later passes can then assume that the type returned by GET-TYPE
+reflects the actual type determined by the type-checker. In
+particuler, these types are used by APPLY-TYPE-CONSTRAINTS to ensure
+that code it type-correct.
+
+Return the type of FORM. Generally speaking it will not be possible to
+firmly determine a type locally for a code fragment, so the type
+returned may be general and make use of complex type specifiers that
+are resolved in the binders that introduce the variables.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
@@ -344,7 +424,13 @@ Usually this will only involve examining SELECTOR.")
 ;; ---------- Representation inference ----------
 
 (defgeneric infer-representation (form)
-  (:documentation "Infer the representations of variables in FORM.")
+  (:documentation "Infer the representations of variables in FORM.
+
+This function usually applies only to binders, and makes use of
+dependency and access information to determine the correct
+representation for each variable. This may also be influenced by
+explicit DECLARE declarations, which should be checked for
+consistency with the representation implied by the code.")
   (:method (form)
     nil)
   (:method ((form list))
@@ -369,7 +455,11 @@ only happen in binders.")
 (defgeneric float-let-blocks (form)
   (:documentation "Float nested LET blocks in FORM to the outermost level.
 
-Return a list consisting of the new form and any declarations floated.")
+Functions on this method should remove any LET blocks in FORM and
+return them to be re-applied at a higher level.
+
+Return a list consisting of the new form and an environment
+including all the variables locally declared.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
@@ -418,8 +508,11 @@ Return a list consisting of the new form and any declarations floated.")
 (defgeneric simplify-progn (form)
   (:documentation "Collapse unnecessary PROGN forms in FORM.
 
-This removes the PROGN around a single other form, as
-well as PROGNs nested inside other PROGNs.")
+PROGN blocks can be introduced in a number of ways to group other
+forms. Methods on this function should re-write PROGN forms that
+are unnecessarily complicated.
+
+Return the simplified form.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
@@ -437,8 +530,11 @@ well as PROGNs nested inside other PROGNs.")
 (defun expand-macros-in-environment (form &optional (f *global-environment*))
   "Recursively expand all macros in FORM in an environment.
 
-This attaches the frame F before calling EXPAND-MACROS. If F is omitted
-(as is usual) then the macros are taken from *GLOBAL-ENVIRONMENT*."
+Thos pass expands all macros to convert FORM into Core Verilisp.
+Macros are taken from the global environment unless a specific
+frame F is provided.
+
+Return the expanded form."
   (in-frame f
     (expand-macros form)))
 
@@ -488,7 +584,17 @@ Use EXPAND-MACROS-IN-ENVIRONMENT to select a specific environment.")
 ;; ---------- Transformation ----------
 
 (defgeneric transform (form)
-  (:documentation "Transform FORM.")
+  (:documentation "Transform FORM.
+
+Methods on this function can transform FORM into an equivalent form
+that is 'better' in some way. Transformation happens after
+type-checking, so the methods can mae use of dependencies, type
+information, and so on: however, the transformed form must be
+fully elaborated Verilisp, since it will not be passed through
+the earlier passes. The necessary information can typically be added
+using DECLARE forms.
+
+Return the transformed form.")
   (:method (form)
     form)
   (:method ((form list))
@@ -513,7 +619,13 @@ The default recurses into ARGS.")
 ;; ---------- Synthesis ----------
 
 (defgeneric synthesise (form)
-  (:documentation "Synthesise the Verilog for FORM in the current environment.")
+  (:documentation "Synthesise the Verilog for FORM.
+
+FORM will be fully elaborated Core Verilisp with fully populated
+environments.
+
+The Verilog synthesised should be send to *STANDARD-OUTPUT*: this
+may be redirected by higher-level functions.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))

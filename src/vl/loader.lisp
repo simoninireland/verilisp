@@ -119,6 +119,16 @@ of a larger compilation process."
     framed))
 
 
+(defun typecheck/vl (form)
+  "Type-check and infer types in FORM.
+
+Returns the overall type of FORM, which will typically be a module.
+
+This function is not usually called directly, but is called as part
+of a larger compilation process."
+  (typecheck form))
+
+
 (defun elaborate/vl (form)
   "Elaborate FORM as a module.
 
@@ -133,15 +143,12 @@ This function is not usually called directly, but is called as part
 of a larger compilation process."
   (declare (optimize debug))
 
-  ;; typecheck and infer
-  (let* ((intf (typecheck form)))
+  ;; simplify
+  (let* ((transformed (transform form))
+	 (floated (car (float-let-blocks transformed)))
+	 (simplified (simplify-progn floated)))
 
-    ;; simplify
-    (let* ((transformed (transform form))
-	   (floated (car (float-let-blocks transformed)))
-	   (simplified (simplify-progn floated)))
-
-      (list intf simplified))))
+    simplified))
 
 
 (defmacro defmodule/vl (modname decls &body body)
@@ -162,15 +169,14 @@ Return the name of the newly-defined module."
     (let ((code `(module ,modname ,decls
 			 ,@body)))
       `(let* ((,module ',code)
-	      (,expanded (expand/vl ,module)))
+	      (,expanded (expand/vl ,module))
+	      (,intf (typecheck/vl ,expanded))
+	      (,elaborated (elaborate/vl ,expanded)))
 
-	 (destructuring-bind (,intf ,elaborated)
-	     (elaborate/vl ,expanded)
+	 ;; declare the module
+	 (declare-module ',modname ,intf ,elaborated)
 
-	   ;; declare the module
-	   (declare-module ',modname ,intf ,elaborated)
-
-	   ',modname)))))
+	 ',modname))))
 
 
 ;; ---------- Module synthesis ----------
