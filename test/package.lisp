@@ -31,6 +31,20 @@
 (def-suite verilisp/def)   ;; architectural component definitions
 
 
+;; ---------- Helper functions ----------
+
+(defun contains-form-p (f l)
+  "Test whether F appears in the code tree L."
+  (if (null l)
+      nil
+
+      (let ((f1 (car l)))
+	(or (equal f1 f)
+	    (and (listp f1)
+		 (contains-form-p f f1))
+	    (contains-form-p f (cdr l))))))
+
+
 ;; ---------- File access relative to the project root ----------
 
 ;; This lets tests access data files stored elsewhere in the project
