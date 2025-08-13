@@ -128,6 +128,38 @@ is IDENTITY, testing the values themselves."
 	 s))
 
 
+(defun duplicates (s &key (test #'eql) (key #'identity))
+  "Return any elements of S that are  present more than once.
+
+If TEST is set, it should designate a function of two variables that
+test those values for equality, The default is EQL. If KEY is
+set, it is applied to each element before applying TEST. The default
+is IDENTITY, testing the values themselves."
+  (declare (optimize debug))
+
+  (let (counts)
+    (flet ((count-elements (e)
+	     (if-let ((m (assoc e counts :test test :key key )))
+	       ;; element already present
+	       (let ((n (cadr m)))
+		 (setf (cdr m) (list (1+ n))))
+
+	       ;; new element
+	       (if (null counts)
+		   (setf counts (list (list e 1)))
+		   (setf (cdr (last counts)) (list (list e 1)))))))
+
+      (mapc #'count-elements s)
+      (foldr (lambda (cs nc)
+	       (destructuring-bind (n v)
+		   nc
+		 (if (> v 1)
+		     (append cs (list n))
+		     cs)))
+	     counts '()))))
+
+
+
 ;; ---------- Pairwise application across several sets ----------
 
 (defun pairwise (f l1 l2)
