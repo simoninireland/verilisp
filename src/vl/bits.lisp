@@ -192,7 +192,7 @@
 
 	(if (null end)
 	    ;; compute end based on width
-	    (setq end `(+ ,start (- ,width 1)))))
+	    (setq end `(- ,start (- ,width 1)))))
 
     (synthesise var)
     (as-literal "[ ")
