@@ -159,7 +159,15 @@ BODY is not run if CONDITION is already true."
 
 (defcoremacro/vl dotimes ((var count) &body body)
   (with-gensyms (counter)
-    `(let ((,counter ,count))  ; will be optimised away if it's a constant
+    `(let ((,counter ,count))
        (do ((,var 0 (1+ ,var)))
 	   ((>= ,var ,counter))
+
+	 ;; optimisation to set the width of var if the bound
+	 ;; is a constant -- otherwise may need to be done manually
+	 ,(if (constant-p count)
+	      (let* ((v (eval-in-static-environment count))
+		     (bv (bits-for-integer v)))
+		`(declare (type (unsigned-byte ,bv) ,var))))
+
 	 ,@body))))
