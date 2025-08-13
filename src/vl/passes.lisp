@@ -600,7 +600,8 @@ Return the transformed form.")
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
-      (transform-sexp fun args))))
+      (with-current-form form
+	(transform-sexp fun args)))))
 
 
 (defgeneric transform-sexp (fun args)
