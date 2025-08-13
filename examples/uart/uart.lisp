@@ -1,4 +1,4 @@
-;; A USB UART
+;; A UART
 ;;
 ;; Copyright (C) 2024--2025 Simon Dobson
 ;;
@@ -17,10 +17,12 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-;; This is a transliteration into Verilisp of the "Documented Verilog UART" from
+;; This is a Verilisp UART written in a "software style" but inspired
+;; by the "Documented Verilog UART" from
 ;; https://github.com/cyrozap/osdvu/blob/master/uart.v
-;;
+
 ;; Copyright (C) 2010 Timothy Goddard (tim@goddard.net.nz)
+;;               2013 Aaron Dahlen
 ;; Distributed under the MIT licence.
 ;;
 ;; Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -41,140 +43,139 @@
 ;; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 ;; THE SOFTWARE.
 
+(defmacro/vl with-asserted (wire &body body)
+  "Perform BODY with WIRE set to 1, and the reset WIRE to 0."
+  `(progn
+     (setq ,wire 1)
+     ,@body
+     (setq ,wire 0)))
+
+
+(defmacro/vl wait (time counter)
+  "Wait for TIME cycles using COUNTER to count the cycles."
+  `(progn
+     (setf ,counter ,time)
+     (while (0/= ,counter))))
+
+
+(defmacro/vl one-baud (baud-rate clk-rate)
+  "Return the number of CLK-RATE ticks per cycle at BAUD-RATE."
+  (floor (/ clk-rate baud-rate)))
+
+
 (defmodule/vl uart (clk rst
-		    rx rx-byte received-p receiving-p receive-error-p
-		    tx tx-byte transmit transmitting-p
-		    &key
-		    (clk-divide 1302))   ;; (/ clock-rate (* baud-rate 4))
+			rx rx-byte received-p receiving-p receive-error-p
+			tx tx-byte transmit transmitting-p)
   (declare (type bit clk rst
-		     rx received-p receiving-p receive-error-p
-		     tx transmit transmitting-p)
+		 rx received-p receiving-p receive-error-p
+		 tx transmit transmitting-p)
 	   (type (unsigned-byte 8) rx-byte tx-byte))
 
-  (let ((rx-clk-divider clk-divide)
-	(tx-clk-divider clk-divide)
-	rx-data rx-countdown rx-bits-remaining
-	rx-status-receiving-p rx-status-received-p rx-status-error-p rx-status-idle-p
-	tx-data (tx-out 1) tx-countdown tx-bits-remaining
+  (let ((one-baud-clk (one-baud 9600 12000000))
+	(rx-clk one-baud-clk)
+	(tx-clk one-baud-clk)
+	rx-data
+	rx-status-receiving-p rx-status-received-p rx-status-error-p
+	tx-data (tx-out 1)
 	tx-status-idle-p)
-    (declare (type (unsigned-byte 10) rx-clk-divider tx-clk-divider)
-	     (type (unsigned-byte 5) rx-countdown tx-countdown)
-	     (type (unsigned-byte 3) rx-bits-remaining tx-bits-remaining))
+    (declare (as constant one-baud-clk)) ;; should be inferred
 
     ;; wire externally visible flags to internal status wires
-    ;; (setq received-p rx-status-received-p)
-    ;; (setq receive-error-p rx-status-error-p)
-    ;; (setq receiving-p (not rx-status-idle-p))
-    ;; (setq rx-byte rx-data)
+    (setq received-p rx-status-received-p)
+    (setq receive-error-p rx-status-error-p)
+    (setq receiving-p rx-status-receiving-p)
+    (setq rx-byte rx-data)
     (setq tx tx-out)
     (setq transmitting-p (not tx-status-idle-p))
 
     (@ (posedge clk)
+       ;; clock dividers
+       (if (0/= rx-clk)
+	   (decf rx-clk))
+       (if (0/= tx-clk)
+	   (decf tx-clk))
 
-       ;; transmit countdown
-       (decf tx-clk-divider)
-       (when (0= tx-clk-divider)
-	 (setq tx-clk-divider clk-divide)
-	 (decf tx-countdown))
+       ;; receiving state machine
+       (forever
+	(setq rx-status-receiving-p 0)
+
+	;; wait for low start bit
+	(until (0= rx))
+
+	(setq rx-status-received-p 0)
+	(setq rx-status-error-p 0)
+	(setq rx-status-receiving-p 1)
+
+	;; wait half a cycle and re-check
+	(wait (>> one-baud-clk 1) rx-clk)
+	(if (0= rx)
+	    (progn
+	      ;; still in start bit, wait half a cycle
+	      (wait (>> one-baud-clk 1) rx-clk)
+
+	      ;; read all eight bits
+	      (dotimes (bits 8)
+
+		;; wait a quarter of a cycle
+		(wait (>> one-baud-clk 2) rx-clk)
+
+		;; take a sequence of samples of the next bit, to
+		;; handle small amounts of clock drift
+		(let ((rx-samples 0))
+		  (declare (width 4 rx-samples))
+
+		  (dotimes (countdown 6)
+		    ;; wait an eighth of a cycle and sample
+		    (wait (>> one-baud-clk 3) rx-clk)
+		    (if (0/= rx)
+			(incf rx-samples)))
+
+		  (if (> rx-samples 3)
+		      (setq rx-data (make-bitfields 1 (bref rx-data 7 :end 1)))
+		      (setq rx-data (make-bitfields 0 (bref rx-data 7 :end 1))))))
+
+	      ;; wait another half-cycle to re-synchroise on bit boundary
+	      (wait (>> one-baud-clk 1) rx-clk)
+
+	      ;; check for high stop bit
+	      (if (0/= rx)
+		  ;; stop bit received, signal receipt
+		  (setq rx-status-received-p 1)
+
+		  ;; no stop bit, signal error
+		  (progn
+		    (setq rx-status-error-p 1)
+		    (wait (<< one-baud-clk 3) rx-clk))))
+
+	    ;; start bit changed unexpectedly, signal error
+	    (progn
+	      (setq rx-status-error-p 1)
+	      (wait (<< one-baud-clk 3) rx-clk))))
 
        ;; transmitting state machine
-       (tagbody
-	tx-idle
-	  (setq tx-status-idle-p 1)
+       (forever
+	;; wait for transmit to be strobed
+	(with-asserted tx-status-idle-p
+	  (until (0/= transmit)))
 
-	  (until (0/= transmit))
+	;; latch the byte to transmit
+	(setq tx-data tx-byte)
 
-	  (setq tx-status-idle-p 0)
-	  (setq tx-data tx-byte)
-	  (setq tx-clk-divider clk-divide)
-	  (setq tx-countdown 4)
-	  (setq tx-out 0)
-	  (setq tx-bits-remaining 8)
+	;; send start bit
+	(setq tx-out 0)
+	(wait one-baud-clk tx-clk)
 
-	tx-sending
-	  (if (0= tx-countdown)
-	      (if (> tx-bits-remaining 0)
-		  (progn
-		    (decf tx-bits-remaining)
-		    (setq tx-out (bref tx-data 0))
-		    (setq tx-data (make-bitfields 0 (bref tx-data 7 :end 1)))
-		    (setq tx-countdown 4)
-		    (go tx-sending))
+	;; send all bits
+	(dotimes (tx-bits 8)
+	  (declare (width 4 tx-bits))
 
-		  (progn
-		    (setq tx-out 1)
-		    (setq tx-countdown 8)
-		    (go tx-delay-restart)))
+	  (setq tx-out (bref tx-data 0))
+	  (setq tx-data (make-bitfields 0 (bref tx-data 7 :end 1)))
+	  (wait one-baud-clk tx-clk))
 
-	      (go tx-sending))
+	;; send two stop bit
+	(setq tx-out 1)
+	(wait (<< one-baud-clk 2) tx-clk)
 
-	tx-delay-restart
-	  (if (0= tx-countdown)
-	      (go tx-idle)
-	      (go tx-delay-restart)))
-
-       ;; receive countdown
-       ;; (decf rx-clk-divider)
-       ;; (when (0= rx-clk-divider)
-       ;;	 (setq rx-clk-divider clk-divide)
-       ;;	 (decf rx-countdown))
-
-       ;; ;; receiving state machine
-       ;; (tagbody
-       ;;	rx-idle
-       ;;	  (setq rx-status-receiving-p 0)
-       ;;	  (setq rx-status-error-p 0)
-       ;;	  (setq rx-status-idle-p 1)
-
-       ;;	  ;; wait for low on rx to signal start of data
-       ;;	  (while (0/= rx))
-
-       ;;	  (setq rx-status-idle-p 0)
-       ;;	  (setq rx-status-receiving-p 1)
-       ;;	  (setq rx-clk-divider clk-divide)
-       ;;	  (setq rx-countdown 2)
-
-       ;;	rx-check-start
-       ;;	  (if (0= rx-countdown)
-       ;;	      (if (0= rx)
-       ;;		  ;; pulse still low
-       ;;		  (progn
-       ;;		    (setq rx-countdown 4)
-       ;;		    (setq rx-bits-remaining 8)
-       ;;		    (go rx-read-bits))
-
-       ;;		  ;; pulse unexpectedly went high, error
-       ;;		  (go rx-error)))
-
-       ;;	rx-read-bits
-       ;;	  (if (0= rx-countdown)
-       ;;	      (progn
-       ;;		(setq rx-data (make-bitfields rx (bref rx-data 7 :end 1)))
-       ;;		(setq rx-countdown 4)
-       ;;		(decf rx-bits-remaining)
-       ;;		(if (0= rx-bits-remaining)
-       ;;		    (go rx-check-stop))))
-
-       ;;	rx-check-stop
-       ;;	  (if (0= rx-countdown)
-       ;;	      ;; receive should be high
-       ;;	      (if rx
-       ;;		  (go rx-received)
-       ;;		  (go rx-error)))
-
-       ;;	rx-delay-restart
-       ;;	  (if (0= rx-countdown)
-       ;;	      (go rx-idle))
-
-       ;;	rx-error
-       ;;	  (setq rx-status-receiving-p 0)
-       ;;	  (setq rx-status-error-p 1)
-       ;;	  (setq rx-countdown 8)
-       ;;	  (go rx-delay-restart)
-
-       ;;	rx-received
-       ;;	  (setq rx-status-received-p 0)
-       ;;	  (setq rx-status-receiving-p 0)
-       ;;	  (go rx-idle))
-
-       )))
+	;; wait for transmit to be low (prevents duplicate characters)
+	(while (0/= transmit))))))
