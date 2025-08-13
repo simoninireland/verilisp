@@ -353,7 +353,7 @@
 
     (vl::with-new-frame
       (let ((m (vl::elaborate/vl p)))
-	(is (vl::synthesise (cadr m)))))))
+	(is (vl::synthesise m))))))
 
 
 (test test-module-real-instanciate

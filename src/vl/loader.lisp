@@ -28,8 +28,8 @@
 (defun declare-module (modname intf code)
   "Declare a module MODNAME with the given INTF and CODE.
 
-The module is declare in *GLOBAL-ENVIRONMENT*. Moduls can be
-re-defined, overwriting previous declarationsn and signalling
+The module is declared in *GLOBAL-ENVIRONMENT*. Modules can be
+re-defined, overwriting previous declarations and signalling
 a DUPLICATE-MODULE warning."
   (in-global-environment
 
@@ -44,12 +44,21 @@ a DUPLICATE-MODULE warning."
 				(as module)))))
 
 
+(defun declare-imported-module (modname intf)
+  "Declare an imported module MODNAME with the given INTF.
+
+The module is declared in *GLOBAL-ENVIRONMENT*. Modules can be
+re-defined, overwriting previous declarations and signalling
+a DUPLICATE-MODULE warning."
+  (declare-module modname intf nil))
+
+
 (defun module-declared-p (modname)
   "Test whether MODNAME is declared as a module in the current environment."
   (in-global-environment
-   (let ((ty (get-type modname)))
-     (and (not (null ty))
-	  (subtype-p ty 'module)))))
+    (let ((ty (get-type modname)))
+      (and (not (null ty))
+	   (subtype-p ty 'module)))))
 
 
 (defun get-module (modname)
@@ -175,6 +184,41 @@ Return the name of the newly-defined module."
 
 	 ;; declare the module
 	 (declare-module ',modname ,intf ,elaborated)
+
+	 ',modname))))
+
+
+(defmacro importmodule/vl (modname decls declarations)
+  "Import a module MODNAME with the given argument DECLS.
+
+Importing allows modules written in Verilog to be used within
+Verilisp. This lets Verilisp programs use existing IP.
+
+Verilisp does a lot more work in analysing code than Verilog, however.
+DECLARATIONS should be a DECLARE form providing information about the
+DECLS, typically types and directions of arguments (which Verilisp
+would normally infer from the body of the module).
+
+Imported modules are not scheuled for synthesis, and should be included
+into the final bitstream from within the FPGA toolchain."
+  ;; make sure we have a DECLARE form
+  (with-current-form declarations
+    (unless (and (listp declarations)
+		 (eql (car declarations) 'declare))
+      (error 'syntax-error :hint "Use a DECLARE form as the module body")))
+
+  (with-gensyms (module expanded intf)
+    (let ((code `(module ,modname ,decls
+			 ,declarations)))
+      `(let* ((,module ',code)
+	      (,expanded (add-frames ,module))
+	      (,intf (typecheck/vl ,expanded)))
+
+	 ;; check that we have all the necessary information
+	 ;; TBD
+
+	 ;; declare the imported module
+	 (declare-imported-module ',modname ,intf)
 
 	 ',modname))))
 

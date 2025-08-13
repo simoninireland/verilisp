@@ -203,5 +203,5 @@
 				(setf clk 0)
 				(go ttt)))))))
     (vl::typecheck p)
-    (let ((q (cadr (vl::elaborate/vl p))))
+    (let ((q (vl::elaborate/vl p)))
       (is (vl::synthesise q)))))

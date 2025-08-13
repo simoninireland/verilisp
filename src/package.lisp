@@ -55,6 +55,7 @@
 
    ;; top-level interface
    #:defmodule/vl
+   #:importmodule/vl
    #:defmacro/vl
    #:macrolet/vl
    #:synthesise/vl

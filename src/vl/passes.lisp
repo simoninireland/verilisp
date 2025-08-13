@@ -307,7 +307,7 @@ environment is restored on leaving BODY."
 
   ;; extract frame and decls, and run BODY in a suitable environment
   (with-gensyms (real-decls local-frame)
-    `(destructuring-bind (real-decls local-frame)
+    `(destructuring-bind (,local-frame ,real-decls)
 	 (get-local-frame-and-decls ,decls)
 
        ;; attach local frame to environment
