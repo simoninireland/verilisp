@@ -448,4 +448,4 @@
 	    (vl::typecheck p)))))
 
     (is (= errors 1))
-    (is (> warnings 0))))
+    (is (= warnings 0))))

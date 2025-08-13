@@ -126,18 +126,30 @@ q
 	'(unsigned-byte 8))))
 
 
+(test test-case-constants
+  "Test we force all comparisons to be constants."
+  (let ((p (vl::expand/vl '(let ((a 10)
+				b)
+			    (case a
+			      (1 (setq b 1))
+			      (b (setq a b)))))))
+
+    (signals (vl::not-static)
+      (vl::typecheck p))))
+
+
 (test test-synthesise-case
   "Test we can synthesise a CASE."
   (let ((p (vl::expand/vl '(let ((a 12)
-				(b 0))
-			   (case a
-			     (1
-			      (setf b 23))
-			     ((2 3 4)
-			      (setf b 34 :sync t)
-			      (setf a 0))
-			     (t
-			      (setf b 0)))))))
+				 (b 0))
+			    (case a
+			      (1
+			       (setf b 23))
+			      ((2 3 4)
+			       (setf b 34 :sync t)
+			       (setf a 0))
+			      (t
+			       (setf b 0)))))))
     (vl::with-new-frame
       (vl::typecheck p)
       (is (vl::synthesise p)))))

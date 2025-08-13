@@ -105,6 +105,7 @@
 			    (tagbody
 			     initial
 			       (go initial))))))
+
     (vl::typecheck p)
     (is (vl::transform p))))
 
@@ -117,16 +118,19 @@
 			    (tagbody
 			     count
 			       ;; wait while the counter increments around the counter
-			       (incf counter)
+			       (setq counter (+ counter 1))
 			       (if (> counter 0)
 				   (go count))
 
 			     blink
 			       ;; update the LED
-			       (setq out (1+ out))
+			       (setq out (+ out 1))
 			       (go count))))))
+
     (vl::typecheck p)
-    (is (vl::transform p))))
+    (let ((q (vl::transform p)))
+      (is (contains-form-p '(setq counter (+ counter 1)) q))
+      (is (contains-form-p '(setq out (+ out 1)) q)))))
 
 
 (test test-tagbody-while-looping
@@ -137,12 +141,15 @@
 			    (tagbody
 			     looping
 			       (while (> counter 0)
-				      (incf counter))
+				      (setq counter (+ counter 1)))
 
-			       (setq out (1+ out))
+			       (setq out (+ out 1))
 			       (go looping))))))
+
     (vl::typecheck p)
-    (is (vl::transform p))))
+    (let ((q (vl::transform p)))
+      (is (contains-form-p '(setq counter (+ counter 1)) q))
+      (is (contains-form-p '(setq out (+ out 1)) q)))))
 
 
 (test test-tagbody-forever-looping
@@ -153,8 +160,70 @@
 			    (tagbody
 			       (forever
 				(while (> counter 0)
-				       (incf counter))
+				       (setq counter (+ counter 1)))
 
-				(setq out (1+ out))))))))
+				(setq out (+ out 1))))))))
     (vl::typecheck p)
-    (is (vl::transform p))))
+    (let ((q (vl::transform p)))
+      (is (contains-form-p '(setq counter (+ counter 1)) q) )
+      (is (contains-form-p '(setq out (+ out 1)) q)))))
+
+
+(test test-tagbody-following-if
+  "Test we pick up forms after an IF."
+
+  (let ((p (vl::expand/vl '(let (a b c)
+			    (tagbody
+			     rx-idle
+			       (setq a 0)
+			       (setq b 0)
+			       (if (0/= c)
+				   (go rx-idle))
+
+			       (setq a 1)
+			       (setq b 1)
+
+			     rx-active
+			       (setq c 1)
+			       (go rx-idle))))))
+
+    (vl::typecheck p)
+    (let ((q (vl::transform p)))
+
+      ;; first state
+      (is (contains-form-p '(setq a 0) q))
+
+      ;; continuation of first state
+      (is (contains-form-p '(setq a 1) q))
+
+      ;; second state
+      (is (contains-form-p '(setq c 1) q)))))
+
+
+(test test-tagbody-nested-if
+  "Test we can handle nested IFs."
+  (let ((p (vl::expand/vl '(let (a b c)
+			    (tagbody
+			     rx-check-start
+			       (if (0= a)
+				   (if (0= b)
+				       (progn
+					 ;; starting pulse is still zero
+					 (setq c 1)
+					 (go rx-sample-bits))
+
+				       ;; starting pulse has disappeared, error
+				       (go rx-error))
+
+				   (go rx-check-start))
+
+			     rx-sample-bits
+			       (setq c 2)
+			       (go rx-check-start)
+
+			     rx-error
+			       (go rx-error))))))
+
+    (vl::typecheck p)
+    (is (contains-form-p '(setq c 1) p))
+    (is (contains-form-p '(setq c 2) p))))

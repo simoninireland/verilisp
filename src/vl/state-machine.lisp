@@ -148,9 +148,9 @@ form fell-through and should therefore continue to EXIT-STATE.")
 					     current-state
 					     trailing-state)))
 
-    (append (list current-state)
-	    nested-states
-	    trailing-states)))
+    (append ;;(list current-state)
+     nested-states
+     trailing-states)))
 
 
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'progn)) args forms current-state exit-state)
@@ -163,6 +163,7 @@ form fell-through and should therefore continue to EXIT-STATE.")
 	 (nested-states (parse-tagbody-forms args
 					     current-state
 					     trailing-state)))
+
     (append nested-states
 	    trailing-states)))
 
@@ -204,10 +205,11 @@ form fell-through and should therefore continue to EXIT-STATE.")
 			    (go ,trailing-label)))))
 	(appendf (body current-state) (list cform)))
 
-      (append (list current-state)
-	      then-states
-	      else-states
-	      trailing-states))))
+      (append ;;(list current-state)
+       then-states
+       (if else-states
+	   else-states)
+       trailing-states))))
 
 
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'case)) args forms current-state exit-state)
@@ -237,9 +239,9 @@ form fell-through and should therefore continue to EXIT-STATE.")
 		      ,@new-arms)))
 	(appendf (body current-state) (list cform)))
 
-      (append (list current-state)
-	      arm-states
-	      trailing-states))))
+      (append ;;(list current-state)
+       arm-states
+       trailing-states))))
 
 
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'go)) args forms current-state exit-state)
@@ -263,12 +265,14 @@ form fell-through and should therefore continue to EXIT-STATE.")
 
     (let ((trailing-states (if (not (null forms))
 			       (parse-tagbody-forms forms
-						    (make-instance 'state)
+						    nil
 						    exit-state))))
-      (if trailing-states
-	  (cons current-state
-		trailing-states)
-	  (list current-state)))))
+      ;; (if trailing-states
+      ;;	  (cons current-state
+      ;;		trailing-states)
+      ;;	  (list current-state))
+
+      trailing-states)))
 
 
 (defun count-tagbody-forms (forms)
@@ -298,14 +302,12 @@ Return a list of of states created, initial state first."
 
   (if (null forms)
       ;; no more forms to process
-      (if current-state
-	  (progn
+      (progn
+	(if current-state
 	    ;; jump to the exit of the current machine
-	    (appendf (body current-state) (list `(go ,(label exit-state))))
-	    (list current-state))
+	    (appendf (body current-state) (list `(go ,(label exit-state)))))
 
-	  ;; no current state either, nothing to do
-	  nil)
+	nil)
 
       ;; forms to do
       (destructuring-bind (form &rest rest)
@@ -318,26 +320,28 @@ Return a list of of states created, initial state first."
 		  ;; link current state to new state
 		  (appendf (body current-state) (list `(go ,(label new-state)))))
 
-	      ;; use this state going forward
-	      (parse-tagbody-forms rest new-state exit-state))
+	      ;; use this new state going forward
+	      (cons new-state
+		    (parse-tagbody-forms rest new-state exit-state)))
 
-	    (progn
-	      (when (null current-state)
-		;; no current state, create one
-		(setq current-state (make-instance 'state)))
+	    (if (null current-state)
+		;; no current state, create one and re-parse
+		(let ((initial-state (make-instance 'state)))
+		  (cons initial-state
+			(parse-tagbody-forms forms initial-state exit-state)))
 
-	      (if (listp form)
-		  ;; handle sexp
-		  (destructuring-bind (fun &rest args)
-		      form
-		    (parse-tagbody-forms-sexp fun args
-					      rest
-					      current-state exit-state))
+		(if (listp form)
+		    ;; handle sexp
+		    (destructuring-bind (fun &rest args)
+			form
+		      (parse-tagbody-forms-sexp fun args
+						rest
+						current-state exit-state))
 
-		  (progn
-		    ;; singleton form that isn't a state marker
-		    (appendf (body current-state) (list form))
-		    (parse-tagbody-forms rest current-state exit-state))))))))
+		    (progn
+		      ;; singleton form that isn't a state marker
+		      (appendf (body current-state) (list form))
+		      (parse-tagbody-forms rest current-state exit-state))))))))
 
 
 (defun build-state-machine (forms)
@@ -365,9 +369,10 @@ A state is unnecessary if it is empty or consists purely of a GO to another stat
 
   (labels ((mergeable-state (m)
 	     (let ((b (body m)))
-	       (if (and (not (null b))
-			(= (length b) 1)
-			(eql (caar b) 'go))
+	       (if (and (not (null b))                          ; body not empty
+			(= (length b) 1)                        ; single form
+			(eql (caar b) 'go)                      ; ... which is a GO
+			(not (eql (cadr (car b)) (label m))))   ; ... and isn't back to the same state
 
 		   ;; mergeable, return its target state
 		   (destructuring-bind (fun target)
@@ -396,7 +401,10 @@ A state is unnecessary if it is empty or consists purely of a GO to another stat
 
 Return LABEL if the the state is not merged."
   (if-let ((m (assoc label merged-states)))
+    ;; state is merged with another, return that state
     (get-label-from-merged-states (cadr m) merged-states)
+
+    ;; state is un-merged, return it
     label))
 
 
@@ -461,30 +469,37 @@ Return LABEL if the the state is not merged."
   (destructuring-bind (newbody newenv)
       (float-let-blocks (with-implicit-tagbody args))
 
-    ;; we hold on to the NEWENV frame because it contains all the information
-    ;; we've already extracted about the variables -- and these were the only
-    ;; ones in scope when the code was analysed, with others beng created
-    ;; by SYNTHESISE-STATE-MACHINE. which adds the necessary types and
-    ;; representations directly
+    (destructuring-bind (newfun &rest newargs)
+	newbody
 
-    (with-new-frame
-      (let ((p (if newenv
-		   ;; float the locally-declared varables around the state machine
-		   (let ((newdecls (add-local-frame-to-decls
-				    (mapcar (lambda (np)
-					      (destructuring-bind (n props)
-						  np
-						(list n
-						      (get-environment-property n 'initial-value newenv :default 0))))
-					    (decls newenv))
-				    newenv)))
-		     `(let ,newdecls
-			,(synthesise-state-machine newbody)))
+      (unless (eql newfun 'tagbody)
+	(error "Incorrectly floated LET blocks in TAGBODY"))
 
-		   ;; no locally-declared variables in body
-		   (synthesise-state-machine newbody))))
+      ;; we hold on to the NEWENV frame because it contains all the information
+      ;; we've already extracted about the variables -- and these were the only
+      ;; ones in scope when the code was analysed, with others beng created
+      ;; by SYNTHESISE-STATE-MACHINE. which adds the necessary types and
+      ;; representations directly
 
-	(transform p)))))
+      (with-new-frame
+	(let* ((synth (synthesise-state-machine newargs))
+	       (p (if newenv
+		      ;; float the locally-declared varables around the state machine
+		      (let ((newdecls (add-local-frame-to-decls
+				       (mapcar (lambda (np)
+						 (destructuring-bind (n props)
+						     np
+						   (list n
+							 (get-environment-property n 'initial-value newenv :default 0))))
+					       (decls newenv))
+				       newenv)))
+			`(let ,newdecls
+			   ,synth))
+
+		      ;; no locally-declared variables in body
+		      synth)))
+
+	  (transform p))))))
 
 
 ;; ---------- GO ----------
