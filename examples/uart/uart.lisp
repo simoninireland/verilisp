@@ -84,9 +84,10 @@
     (setq received-p rx-status-received-p)
     (setq receive-error-p rx-status-error-p)
     (setq receiving-p rx-status-receiving-p)
+    (setq transmitting-p (not tx-status-idle-p))
+
     (setq rx-byte rx-data)
     (setq tx tx-out)
-    (setq transmitting-p (not tx-status-idle-p))
 
     (@ (posedge clk)
        ;; clock dividers
@@ -121,23 +122,21 @@
 
 		;; take a sequence of samples of the next bit, to
 		;; handle small amounts of clock drift
-		(let ((rx-samples 0))
-		  (declare (width 4 rx-samples))
+		(let ((samples 0))
+		  (declare (width 4 samples))
 
 		  (dotimes (countdown 6)
 		    ;; wait an eighth of a cycle and sample
 		    (wait (>> one-baud-clk 3) rx-clk)
 		    (if (0/= rx)
-			(incf rx-samples)))
+			(incf samples)))
 
-		  (if (> rx-samples 3)
+		  (if (> samples 3)
 		      (setq rx-data (make-bitfields 1 (bref rx-data 7 :end 1)))
 		      (setq rx-data (make-bitfields 0 (bref rx-data 7 :end 1))))))
 
-	      ;; wait another half-cycle to re-synchroise on bit boundary
+	      ;; wait another half-cycle to sample the middle of the high stop bit
 	      (wait (>> one-baud-clk 1) rx-clk)
-
-	      ;; check for high stop bit
 	      (if (0/= rx)
 		  ;; stop bit received, signal receipt
 		  (setq rx-status-received-p 1)
@@ -154,7 +153,7 @@
 
        ;; transmitting state machine
        (forever
-	;; wait for transmit to be strobed
+	;; wait for transmit to be strobed high
 	(with-asserted tx-status-idle-p
 	  (until (0/= transmit)))
 
@@ -173,9 +172,9 @@
 	  (setq tx-data (make-bitfields 0 (bref tx-data 7 :end 1)))
 	  (wait one-baud-clk tx-clk))
 
-	;; send two stop bit
+	;; send two stop bits
 	(setq tx-out 1)
-	(wait (<< one-baud-clk 2) tx-clk)
+	(wait (<< one-baud-clk 1) tx-clk)
 
 	;; wait for transmit to be low (prevents duplicate characters)
 	(while (0/= transmit))))))

@@ -1,4 +1,4 @@
-# Makefile for theUART demo
+# Makefile for the UART echo demo
 #
 # Copyright (C) 2024--2025 Simon Dobson
 #
@@ -17,24 +17,26 @@
 # You should have received a copy of the GNU General Public License
 # along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-include ../icestick.mk
+VERILISP_ROOT = ../..
+include $(VERILISP_ROOT)/examples/icestick.mk
 
 
 # ---------- Target code ----------
 
 # Bitstream
-TARGET = counter.bin
+TARGET = echo.bin
 
 # Sources
-SOURCES = uart.lisp flasher.lisp counter.lisp
-CONFIG = counter.pcf
-OBJECT = counter.v
+SOURCES = uart.lisp echo.lisp
+CONFIG = echo.pcf
+OBJECT = echo.v
 
 
 # ---------- Tools ----------
 
 # Tools
 RM = rm -fr
+
 
 # ---------- Top-level targets ----------
 

@@ -31,7 +31,7 @@ ICESTORM_CONTAINER_TAG = icestorm
 # ---------- Tools ----------
 
 # Tools
-VERILISPC = ../../bin/verilispc
+VERILISPC = $(VERILISP_ROOT)/bin/verilispc
 SYNTH = yosys
 PNR = nextpnr-ice40
 PACK = icepack
@@ -86,7 +86,7 @@ clean:
 	$(VERILISPC) $(VERILISPC_OPTS) -o $*.v $(SOURCES)
 
 .v.json:
-	$(ICESTORM_IN_CONTAINER) $(SYNTH) $(SYNTH_OPTS) -p "synth_ice40 -top $(TOPMODULE) -json $*.json" $<
+	$(ICESTORM_IN_CONTAINER) $(SYNTH) $(SYNTH_OPTS) -p "synth_ice40 -top $(TOPMODULE) -json $*.json" $(VERILOG_SOURCES) $<
 
 .json.asc:
 	$(ICESTORM_IN_CONTAINER) $(PNR) $(PNR_OPTS) --$(FPGA_DEVICE) --package $(FPGA_PACKAGE) --json $*.json --pcf $*.pcf --asc $*.asc
