@@ -21,3 +21,10 @@ The main interface to Verilisp is through a small set of operations.
 
 
 .. cl:macro:: macrolet/vl
+
+
+In some projects it may also be useful (or necessary) to import
+existing IP written in Verilog.
+
+
+.. cl:macro:: importmodule/vl
