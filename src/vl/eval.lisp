@@ -154,6 +154,8 @@ compile time.
 
 FORM should be in Lisp: to evaluate Verilisp forms use
 EVAL-IN-STATIC-ENVIRONMENT."
+  (declare (optimize debug))
+
   (let ((closed-form (close-form-in-static-environment form)))
     (eval closed-form)))
 
@@ -179,6 +181,7 @@ EVAL-LISP-IN-STATIC-ENVIRONMENT."
 	((error (lambda (c)
 		  (declare (ignore c))
 		  (error 'not-static :hint "Make sure expression is statically determinable"))))
+
       (eval-lisp-in-static-environment (lispify form)))))
 
 
