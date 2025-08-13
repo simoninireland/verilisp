@@ -25,51 +25,32 @@
   (with-gensyms (then)
     `(tagbody
 	(setq ,wire 1)
-      ,then
+	,then
 	(setq ,wire 0))))
-
-
-(defmacro/vl flash (n)
-  "Flash the flasher N times."
-  `(progn
-     ;; set up and trigger the flashes
-     (setq flashes ,n)
-     (pulse flash)
-
-     ;; wait for them to finish
-     (until (not flashing-p))))
 
 
 (defmodule/vl counter (clk rx tx led
 			   &key (delay 22))
-  (declare (type bit clk rx tx led))
+  (declare (type bit clk rx tx led)
+	   (direction out tx))  ;; should be inferred from module's direction!
 
-  (let (flashlight)
+  (let (rx-byte received-p receiving-p receive-error-p
+	tx-byte (transmit 0) transmitting-p)
 
-    (setq led flashlight)
+    (let ((uart (make-instance 'uart :clk clk :rst 0
+				     :rx rx :rx-byte rx-byte
+				     :received-p received-p :receiving-p receiving-p :receive-error-p receive-error-p
+				     :tx tx :tx-byte tx-byte
+				     :transmit transmit :transmitting-p transmitting-p)))
 
-    (let (flash flashes flashing-p counter)
-      (declare (width delay counter)
-	       (width 3 flashes)
-	       (type bit flashing-p))
+      (@ (posedge clk)
+	 (cond (received-p
+		(setq tx-byte rx-byte)
+		;;(setq tx-byte #16r62)
+		(setq transmit 1))
 
-      (let ((flasher (make-instance 'flasher :clk clk :flash flash :flashes flashes :led flashlight
-					     :flashing-p flashing-p
-					     :delay (- delay 2))))
-
-	(@ (posedge clk)
-
-	   (forever
-	    ;; do some flashes
-	    (flash 6)
-
-	    ;; delay!
-	    (setq counter 1)
-	    (while (> counter 0)
-		   (incf counter))
-	    (setq counter 1)
-	    (while (> counter 0)
-		   (incf counter))
-	    (setq counter 1)
-	    (while (> counter 0)
-		   (incf counter))))))))
+	       (receive-error-p
+		(setq tx-byte #16r21)
+		(setq transmit 1))
+	       (t
+		(setq transmit 0)))))))

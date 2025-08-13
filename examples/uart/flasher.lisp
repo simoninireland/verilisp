@@ -17,14 +17,6 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(defmacro/vl with-asserted (wire &body body)
-  "Perform BODY with WIRE set to 1, and the reset WIRE to 0."
-  `(progn
-     (setq ,wire 1)
-     ,@body
-     (setq ,wire 0)))
-
-
 (defmodule/vl flasher (clk
 		       flash flashes led
 		       &optional flashing-p
