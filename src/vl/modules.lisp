@@ -210,7 +210,11 @@ Signal VALUE-MISMATCH as an error if not."
 
       ;; add all the names
       (dolist (args (list reqs opts keys))
-	(mapc #'add-decl-to-frame args)))))
+	(mapc #'add-decl-to-frame args))
+
+      ;; set all the keyword arguments to be parameters
+      (dolist (n (mapcar #'safe-car keys))
+	(set-variable-property n 'as 'parameter)))))
 
 
 (defun compute-module-interface-type (decls)
@@ -238,12 +242,7 @@ Signal VALUE-MISMATCH as an error if not."
   (dolist (n (variables-declared-in-current-frame))
     (let* ((ty (or (variable-property n 'type :default nil)
 		   '(unsigned-byte 1))))
-      (add-type-constraint n ty)))
-
-  (destructuring-bind (reqs opts keys)
-      (parse-module-lambda-list decls)
-    (dolist (n (mapcar #'safe-car keys))
-	(set-variable-property n 'as 'parameter))))
+      (add-type-constraint n ty))))
 
 
 (defmethod compute-type-sexp ((fun (eql 'module)) args)
@@ -548,29 +547,27 @@ Signal VALUE-MISMATCH as an error if not."
 
       ;; make sure there are no duplicate arguments
       (unless (set-p ks)
-	(error 'not-importable :module modname
-			       :args initargs
-			       :hint "Check for duplicate arguments"))
+	(let ((ns (duplicates ks)))
+	  (error 'not-importable :module modname
+				 :arg ns
+				 :hint "Check for duplicate arguments")))
 
       ;; make sure all required arguments are present
-      (unless (every (lambda (n)
-		       (member (module-argument-name-to-keyword n)
-			       ks))
-		     (module-required-arguments intf))
-	(error 'not-importable :module modname
-			       :args initargs
-			       :hint "Make sure all required arguments are provided"))
+      (dolist (n (module-required-arguments intf))
+	(let ((k (module-argument-name-to-keyword n)))
+	  (unless (member k ks)
+	    (error 'not-importable :module modname
+				   :arg k
+				   :hint "Make sure all required arguments are provided"))))
 
       ;; make sure all arguments are in the interface
-      (unless (every (lambda (k)
-		       (or (member k (mapcar (compose #'module-argument-name-to-keyword #'safe-car)
-					     (module-arguments intf)))
-			   (member k (mapcar (compose #'module-argument-name-to-keyword #'safe-car)
-					     (module-parameters intf)))))
-		     ks)
-	(error 'not-importable :module modname
-			       :args initargs
-			       :hint "Make sure all arguments are declared on the interface")))))
+      (dolist (k ks)
+	(unless (member k (mapcar (compose #'module-argument-name-to-keyword #'safe-car)
+				  (union (module-arguments intf)
+					 (module-parameters intf))))
+	  (error 'not-importable :module modname
+				 :arg k
+				 :hint "Make sure all arguments provided are declared in the interface"))))))
 
 
 (defmethod apply-type-constraints-sexp ((fun (eql 'make-instance)) args)
