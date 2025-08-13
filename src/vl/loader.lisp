@@ -169,9 +169,11 @@ afterwards -- although possibly still not finally synthesisable),
 and then be processed ready for synthesis (which might cause further
 warnings or errors).
 
-The resulting fully-elaborated module is added to *MODULE-LIST* for
-synthesis. Its type is added to *MODULE-INTERFACES* for importing.
-Duplicate module names will cause a DUPLICATE-MODULE error.
+The resulting fully-elaborated module is added to *GLOBAL-ENVIRONMENT*
+and is avalable for importing and synthesis.
+
+Declaring a module again will cause a DUPLICATE-MODULE warning, and the
+old module will be overwritten.
 
 Return the name of the newly-defined module."
   (with-gensyms (module expanded intf elaborated)
