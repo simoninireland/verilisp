@@ -115,24 +115,21 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 ;; register, so we provide two different operators instead. (This will
 ;; change if I can figure out a way to synthesise ash.)
 ;;
-;; The destructuring is to ensure there are only two arguments.
-;;
 ;; The result is always unsigned.
 
 (defmethod compute-type-sexp ((fun (eql '<<)) args)
+  (declare (optimize debug))
+
   (ensure-number-of-arguments fun args 2)
 
   (destructuring-bind (val offset)
       args
     (let ((tyval (compute-type val))
 	  (tyoffset (compute-type offset)))
-      (ensure-fixed-width tyval)
-      (ensure-fixed-width tyoffset)
 
       ;; the width is the width of the value plus the
       ;; maximum number that can be in the offset
-      `(unsigned-byte ,(+ (bitwidth tyval)
-			  (1- (ash 1 (bitwidth tyoffset))))))))
+      `(and ,tyval (unsigned-byte (bitwidth ',tyoffset))))))
 
 
 (defmethod synthesise-sexp ((fun (eql '<<)) args)
@@ -155,12 +152,10 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
       args
     (let ((tyval (compute-type val))
 	  (tyoffset (compute-type offset)))
-      (ensure-fixed-width tyval)
-      (ensure-fixed-width tyoffset)
 
       ;; use the width of the value as the maximum width, since
       ;; shifting right can only make it smaller
-      `(unsigned-byte ,(bitwidth tyval)))))
+      tyval)))
 
 
 (defmethod synthesise-sexp ((fun (eql '>>)) args)
