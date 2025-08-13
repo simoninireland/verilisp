@@ -22,12 +22,10 @@
 
 ;; RAM
 (defmodule/vl ram (addr rd/wr write-mask data
-			&key
-			(words 256))
+		   &key (words 256))
   (declare (type (unsigned-byte 32) addr data)
 	   (type bit rd/wr)
-	   (type (unsigned-byte 4) write-mask)
-	   (direction inout data))
+	   (type (unsigned-byte 4) write-mask))
 
   (let ((mem (make-array (words) :element-type (unsigned-byte 32)
 				 :initial-element 0)))
@@ -37,12 +35,9 @@
 	 (if rd/wr
 	     ;; writing
 	     (let ((updated (aref mem word-addr)))
-	       (with-bitfields (b3 b3 b3 b3 b3 b3 b3 b3
-				   b2 b2 b2 b2 b2 b2 b2 b2
-				   b1 b1 b1 b1 b1 b1 b1 b1
-				   b0 b0 b0 b0 b0 b0 b0 b0)
-		   updated
-					;TODO: Is the mask being interpreted correctly?
+	       (with-bitfields ((b3 8) (b2 8) (b1 8) (b0 8))
+		 updated
+		 ;;TODO: Is the mask being interpreted correctly?
 		 (when (asserted-p (bref write-mask 0))
 		   (setf b0 (bref data 7 :width 8)))
 		 (when (asserted-p (bref write-mask 1))
@@ -60,13 +55,12 @@
 
 
 ;; Simple ALU
-(defmodule/vl rv321-alu (a b add/sub sign-extending-p
+(defmodule/vl rv32i-alu (a b add/sub sign-extending-p
 			 op shift c)
   (declare (type (unsigned-byte 32) a b c)
 	   (type bit add/sub sign-extending-p)
 	   (type (unsigned-byte 3) op)
-	   (type (unsigned-byte 5) shift)
-	   (direction out c))
+	   (type (unsigned-byte 5) shift))
 
   (@ (*)
      (case op
@@ -167,14 +161,16 @@
 
     ;; wiring
     (let (a b c compare
-	    (op      0)
-	    (add/sub 0)
 
-	    ;; memory access
-	    (addr       0)
-	    (data       0)
-	    (rd/wr      0)
-	    (write-mask 0))
+	  (op      0)
+	  (add/sub 0)
+	  shift-amount
+
+	  ;; memory access
+	  (addr       0)
+	  (data       0)
+	  (rd/wr      0)
+	  (write-mask 0))
       (declare (type (unsigned-byte 32) a b c addr data)
 	       (type (unsigned-byte 3) op)
 	       (type (unsigned-byte 4) write-mask)
@@ -183,7 +179,7 @@
       (let ((mem (make-instance 'ram :addr addr :data data
 				     :rd/wr rd/wr :write-mask write-mask))
 	    (alu (make-instance 'rv32i-alu :a a :b b :c c
-					   :op op
+					   :op op :add/sub add/sub :sign-extending-p 1
 					   :shift shift-amount))
 	    (comparator (make-instance 'rv32i-comparator :a a :b b :c compare
 							 :op op)))
@@ -337,11 +333,10 @@
 
 			;; store relative to register (S)
 			(#2r0100011
-			 (let ((read-type (bref funct3 1 :width 2)))
-			   (setq write-mask (cond ((= read-type #2r00)
+			 (let ((write-type (bref funct3 1 :width 2)))
+			   (setq write-mask (cond ((= write-type #2r00)
 						   ;; store byte
 						   (if (asserted-p (bref addr 1))
-					;TODO: Check these masks are correct
 						       ;; writing to byte in upper half-word
 						       (if (asserted-p (bref addr 0))
 							   #2r1000
@@ -352,7 +347,7 @@
 							   #2r0010
 							   #2r0001)))
 
-						  ((= read-type #2r01)
+						  ((= write-type #2r01)
 						   ;; store half-word
 						   (if (asserted-p (bref addr 1))
 						       ;; writing to upper half-word
