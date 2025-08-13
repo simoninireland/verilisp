@@ -248,9 +248,11 @@ The name is the first element, whether or not DECL is a list."
 			       ;; no initial value, assume a wire
 			       'wire)
 
-			     ;; variable is unused
+			     ;; variable is unused, and is not a module (which we
+			     ;; don't report as they're never used directly)
 			     (progn
-			       (if (not (or ignored ignorable))
+			       (if (and (not (or ignored ignorable))
+					(not (subtype-p (get-type n) 'module)))
 				   ;; not marked as ignored/able
 				   (warn 'unused-variable :variable n
 							  :hint "Make sure variable is needed"))
