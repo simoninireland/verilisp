@@ -188,19 +188,9 @@
 			  (l1 z))
 			 (setq x (l1 z)))))))
 
-    (labels ((find-form (f l)
-	       (if (null l)
-		   nil
-
-		   (let ((f1 (car l)))
-		     (or (equal f1 f)
-			 (and (listp f1)
-			      (find-form f f1))
-			 (find-form f (cdr l)))))))
-
-      (is (find-form '(+ y 12) p))
-      (is (find-form '(+ z 13) p))
-      (is (find-form '(+ z 12) p)))))
+    (is (contains-form-p '(+ y 12) p))
+    (is (contains-form-p '(+ z 13) p))
+    (is (contains-form-p '(+ z 12) p))))
 
 
 (test test-do-no-variables
