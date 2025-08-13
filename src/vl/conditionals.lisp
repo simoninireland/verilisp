@@ -150,15 +150,17 @@ Each test element must be testable against TY."
       clause
 
     (if (not (eql val 't))
-	(if (listp val)
-	    ;; multiple test elements, make sure they're all appropriate
-	    (dolist (v val)
-	      (let ((tyval (compute-type v)))
-		(ensure-subtype tyval ty)))
+	;; multiple test elements, make sure they're all appropriate
+	(dolist (v (if (listp val)
+		       val
+		       (list val)))
 
-	    ;; single test element
-	    (let ((tyval (compute-type val)))
-	      (ensure-subtype tyval ty))))))
+	  ;; all comparison forms must be static constants
+	  (ensure-static v)
+
+	  ;; check subtyping against comparison
+	  (let ((tyval (compute-type v)))
+	    (ensure-subtype tyval ty))))))
 
 
 (defmethod apply-type-constraints-sexp ((fun (eql 'case)) args)

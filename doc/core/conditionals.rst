@@ -49,16 +49,35 @@ cases where the other arm is empty.
 --------
 
 The ``case`` form tests a value for equality against different
-options, with a default option if no values match.
+options, with a default option if no values match. The guards can be
+single values or lists of values.
 
 .. code-block:: lisp
 
    (case a
-	 (1 (setq b 34))
-	 (2 (setq c (*a b)))
-	 (t (setq a 0)))
+      (1
+       (setq b 34))
+      ((2 3 4)
+       (setq c (*a b)))
+      (t
+       (setq a 0)))
 
 The ``t`` branch is executed if none of the other branches is
-triggered. The values guarding the arms must be constants, not
-expressions: for a more flexible multi-armed conditional see
-:ref:`core-cond`.
+triggered. As in Common Lisp, the values guarding the arms must be
+constants, not expressions: however, unlike in Common Lisp, Verilisp
+allows bindings to be declared as constants, so this is legal:
+
+.. code-block:: lisp
+
+   (let ((one 1)
+	 (two 2))
+      (declare (as constant one two))
+
+      (case a
+	 (one
+	  (setq b 1))
+	 ...))
+
+because the guard is explicitly declared to be constant.
+
+For a more flexible multi-armed conditional see :ref:`core-cond`.
