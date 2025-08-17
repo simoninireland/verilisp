@@ -9,9 +9,8 @@ Verilisp is structured as a nanopass compiler
 :cite:`NanopassCompilerEducation` making use of functions over the
 code tree. The nanopass approach has slightly lower performance than
 more traditional compiler structures because it makes more passes over
-the code tree. However it is conceptually simpler as it focuses a
-single component within a single pass, and hence usually within a
-single generic function.
+the code tree. However it is conceptually simpler as a single pass
+focuses on a single issue, and usually with a single generic function.
 
 
 Top-level compilation stages
@@ -22,7 +21,7 @@ The compilation process is conducted by three top-level passes.
 .. note::
 
    These functions are not usually called directly, but are called as
-   part of ``defmacro/vl``.
+   part of :cl:macro:`defmacro/vl`.
 
 
 .. cl:function:: expand/vl
