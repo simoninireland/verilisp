@@ -33,7 +33,7 @@ bits, with the most significant being the sign.
    .. code-block:: lisp
 
       (let ((a 12))
-	(declare (type (unsigned-byte 32) a))
+	(declare (type (signed-byte 32) a))
 
 	...)
 
