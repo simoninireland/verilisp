@@ -22,9 +22,7 @@
 		   leds-out
 		   rxd txd)
   (declare (type bit clk-in rxd txd)
-	   (type (unsigned-byte 5) leds-out)
-	   (direction in clk-in txd)
-	   (direction out leds-out rxd))
+	   (type (unsigned-byte 5) leds-out))
 
   (let (clk reset
 
@@ -32,8 +30,8 @@
 	leds
 
 	;; core state
-	(mem   (make-array '(256) :element-type (unsigned-byte 32)
-				  :initial-contents (:file "firmware.hex")))
+	(mem  (make-array '(256) :element-type (unsigned-byte 32)
+				 :initial-contents (:file "firmware.hex")))
 	pc instr
 
 	;; clock management
@@ -44,8 +42,7 @@
 				       :slow 19)))
     (declare (type bit clk reset)
 	     (type (unsigned-byte 5) leds)
-	     (type (unsigned-byte 32) pc instr)
-	     (as :wire clk reset))
+	     (type (unsigned-byte 32) pc instr))
 
     ;; wire the LED wires to the output register
     (setq leds-out leds)
@@ -90,17 +87,11 @@
 	  ;; function codes
 	  (funct3 (bref instr 14 :end 12))
 	  (funct7 (bref instr 31 :end 25)))
-      (declare (as wire isALUreg isALUimm isBranch isJALR isJAL
-			isAIUPC isLUT isLoad isStore isSystem
-			Uimm Iimm Simm Bimm Jimm
-			rs1Id rs2Id rdid
-			funct3 funct7))
 
       ;; register bank
       (let ((RegisterBank  (make-array '(32) :element-type (unsigned-byte 32)))
 	    (rs1           0)
 	    (rs2           0))
-	(declare (type (unsigned-byte 32) rs1 rs2))
 
 	;; the ALU
 	(let((aluIn1 rs1)
@@ -111,8 +102,6 @@
 			(bref rs2 4 :end 0)
 			(bref instr 24 :end 20)))
 	     aluOut)
-	  (declare (type (unsigned-byte 32) aluIn1 aluIn2)
-		   (as wire aluIn1 aluIn2 shamt))
 
 	  (@ (*)
 	     (case funct3

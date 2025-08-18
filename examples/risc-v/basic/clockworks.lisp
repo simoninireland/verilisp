@@ -18,11 +18,9 @@
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (defmodule/vl clockworks (clk-in reset-in
-				 clk reset
-				 &key (slow 0))
-  (declare (type bit clk-in reset-in clk reset)
-	   (direction in clk-in reset-in)
-	   (direction out clk reset))
+			  clk reset
+			  &key (slow 0))
+  (declare (type bit clk-in reset-in clk reset))
 
   ;; clock divider
   (let ((slow-clk 0))
