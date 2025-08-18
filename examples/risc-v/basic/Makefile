@@ -15,8 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this software. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-include ../../icestick.mk
-include ../risc-v.mk
+VERILISP_ROOT = ../../..
+include $(VERILISP_ROOT)/examples/icestick.mk
+include $(VERILISP_ROOT)/examples/risc-v/risc-v.mk
 
 
 # ---------- Target code ----------
@@ -55,16 +56,6 @@ $(TARGET): $(OBJECT) $(CONFIG)
 
 
 $(OBJECT): $(ASM_HEXES) $(SOURCES)
-
-
-# Upload the target bitstream to the device
-upload: $(TARGET)
-	$(IN_CONTAINER) $(PROGRAM) $(PROGRAM_OPTS) $<
-
-
-# Clean-up the build directory
-clean:
-	$(RM) $(FPGA_GENERATED) $(ASM_GENERATED) $(OBJECT)
 
 
 # Print a help message

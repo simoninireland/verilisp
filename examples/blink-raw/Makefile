@@ -15,7 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this software. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-include ../icestick.mk
+VERILISP_ROOT = ../..
+include $(VERILISP_ROOT)/examples/icestick.mk
 
 
 # ---------- Target code ----------
