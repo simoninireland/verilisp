@@ -129,10 +129,8 @@ Return the type of the clause body."
 (defun compute-type-clauses (clauses)
   "Typecheck case CLAUSES.
 
-The type is the lub of the clause types."
-  (foldr (lambda (tyl clause)
-	   (lub tyl (compute-type-clause clause)))
-	 clauses nil))
+The type is the union of the clause types."
+  `(or ,@(mapcar #'compute-type-clause clauses)))
 
 
 (defmethod compute-type-sexp ((fun (eql 'case)) args)
