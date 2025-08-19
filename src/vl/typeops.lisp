@@ -200,6 +200,30 @@ The default width of a type is zero, meaning it won;t be representable.")
   (apply #'bitwidth-type (deconstruct-type ty)))
 
 
+;; ---------- Representability ----------
+
+(defun representable-type-p (ty)
+  "Tes that type TY can be represented."
+  (apply #'representable-type-sexp-p (deconstruct-type ty)))
+
+
+(defgeneric representable-type-sexp-p (tytag tyargs)
+  (:documentation "Test that a type can be represented.
+
+Methods on this function should test that there is a representation
+for the type, which generally means that it can be represented by a
+fixed number of bits.
+
+The default is that types are not representable.")
+  (:method (tytag tyargs)
+    nil)
+
+  (:method ((tytag (eql 'type-of)) tyargs)
+    (destructuring-bind (n &optional (f (current-frame)))
+	tyargs
+      (representable-type-p (get-frame-property n 'type f)))))
+
+
 ;; ---------- Least upper-bounds ----------
 
 (defgeneric lub-type (ty1tag ty1args ty2tag ty2args)
@@ -320,67 +344,6 @@ largest representable type that can be formed."
 	(eval-type ty)
 
 	(foldr #'lurbtype tys ty))))
-
-
-;; ---------- Representability ----------
-
-(defun representable-type-p (ty)
-  "Tes that type TY can be represented."
-  (apply #'representable-type-sexp-p (deconstruct-type ty)))
-
-
-(defgeneric representable-type-sexp-p (tytag tyargs)
-  (:documentation "Test that a type can be represented.
-
-Methods on this function should test that there is a representation
-for the type, which generally means that it can be represented by a
-fixed number of bits.
-
-The default is that types are not representable.")
-  (:method (tytag tyargs)
-    nil)
-
-  (:method ((tytag (eql 'type-of)) tyargs)
-    (destructuring-bind (n &optional (f (current-frame)))
-	tyargs
-      (representable-type-p (get-frame-property n 'type f)))))
-
-
-(defun lurb (ty &rest tys)
-  "Return the least upper representable bound of TY and TYS.
-
-The LURB of two types is their LUB when they are bounded, but
-treates a test against an unbounded type as a sub-type comparison."
-  (declare (optimize debug))
-
-  (flet ((lurbtype (ty1 ty2)
-	   (declare (optimize debug))
-
-	   (let ((lubty (lub ty1 ty2)))
-	     (if (representable-type-p lubty)
-		 lubty
-
-		 ;; if left side is representable, check subtyping
-		 (if (representable-type-p ty1)
-		     (if (subtype-p ty1 ty2)
-			 ty1
-			 nil)
-
-		     nil)))))
-
-    (let ((lurbty (if (null tys)
-		      ;; only one type, evaluate it
-		      ;; (otherwise FOLDR short-cuts and returns TY)
-		      (eval-type ty)
-
-		      ;; otherwise, fold across the types
-		      (foldr #'lurbtype tys ty))))
-
-      (if (representable-type-p lurbty)
-	  lurbty
-
-	  (error 'not-representable :type lurbty)))))
-
 
 
 ;; ---------- Type constraints ----------
