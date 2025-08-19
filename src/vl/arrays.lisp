@@ -323,7 +323,7 @@ probably should, for those that are statically determined."
       args
     (let ((ty (compute-type place)))
       (ensure-subtype ty 'array)
-      (mapc #'ensure-fixed-width indices))))
+      (mapc (compose #'ensure-fixed-width #'compute-type) indices))))
 
 
 (defmethod read-variables-sexp ((fun (eql 'aref)) args)
