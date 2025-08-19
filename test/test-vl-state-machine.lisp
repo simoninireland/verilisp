@@ -254,13 +254,38 @@
 	(is (<= (length states) 3))))))
 
 
-(test test-tagbody-nested-in-conditional
-  "Test we can compile a state machine within the arm of a cnditional."
+(test test-tagbody-nested-in-then-conditional
+  "Test we can compile a state machine within thethen arm of a cnditional."
   (with-new-frame
     (let ((p (vl::expand/vl '(let (a b)
 			      (tagbody
 			       initial-state
 				 (if a
+				     (while (> a b)
+					    (incf b)))
+				 (setq a (+ a 12))
+			       return-state
+				 (incf a)
+				 (go initial-state)
+			       jump-state
+				 (setq a (+ b 1))
+				 (if (> a b)
+				     (go return-state)))))))
+
+      (vl::typecheck p)
+      (let* ((q (vl::synthesise-state-machine (cdr (elt p 2))))
+	     (states (cddr (elt (elt q 3) 3))))
+	(is (<= (length states) 6))))))
+
+
+(test test-tagbody-nested-in-else-conditional
+  "Test we can compile a state machine within the else arm of a cnditional."
+  (with-new-frame
+    (let ((p (vl::expand/vl '(let (a b)
+			      (tagbody
+			       initial-state
+				 (if a
+				     (setq a 14)
 				     (while (> a b)
 					    (incf b)))
 				 (setq a (+ a 12))

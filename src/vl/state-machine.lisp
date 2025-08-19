@@ -204,16 +204,18 @@ form fell-through and should therefore continue to EXIT-STATE.")
 	   (else-label (if else-states
 			   (label else-state))))
 
+      ;; compile the conditional, with optimisations
       (cond ((and (= (length then-states) 1)
 		  (or (null else-states)
 		      (= (length else-states) 1)))
-	     ;; we can coalesce the arms into this state
+	     ;; then arm is a single state, else is either a single state
+	     ;; or missing, so we can coalesce both diretly into this state
+	     ;; rather than creating new intermediate states
 
 	     ;; recompile the arms to fall-through
 	     (let* ((then-states (parse-tagbody-forms (list then-branch)
 						      nil nil))
 		    (then-state (car then-states))
-		    (then-label (label then-state))
 		    (else-states (if else-branch
 				     (parse-tagbody-forms else-branch
 							  nil nil)))
@@ -242,8 +244,48 @@ form fell-through and should therefore continue to EXIT-STATE.")
 
 		   (cdr trailing-states)))))
 
-	    ;; TODO There are some more optimisations we can add here, for
-	    ;; conditionals with one single-state side, etc
+	    ((or (null else-states)
+		 (= (length else-states) 1))
+	     ;; then arm is a full state machine but else is either a
+	     ;; single state or missing, so we can build it into this state
+	     ;; but we need to keep the trailing states as a state for the
+	     ;; then arm to jump back to
+	     (let ((cform (if else-states
+			      ;; two arms
+			      `(if ,condition
+				   (go ,then-label)
+				   (progn
+				     ,@(body else-state)))
+
+			      ;; one arm
+			      `(if ,condition
+				   (go ,then-label)
+				   (go ,trailing-label)))))
+
+	       ;; add the condition to the current state
+	       (appendf (body current-state) (list cform))
+
+	       ;; return all the states created
+	       (append then-states
+		       (if trailing-states
+			   trailing-states))))
+
+	    ((= (length then-states) 1)
+	     ;; then arm is a single state but the else arm is a full
+	     ;; state machine, so integrate the then arm but keep the
+	     ;; trailing states as a state for the else arm to jump to
+	     (let ((cform `(if ,condition
+			       (progn
+				 ,@(body then-state))
+			       (go ,else-label))))
+
+	       ;; add the condition to the current state
+	       (appendf (body current-state) (list cform))
+
+	       ;; return all the states created
+	       (append else-states
+		       (if trailing-states
+			   trailing-states))))
 
 	    (t
 	     ;; default creates new states for both arms
@@ -258,8 +300,10 @@ form fell-through and should therefore continue to EXIT-STATE.")
 				   (go ,then-label)
 				   (go ,trailing-label)))))
 
+	       ;; add condition to current state
 	       (appendf (body current-state) (list cform))
 
+	       ;; return all the states created
 	       (append then-states
 		       (if else-states
 			   else-states)
