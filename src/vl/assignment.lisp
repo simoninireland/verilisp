@@ -61,6 +61,7 @@ isn't declared."
 (defmethod apply-type-constraints-sexp ((fun (eql 'setq)) args)
   (destructuring-bind (n v &key sync)
       args
+    (ensure-writeable n)
     (apply-type-constraints `(setf ,n ,v :sync ,sync))))
 
 
@@ -78,8 +79,12 @@ isn't declared."
       args
 
     ;; catch the common mistake of using SETQ when we need SETF
-    (unless (symbolp n)
+    (when (listp n)
       (error 'not-synthesisable :hint "Do you need SETF instead of SETQ?"))
+
+    ;; catch assigning to a non-variable
+    (unless (symbolp n)
+      (error 'not-synthesisable :hint "Assignment target is not a variable"))
 
     (let ((read (read-variables v)))
       (add-dependencies n read)

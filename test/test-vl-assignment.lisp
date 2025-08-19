@@ -36,6 +36,13 @@
 				      (setq a 9)))))))
 
 
+(test test-assignment-to-constant
+  "Test we can't assign to a constant."
+  (signals (not-synthesisable)
+    (vl::typecheck (vl::expand/vl '(let ((a 12))
+				    (setf 24 a))))))
+
+
 (test test-assignment-same-width
   "Test we can assign."
   (vl::with-new-frame
