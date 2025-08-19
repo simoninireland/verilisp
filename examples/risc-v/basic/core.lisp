@@ -136,7 +136,7 @@
 
 	  ;; the state machine
 	  (@ (posedge clk)
-	     (tagbody
+	     (forever
 	      fetch-instruction
 		;; State 0: fetch the next instruction
 		(if reset
