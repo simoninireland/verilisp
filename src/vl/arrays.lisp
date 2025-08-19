@@ -81,11 +81,15 @@
 
 
 (defmethod representable-type-sexp-p ((tytag (eql 'array)) tyargs)
-  (destructuring-bind (ty &optional sh)
-      tyargs
+  (if (null tyargs)
+      ;; an unconstrained array type is not representable
+      nil
 
-    ;; an array is representable if its element type is
-    (representable-type-p (lub ty))))
+      (destructuring-bind (ty &optional sh)
+	  tyargs
+
+	;; an array is representable if its element type is
+	(representable-type-p (lub ty)))))
 
 
 ;; ---------- Array initialisation data ----------
