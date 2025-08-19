@@ -150,14 +150,14 @@
 		(setq rs2 (aref RegisterBank rs2Id))
 
 	      execute-writeback
-		;; State 3: execute the instruction and write back results
+		;; State 2: execute the instruction and write back results
 
 		;; writeback data to registers
 		(when (and (or isALUReg
 			       isALUImm
 			       isJAL
 			       isJALR)
-			   (/= rdId 0))
+			   (/= rdId 0))  ; don't update R0, which is constantly 0
 		  (setf (aref RegisterBank rdId) (if (or isJAL isJALR)
 						     (+ pc 4)
 						     aluOut))
