@@ -77,29 +77,41 @@
   (destructuring-bind (place start &key end width)
       selectorargs
 
-    (let ((val-width (union (foldr #'union (read-variables (remove-nulls (list start end width))) '())
-			    (read-variables val))))
-      (if (symbolp place)
-	  val-width
+    (let* ((params (foldr #'union (read-variables (remove-nulls (list start end width))) '()))
+	   (vals (read-variables val))
+	   (val-width (union params vals)))
 
-	  (destructuring-bind (psel &rest pselargs)
-	      place
-	    (union val-width
-		   (read-variables-setf psel val pselargs)))))))
+      (cond ((symbolp place)
+	     val-width)
+
+	    ((integerp place)
+	     ;; legitimate to have a constant as the value
+	     params)
+
+	    (t
+	     (destructuring-bind (psel &rest pselargs)
+		 place
+	       (union val-width
+		      (read-variables-setf psel val pselargs))))))))
 
 
 (defmethod written-variables-setf ((selector (eql 'bref)) val selectorargs)
   (destructuring-bind (place start &key end width)
       selectorargs
 
-    (if (listp place)
-	;; complex place, recurse into it
-	(destructuring-bind (psel &rest pselargs)
-	    place
-	  (written-variables-setf psel val pselargs))
+    (cond ((symbolp place)
+	   ;; variable, written to
+	   (list place))
 
-	;; variable, this is written to
-	(list place))))
+	  ((integerp place)
+	   ;; constant, nowhere to write
+	   nil)
+
+	  (t
+	   ;; complex place, recurse into it
+	   (destructuring-bind (psel &rest pselargs)
+	       place
+	     (written-variables-setf psel val pselargs))))))
 
 
 (defmethod generalised-place-sexp-p ((selector (eql 'bref)) selectorargs)

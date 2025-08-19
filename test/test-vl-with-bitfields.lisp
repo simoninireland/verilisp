@@ -126,11 +126,16 @@
 			(setf c 0)))))
 
   ;; declarations, no tests
-  (is (vl::expand/vl '(let (c)
+  (signals (unreachable-code)
+    (vl::expand/vl '(let (c)
 		       (vl::if-let-bitfields (a a a c c b b b)
 			#2r10010110
 			(setf c (+ a b))
 			(setf c 0)))))
+  (is (vl::expand/vl '(let (c)
+		       (vl::if-let-bitfields (a a a c c b b b)
+			#2r10010110
+			(setf c (+ a b))))))
 
   ;; tests and declarations
   (is (vl::expand/vl '(let (c)

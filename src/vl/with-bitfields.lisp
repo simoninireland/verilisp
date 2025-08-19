@@ -235,12 +235,12 @@ SETF will update the appropriate positons in ARG."
 	     (tests (if fixed-bit-runs
 			(mapcar (curry #'run-to-test condition) fixed-bit-runs)))
 	     (decls (if variable-runs
-			(mapcar (curry #'run-to-decl condition) variable-runs))))
+			(mapcar (curry #'run-to-decl arg) variable-runs))))
 
 	(if tests
 	    (let ((test (if (= (length tests) 1)
-		       (car tests)
-		       `(and ,@tests))))
+			    (car tests)
+			    `(and ,@tests))))
 
 	      (if decls
 		  ;; tests and declarations
