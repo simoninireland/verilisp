@@ -115,7 +115,8 @@
 		(setq aluOut (<< aluIn1 shamt)))
 
 	       (#2r010
-		(setq aluOut (< aluIn1 aluIn2))) ;; signed
+		(setq aluOut (< (the 'signed-byte aluIn1)
+				(the 'signed-byte aluIn2)))) ;; signed
 
 	       (#2r011
 		(setq aluOut (< aluIn1 aluIn2))) ;; unsigned
@@ -125,7 +126,7 @@
 
 	       (#2r101
 		(if (bref funct7 5)
-		    (setq aluOut (>> aluIn1 shamt)) ;; sign-extended
+		    (setq aluOut (>> (the 'signed-byte aluIn1) shamt)) ;; sign-extended
 		    (setq aluOut (>> aluIn1 shamt)))) ;; unsigned
 
 	       (#2r110
