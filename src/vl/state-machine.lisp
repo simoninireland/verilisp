@@ -185,9 +185,8 @@ form fell-through and should therefore continue to EXIT-STATE.")
   (destructuring-bind (condition then-branch &rest else-branch)
       args
 
-    (let* ((trailing-states (if forms
-				(parse-tagbody-forms forms
-						     nil exit-state)))
+    (let* ((trailing-states (parse-tagbody-forms forms
+						 nil exit-state))
 	   (trailing-state (if trailing-states
 			       (car trailing-states)
 			       exit-state))
@@ -272,6 +271,8 @@ form fell-through and should therefore continue to EXIT-STATE.")
   (destructuring-bind (condition &rest cases)
       args
 
+    ;; TODO Optimise this like IF
+
     (let* ((trailing-states (parse-tagbody-forms forms nil exit-state))
 	   (trailing-state (if trailing-states
 			       (car trailing-states)
@@ -353,27 +354,35 @@ Return a list of of states created, initial state first."
   (if (null forms)
       ;; no more forms to process
       (progn
-	(if (and current-state exit-state)
-	    ;; jump to the exit of the current machine
-	    (appendf (body current-state) (list `(go ,(label exit-state)))))
+	(if current-state
+	    (when exit-state
+		;; we have a current state, append a jump to the exit state
+		(appendf (body current-state) (list `(go ,(label exit-state))))
+		nil)
 
-	nil)
+	    (when exit-state
+		;; we don't have a current state, create one to hold the jump
+		;; (which may then be optimised away later)
+		(let ((jump-state (make-instance 'state)))
+		  (appendf (body jump-state) (list `(go ,(label exit-state))))
+		  (list jump-state)))))
 
       ;; forms to do
       (destructuring-bind (form &rest rest)
 	  forms
 
 	(if (state-label-p form)
-	    ;; new state marker, create a new state
+	    ;; new state marker
 	    (let ((new-state (make-instance 'state :label form)))
 	      (if current-state
 		  ;; link current state to new state
 		  (appendf (body current-state) (list `(go ,(label new-state)))))
 
-	      ;; use this new state going forward
+	      ;; use this new state as the current state going forward
 	      (cons new-state
 		    (parse-tagbody-forms rest new-state exit-state)))
 
+	    ;; executable form
 	    (if (null current-state)
 		;; no current state, create one and re-parse
 		(let ((initial-state (make-instance 'state)))
@@ -530,6 +539,10 @@ Return LABEL if the the state is not merged."
       ;; ones in scope when the code was analysed, with others beng created
       ;; by SYNTHESISE-STATE-MACHINE. which adds the necessary types and
       ;; representations directly
+
+      ;; We put the state machine synthesis into its own frame so that
+      ;; it can declare the state variable and merge table metavariables
+      ;; for use in its own further transformation.
 
       (with-new-frame
 	(let* ((synth (synthesise-state-machine newargs))
