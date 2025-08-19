@@ -97,8 +97,9 @@
 ;; Fixed-width types are representable if they have positive widths
 
 (defmethod representable-type-sexp-p ((tytag (eql 'unsigned-byte)) tyargs)
-  (let ((w (eval-in-static-environment (car tyargs))))
-    (> w 0)))
+  (if (not (null tyargs))
+      (let ((w (eval-in-static-environment (car tyargs))))
+	(> w 0))))
 
 
 (defmethod representable-type-sexp-p ((tytag (eql 'bit)) tyargs)
@@ -106,8 +107,9 @@
 
 
 (defmethod representable-type-sexp-p ((tytag (eql 'signed-byte)) tyargs)
-  (let ((w (eval-in-static-environment (car tyargs))))
-    (> w 0)))
+  (if (not (null tyargs))
+      (let ((w (eval-in-static-environment (car tyargs))))
+	(> w 0))))
 
 
 ;; ---------- Least upper-bound ----------
@@ -226,11 +228,13 @@
 
 
 (defmethod bitwidth-type ((tytag (eql 'unsigned-byte)) tyargs)
-  (car tyargs))
+  (if (not (null tyargs))
+      (car tyargs)))
 
 
 (defmethod bitwidth-type ((tytag (eql 'signed-byte)) tyargs)
-  (car tyargs))
+  (if (not (null tyargs))
+      (car tyargs)))
 
 
 (defmethod bitwidth-type ((tytag (eql 'bit)) tyargs)

@@ -28,6 +28,17 @@
       args
     (unquote ty)
 
+    (compute-type val)
+
+    ;; the type we assume is the type we're asserting
+    ty))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'the)) args)
+  (destructuring-bind (ty val)
+      args
+    (unquote ty)
+
     (let ((tyval (compute-type val)))
       (cond ((eql ty t)
 	     ;; casting to top does nothing
@@ -55,7 +66,14 @@
 (defmethod synthesise-sexp ((fun (eql 'the)) args)
   (destructuring-bind (ty val)
       args
-    (synthesise val)))
+    (unquote ty)
+
+    (if (subtype-p ty 'signed-byte)
+	(progn
+	  (as-literal "$signed(")
+	  (synthesise val)
+	  (as-literal ")"))
+	(synthrsise val))))
 
 
 ;; ---------- Type coercions ----------
@@ -65,14 +83,21 @@
       args
     (unquote ty)
 
-    (let ((vty (compute-type val)))
-      (if (and (fixed-width-p ty)
-	       (fixed-width-p vty))
-	  ;; can coerce fixed-width types
-	  (let ((tyw (bitwidth (deconstruct-type ty)))
-		(vtyw (bitwidth (deconstruct-type vty))))
-	    ty)
+    (compute-type val)
 
+    ;; the type of the coercion is the type we're coercing to
+    ty))
+
+
+(defmethod apply-type-constraints-sexp ((fun (eql 'coerce)) args)
+  (destructuring-bind (val ty)
+      args
+    (unquote ty)
+
+    ;; check we can do the coercion
+    (let ((vty (compute-type val)))
+      (if (not (and (fixed-width-p ty)
+		    (fixed-width-p vty)))
 	  ;; can't coerce anything else for now
 	  (error 'coercion-mismatch :expected ty :got vty
 				    :hint "Make sure the two types are coercible.")))))
@@ -92,14 +117,15 @@
     (unquote ty)
 
     (let* ((vty (compute-type val))
-	   (tyw (bitwidth (deconstruct-type ty)))
-	   (vtyw (bitwidth (deconstruct-type vty))))
+	   (tyw (bitwidth ty))
+	   (vtyw (bitwidth vty)))
 
       (cond
 	;; type are both unsigned
 	((and (unsigned-byte-p vty)
 	      (unsigned-byte-p ty))
-	 (cond ((= vtyw tyw)
+	 (cond ((or (null tyw)
+		    (= vtyw tyw))
 		;; types have equal width, synthesise unchanged
 		(synthesise val))
 
@@ -116,7 +142,8 @@
 	;; type are both signed
 	((and (signed-byte-p vty)
 	      (signed-byte-p ty))
-	 (cond ((= vtyw tyw)
+	 (cond ((or (null tyw)
+		    (= vtyw tyw))
 		;; types have equal width, leave unchanged
 		(synthesise val))
 
@@ -138,11 +165,12 @@
 	;; value is unsigned, needed as signed
 	((and (unsigned-byte-p vty)
 	      (signed-byte-p ty))
-	 (cond  ((= vtyw tyw)
-		 ;; types have equal width, reduce value and zero-extend
-		 (let ((reduced (- tyw 2)))
-		   (synthesise `(make-bitfields 0
-						(bref ,val ,reduced :end 0)))))
+	 (cond ((or (null tyw)
+		    (= vtyw tyw))
+		;; types have equal width, reduce value and zero-extend
+		(let ((reduced (- tyw 2)))
+		  (synthesise `(make-bitfields 0
+					       (bref ,val ,reduced :end 0)))))
 
 		((> vtyw tyw)
 		 ;; value is wider, shrink it
