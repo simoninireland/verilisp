@@ -286,9 +286,9 @@ Calling LUB with a single type is a quick way to simplify TY."
 	       (lub-type ty1tag ty1args ty2tag ty2args)))))
 
     (if (null tys)
-	;; only one type, evaluate it
+	;; only one type, evaluate it against NIL
 	;; (otherwise FOLDR short-cuts and returns TY)
-	(eval-type ty)
+	(lubtype ty nil)
 
 	(foldr #'lubtype tys ty))))
 
@@ -339,9 +339,9 @@ largest representable type that can be formed."
 			  nil)))))))
 
     (if (null tys)
-	;; only one type, evaluate it
+	;; only one type, evaluate it against NIL
 	;; (otherwise FOLDR short-cuts and returns TY)
-	(eval-type ty)
+	(lurbtype ty nil)
 
 	(foldr #'lurbtype tys ty))))
 
