@@ -39,7 +39,7 @@
 
 (defmethod synthesise-sexp ((fun (eql 'make-bitfields)) args)
   (as-literal "{")
-  (as-inline-forms args :sep ",")
+  (as-inline-forms args :sep ", ")
   (as-literal "}"))
 
 
