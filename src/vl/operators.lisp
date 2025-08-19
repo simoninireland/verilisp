@@ -206,7 +206,7 @@ Use VERILOG-OPERATOR if provided for synthesis."
 
 ;; ---------- Logical ----------
 
-(defmacro define-fixed-width-binary-logical-operator (symbol &optional verilog-operator)
+(defmacro define-fixed-width-nary-logical-operator (symbol &optional verilog-operator)
   "Declare the necessary functions for SYMBOL.
 
 Use VERILOG-OPERATOR if provided for synthesis."
@@ -226,16 +226,10 @@ Use VERILOG-OPERATOR if provided for synthesis."
 
 
      (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
-       (destructuring-bind (l r)
-	   args
-	 (as-literal "(")
-	 (synthesise l)
-	 (as-literal ,(format nil " ~a " verilog-operator))
-	 (synthesise r)
-	 (as-literal ")")))))
+       (as-infix ,verilog-operator args))))
 
-(define-fixed-width-binary-logical-operator and "&&")
-(define-fixed-width-binary-logical-operator or "||")
+(define-fixed-width-nary-logical-operator and "&&")
+(define-fixed-width-nary-logical-operator or "||")
 
 
 (defmacro define-fixed-width-unary-logical-operator (symbol &optional verilog-operator)
