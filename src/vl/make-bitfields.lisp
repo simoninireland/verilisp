@@ -90,7 +90,7 @@ The BASE used can be 2, 8, 10, or 16."
     (as-literal "{")
     (if (static-constant-p bs)
 	;; value is a static constant, output it
-	(let ((w (bitwidth (ensure-static bs))))
+	(let ((w (bits-for-integer (ensure-static bs))))
 	  (synthesise-fixed-width-constant bs w))
 
 	;; value is an expression, synthesise it
