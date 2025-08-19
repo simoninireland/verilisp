@@ -169,32 +169,36 @@
   (lub (construct-type ty1tag ty1args) '(unsigned-byte 1)))
 
 
-(defmethod lub-type((ty1tag (eql 'or)) ty1args ty2tag ty2args)
-  (if (every #'fixed-width-p ty1args)
-      ;; the union of fixed-width types is the maximum of their widths
-      (let* ((w (apply #'max (mapcar (compose #'bitwidth #'eval-type) ty1args)))
-	     (tyu `(,(if (every (rcurry #'subtype-p 'unsigned-byte) ty1args)
-		      'unsigned-byte
-		      'signed-byte)
-		    ,w)))
-	(lub tyu (construct-type ty2tag ty2args)))
+;; Form unions and intersections of fixed-width types
 
-      ;; otherwise fall through
-      (call-next-method)))
+(defmethod lub-type((ty1tag (eql 'or)) ty1args ty2tag ty2args)
+  (let ((tys (mapcar #'lub ty1args)))
+    (if (every #'fixed-width-p tys)
+	;; the union of fixed-width types is the maximum of their widths
+	(let* ((w (apply #'max (mapcar #'bitwidth tys)))
+	       (tyu `(,(if (every (rcurry #'subtype-p 'unsigned-byte) tys)
+			   'unsigned-byte
+			   'signed-byte)
+		      ,w)))
+	  (lub tyu (construct-type ty2tag ty2args)))
+
+	;; otherwise fall through
+	(call-next-method))))
 
 
 (defmethod lub-type((ty1tag (eql 'and)) ty1args ty2tag ty2args)
-  (if (every #'fixed-width-p ty1args)
-      ;; the intersection of fixed-width types is the sum of their widths
-      (let* ((w (apply #'+ (mapcar (compose #'bitwidth #'eval-type) ty1args)))
-	     (tyu `(,(if (every (rcurry #'subtype-p 'unsigned-byte) ty1args)
-			 'unsigned-byte
-			 'signed-byte)
-		    ,w)))
-	(lub tyu (construct-type ty2tag ty2args)))
+  (let ((tys (mapcar #'lub ty1args)))
+    (if (every #'fixed-width-p tys)
+	;; the intersection of fixed-width types is the sum of their widths
+	(let* ((w (apply #'+ (mapcar #'bitwidth tys)))
+	       (tyu `(,(if (every (rcurry #'subtype-p 'unsigned-byte) tys)
+			   'unsigned-byte
+			   'signed-byte)
+		      ,w)))
+	  (lub tyu (construct-type ty2tag ty2args)))
 
-      ;; otherwise fall through
-      (call-next-method)))
+	;; otherwise fall through
+	(call-next-method))))
 
 
 ;; ---------- Widths ----------
