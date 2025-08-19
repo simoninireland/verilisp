@@ -648,7 +648,13 @@ may be redirected by higher-level functions.")
   (:method ((form list))
     (let ((fun (car form))
 	  (args (cdr form)))
-      (lispify-sexp fun args))))
+
+      (if (eql fun 'quote)
+	  ;; leave quoted lisp expressions alone
+	  `(,fun ,@args)
+
+	  ;; otherwise reduce
+	  (lispify-sexp fun args)))))
 
 
 (defgeneric lispify-sexp (fun args)
