@@ -227,3 +227,28 @@
     (vl::typecheck p)
     (is (contains-form-p '(setq c 1) p))
     (is (contains-form-p '(setq c 2) p))))
+
+
+(test test-tagbody-coalesce-conditional
+  "Testw e coalesce singleton-state branches of a conditional."
+  (with-new-frame
+    (let ((p (vl::expand/vl '(let (a b)
+			      (tagbody
+			       initial-state
+				 (if a
+				     (setq b 1)
+				     (progn
+				       (setq b 2)
+				       (go jump-state)))
+				 (setq a (+ a 1))
+			       return-state
+				 (go initial-state)
+			       jump-state
+				 (setq a (+ b 1))
+				 (if (> a b)
+				     (go return-state)))))))
+
+      (vl::typecheck p)
+      (let* ((q (vl::synthesise-state-machine (cdr (elt p 2))))
+	     (states (cddr (elt (elt q 3) 3))))
+	(is (<= (length states) 3))))))

@@ -33,13 +33,22 @@
     :documentation "The forms in the body of the state."
     :initarg :body
     :initform nil
-    :accessor body))
+    :accessor body)
+   (synthetic-p
+    :documentation "Flag whether the state is synthetic."
+    :initform nil
+    :reader synthetic-p)
+   (go-target-p
+    :documentation "Flag whether the state is the target of a GO form."
+    :initform nil
+    :accessor go-target-p))
   (:documentation "Abstract state in a state machine."))
 
 
 (defmethod initialize-instance :after ((s state) &key label &allow-other-keys)
   (unless label
-    (setf (slot-value s 'label) (gensym))))
+    (setf (slot-value s 'label) (gensym))
+    (setf (slot-value s 'synthetic-p) t)))
 
 
 ;; ---------- TAGBODY ----------
@@ -138,9 +147,10 @@ form fell-through and should therefore continue to EXIT-STATE.")
 
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'tagbody)) args forms current-state exit-state)
   ;; nested machine, start a new state for this machine
-  (let* ((trailing-states (parse-tagbody-forms forms
-					       nil
-					       exit-state))
+  (let* ((trailing-states (if forms
+			      (parse-tagbody-forms forms
+						   nil
+						   exit-state)))
 	 (trailing-state (if (null trailing-states)
 			     exit-state
 			     (car trailing-states)))
@@ -148,24 +158,25 @@ form fell-through and should therefore continue to EXIT-STATE.")
 					     current-state
 					     trailing-state)))
 
-    (append ;;(list current-state)
-     nested-states
-     trailing-states)))
+    (append nested-states
+	    (if trailing-states
+		trailing-states))))
 
 
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'progn)) args forms current-state exit-state)
-  (let* ((trailing-states (parse-tagbody-forms forms
-					       nil exit-state))
+  (let* ((trailing-states (if forms
+			      (parse-tagbody-forms forms
+						   nil exit-state)))
 	 (trailing-state (if trailing-states
 			     (car trailing-states)
 			     exit-state))
-	 (trailing-label (label trailing-state))
 	 (nested-states (parse-tagbody-forms args
 					     current-state
 					     trailing-state)))
 
     (append nested-states
-	    trailing-states)))
+	    (if trailing-states
+		trailing-states))))
 
 
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'if)) args forms current-state exit-state)
@@ -174,12 +185,14 @@ form fell-through and should therefore continue to EXIT-STATE.")
   (destructuring-bind (condition then-branch &rest else-branch)
       args
 
-    (let* ((trailing-states (parse-tagbody-forms forms
-						 nil exit-state))
+    (let* ((trailing-states (if forms
+				(parse-tagbody-forms forms
+						     nil exit-state)))
 	   (trailing-state (if trailing-states
 			       (car trailing-states)
 			       exit-state))
-	   (trailing-label (label trailing-state))
+	   (trailing-label (if trailing-state
+			       (label trailing-state)))
 	   (then-states (parse-tagbody-forms (list then-branch)
 					     nil trailing-state))
 	   (then-state (car then-states))
@@ -192,24 +205,67 @@ form fell-through and should therefore continue to EXIT-STATE.")
 	   (else-label (if else-states
 			   (label else-state))))
 
-      ;; add the condition to the current state
-      (let ((cform (if else-states
-		       ;; two arms
-		       `(if ,condition
-			    (go ,then-label)
-			    (go ,else-label))
+      (cond ((and (= (length then-states) 1)
+		  (or (null else-states)
+		      (= (length else-states) 1)))
+	     ;; we can coalesce the arms into this state
 
-		       ;; one arm, jump to the trailing state on false
-		       `(if ,condition
-			    (go ,then-label)
-			    (go ,trailing-label)))))
-	(appendf (body current-state) (list cform)))
+	     ;; recompile the arms to fall-through
+	     (let* ((then-states (parse-tagbody-forms (list then-branch)
+						      nil nil))
+		    (then-state (car then-states))
+		    (then-label (label then-state))
+		    (else-states (if else-branch
+				     (parse-tagbody-forms else-branch
+							  nil nil)))
+		    (else-state (if else-states
+				    (car else-states))))
 
-      (append ;;(list current-state)
-       then-states
-       (if else-states
-	   else-states)
-       trailing-states))))
+	       (let ((cform (if else-states
+				;; two arms
+				`(if ,condition
+				     (progn
+				       ,@(body then-state))
+				     (progn
+				       ,@(body else-state)))
+
+				;; one arm
+				`(if ,condition
+				     (progn
+				       ,@(body then-state))))))
+
+		 ;; add the condition to the current state
+		 (appendf (body current-state) (list cform))
+
+		 ;; add the start of trailing states to the current state
+		 (when trailing-state
+		   (appendf (body current-state) (body trailing-state))
+
+		   (cdr trailing-states)))))
+
+	    ;; TODO There are some more optimisations we can add here, for
+	    ;; conditionals with one single-state side, etc
+
+	    (t
+	     ;; default creates new states for both arms
+	     (let ((cform (if else-states
+			      ;; two arms
+			      `(if ,condition
+				   (go ,then-label)
+				   (go ,else-label))
+
+			      ;; one arm, jump to the trailing state on false
+			      `(if ,condition
+				   (go ,then-label)
+				   (go ,trailing-label)))))
+
+	       (appendf (body current-state) (list cform))
+
+	       (append then-states
+		       (if else-states
+			   else-states)
+		       (if trailing-states
+			   trailing-states))))))))
 
 
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'case)) args forms current-state exit-state)
@@ -239,9 +295,8 @@ form fell-through and should therefore continue to EXIT-STATE.")
 		      ,@new-arms)))
 	(appendf (body current-state) (list cform)))
 
-      (append ;;(list current-state)
-       arm-states
-       trailing-states))))
+      (append arm-states
+	      trailing-states))))
 
 
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'go)) args forms current-state exit-state)
@@ -267,11 +322,6 @@ form fell-through and should therefore continue to EXIT-STATE.")
 			       (parse-tagbody-forms forms
 						    nil
 						    exit-state))))
-      ;; (if trailing-states
-      ;;	  (cons current-state
-      ;;		trailing-states)
-      ;;	  (list current-state))
-
       trailing-states)))
 
 
@@ -303,7 +353,7 @@ Return a list of of states created, initial state first."
   (if (null forms)
       ;; no more forms to process
       (progn
-	(if current-state
+	(if (and current-state exit-state)
 	    ;; jump to the exit of the current machine
 	    (appendf (body current-state) (list `(go ,(label exit-state)))))
 
@@ -347,8 +397,8 @@ Return a list of of states created, initial state first."
 (defun build-state-machine (forms)
   "Parse FORMS as the body of a TAGBODY, building a state machine.
 
-The resulting machien is necessarily 'top-level', not contained in
-another machine. It has a passivating state added to the end, whcih it
+The resulting machine is necessarily 'top-level', not contained in
+another machine. It has a passivating state added to the end, which it
 will remain in if it ever gets to that point. This allows machines to
 be built that run once and then stop. Use explicit GO forms, or
 looping macros like FOREVER, to keep the machine running."
@@ -364,7 +414,7 @@ looping macros like FOREVER, to keep the machine running."
 (defun merge-state-machine-empty-states (machine)
   "Return an alist mapping states in MACHINE to only the necessary states.
 
-A state is unnecessary if it is empty or consists purely of a GO to another state."
+A state is unnecessary if it consists purely of a GO to another state."
   (declare (optimize debug))
 
   (labels ((mergeable-state (m)
