@@ -248,6 +248,9 @@ The default LUB of two types is their union type.")
 
 The actual type calculations are performed by LUB-TYPE.
 
+The upper bound may not be representable. To ensure representability,
+use LURB.
+
 Calling LUB with a single type is a quick way to simplify TY."
   (declare (optimize debug))
 
@@ -264,6 +267,60 @@ Calling LUB with a single type is a quick way to simplify TY."
 	(eval-type ty)
 
 	(foldr #'lubtype tys ty))))
+
+
+(defun lurb (ty &rest tys)
+  "Compute the least uppser representable bound of TY and TYS.
+
+The representable bound includes only the representable types in determining the
+type to be used. Any unrepresentable types in the list are used to make sure
+that the computed type is an appropriate sub-type. The advantage of this is
+that an operation can require, for example, a SIGNED-BYTE argument without
+committing to a particular width, and have that width be inferred from other
+context.
+
+For example,
+
+(LUB '(UNSIGNED-BYTE 8) 'UNSIGNED-BYTE)
+
+is UNSIGNED-BYTE, the upper bound of the two types, while
+
+(LURB '(UNSIGNED-BYTE 8) 'UNSIGNED-BYTE)
+
+is (UNSIGNED-BYTE 8), which is a sub-type of UNSIGNED-BYTE and is the
+largest representable type that can be formed."
+  (flet ((lurbtype (ty1 ty2)
+	   (let* ((ety1 (eval-type ty1))
+		  (ety2 (eval-type ty2))
+		  (rep1 (representable-type-p ety1))
+		  (rep2 (representable-type-p ety2)))
+
+	     (cond ((and rep1 rep2)
+		    ;; both types are representable, form their LUB
+		    (destructuring-bind (ty1tag ty1args)
+			(deconstruct-type ety1)
+		      (destructuring-bind (ty2tag ty2args)
+			  (deconstruct-type ety2)
+			(lub-type ty1tag ty1args ty2tag ty2args))))
+
+		   ;; one type is representable, check sub-typing and return the other
+		   (rep1
+		    (ensure-subtype ety1 ety2)
+		    ety1)
+		   (rep2
+		    (ensure-subtype ety2 ety1)
+		    ety2)
+
+		   ;; neither type is representable
+		   (t
+		    nil)))))
+
+    (if (null tys)
+	;; only one type, evaluate it
+	;; (otherwise FOLDR short-cuts and returns TY)
+	(eval-type ty)
+
+	(foldr #'lurbtype tys ty))))
 
 
 ;; ---------- Representability ----------

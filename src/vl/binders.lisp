@@ -180,7 +180,7 @@ The name is the first element, whether or not DECL is a list."
 
 	  ;; constrain the variable's type (which must be representable)
 	  (let* ((constraints (get-type-constraints n))
-		 (lubty (if constraints (apply #'lub constraints))))
+		 (lubty (if constraints (apply #'lurb constraints))))
 
 	    (let ((ty (get-type n)))
 	      (if ty
