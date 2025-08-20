@@ -510,6 +510,9 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 		      ;; width is of the type itself
 		      (bitwidth type))))
 
+      (if (signed-byte-p type)
+	  (as-literal "signed "))
+
       (when (or (not (numberp width))
 		(> width 1))
 	;; we have a width (or a width expression)
@@ -532,6 +535,7 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 (defun synthesise-wire (n)
   "Synthesise a wire N a LET block."
   (let ((v (get-initial-value n :default 0)))
+    (as-literal "wire ")
     (let* ((type (get-type n))
 	   (width (if (array-type-p type)
 		      ;; width is the width of the element type
@@ -539,7 +543,10 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 
 		      ;; width is of the type itself
 		      (bitwidth type))))
-      (as-literal "wire ")
+
+      (if (signed-byte-p type)
+	  (as-literal "signed "))
+
       (when (or (not (numberp width))
 		(> width 1))
 	;; we have a width (or a width expression)
