@@ -137,7 +137,7 @@
 
 	  ;; the state machine
 	  (@ (posedge clk)
-	     (forever
+	     (tagbody
 	      fetch-instruction
 		;; State 0: fetch the next instruction
 		(if reset
@@ -174,4 +174,6 @@
 				 (isJALR
 				  (+ rs1 Iimm))
 				 (t
-				  (+ pc 4))))))))))))
+				  (+ pc 4)))))
+
+		(go fetch-instruction))))))))
