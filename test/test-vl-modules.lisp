@@ -326,7 +326,7 @@
 	(is (vl::variable-property 'c 'read))
 	(is (vl::variable-property 'c 'written))
 	(is (vl::variable-property 'd 'read))
-	(is (not (vl::variable-property 'd 'written)))))))
+	(is (vl::variable-property 'd 'written))))))
 
 
 ;; ---------- Larger and more complicated/contrived examples ----------
@@ -449,3 +449,119 @@
 
     (is (= errors 1))
     (is (= warnings 0))))
+
+
+(test test-module-type-representation
+  "Test we get the right types and representations for instanciated modules."
+  (vl::clear-global-environment)
+
+  (defmodule/vl clockworks (clk-in reset-in
+			    clk reset
+			    &key (slow 0))
+    (declare (type bit clk-in reset-in clk reset)
+	     (direction in clk-in reset-in)
+	     (direction out clk reset))
+
+    ;; clock divider
+    (let ((slow-clk 0))
+      (declare (type (unsigned-byte (1+ slow)) slow-clk))
+
+      (@ (posedge clk-in)
+	 (incf slow-clk))
+      (setf clk (bref slow-clk slow)))
+
+    (setq reset reset-in))
+
+  (defmodule/vl soc (clk-in clk reset)
+    (declare (type bit clk-in clk reset))
+
+    (let ((c (make-instance 'clockworks :clk-in clk-in
+					:reset-in 0
+					:clk clk
+					:reset reset
+					:slow 9)))
+      (setf reset 1)))
+
+  (let ((f (cadr (assoc 'vl::local-frame (elt (elt (vl::get-module 'soc) 3) 1)))))
+    (is (vl::subtype-p(vl::get-environment-property 'c 'type f) 'module))
+    (is (eql (vl::get-environment-property 'c 'as f) 'module))))
+
+
+(test test-module-direction-inference
+  "Test we use directions to get directions."
+  (vl::clear-global-environment)
+
+  (defmodule/vl clockworks (clk-in reset-in
+				   clk reset
+				   &key (slow 0))
+    (declare (type bit clk-in reset-in clk reset)
+	     (direction in clk-in reset-in)
+	     (direction out clk reset))
+
+    ;; clock divider
+    (let ((slow-clk 0))
+      (declare (type (unsigned-byte (1+ slow)) slow-clk))
+
+      (@ (posedge clk-in)
+	 (incf slow-clk))
+      (setf clk (bref slow-clk slow)))
+
+    (setq reset reset-in))
+
+  (defmodule/vl soc (clk-in clk reset)
+    (declare (type bit clk-in clk reset))
+
+    (let ((c (make-instance 'clockworks :clk-in clk-in
+					:reset-in 0
+					:clk clk
+					:reset reset
+					:slow 9)))
+      (setf reset 1)))
+
+  (let ((f (vl::module-frame (vl::get-module-interface 'soc))))
+    (is (vl::get-environment-property 'clk-in 'read f))
+    (is (not (vl::get-environment-property 'clk-in 'vl::written f)))
+    (is (vl::get-environment-property 'clk 'vl::written f))))
+
+
+(test test-module-out-inout
+  "Test we force out and inout parameters to be generalised places."
+  (vl::clear-global-environment)
+
+  (defmodule/vl clockworks (clk-in reset-in
+				   clk reset
+				   &key (slow 0))
+    (declare (type bit clk-in reset-in clk reset)
+	     (direction in clk-in reset-in)
+	     (direction out clk reset))
+
+    ;; clock divider
+    (let ((slow-clk 0))
+      (declare (type (unsigned-byte (1+ slow)) slow-clk))
+
+      (@ (posedge clk-in)
+	 (incf slow-clk))
+      (setf clk (bref slow-clk slow)))
+
+    (setq reset reset-in))
+
+  (flet ((instanciate (x)
+	   (let ((p (vl::expand/vl `(let (clk-in clk reset-in reset
+					  (b #2r100))
+				      (let ((cw1 (make-instance 'clockworks
+								:clk-in clk-in
+								:clk ,x
+								:reset-in reset-in
+								:reset reset)))
+					(setq reset-in 1))))))
+	     (vl:typecheck/vl p))))
+
+    ;; variables are OK
+    (is (instanciate 'b))
+
+    ;; bits in a number are OK
+    (is (instanciate '(bref b 2)))
+
+    ;; constants fail
+    (signals (vl:not-importable)
+      (instanciate 0))))

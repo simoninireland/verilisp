@@ -261,24 +261,25 @@
 
 (test test-let-representation-inference
   "Check we infer the right representations."
-  (let* ((p (expand/vl `(let ((a 23)
-			      (b (+ 56 17))
-			      (c 0))
-			  (setq a (+ c b))
-			  (let ((d (+ a b)))
-			    (setq c (bref d 2 :end 0)))))))
-    (vl::typecheck p)
+  (vl::with-new-frame
+    (let* ((p (expand/vl `(let ((a 23)
+				(b (+ 56 17))
+				(c 0))
+			    (setq a (+ c b))
+			    (let ((d (+ a b)))
+			      (setq c (bref d 2 :end 0)))))))
+      (vl::typecheck p)
 
-    (let ((decls (cadr p)))		; outer LET
-      (with-local-frame decls
-	(is (eql (vl::variable-property 'a 'as) 'register))
-	(is (eql (vl::variable-property 'b 'as) 'constant))
-	(is (eql (vl::variable-property 'a 'as) 'register))))
+      (let ((decls (cadr p)))		; outer LET
+	(with-local-frame decls
+	  (is (eql (vl::variable-property 'a 'as) 'register))
+	  (is (eql (vl::variable-property 'b 'as) 'constant))
+	  (is (eql (vl::variable-property 'a 'as) 'register))))
 
-    (let ((decls (elt (elt p 3) 1)))  ; inner LET
-      (format t "~a" decls)
-      (with-local-frame decls
-	(is (eql (vl::variable-property 'd 'as) 'wire))))))
+      (let ((decls (elt (elt p 3) 1)))	; inner LET
+	(format t "~a" decls)
+	(with-local-frame decls
+	  (is (eql (vl::variable-property 'd 'as) 'wire)))))))
 
 
 ;; ---------- Variable accesses ----------
