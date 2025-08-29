@@ -24,11 +24,8 @@
 ;; ---------- Representationa ----------
 
 (deftype representation ()
-  "The type of variable representations.
-
-Valid representations in LET forms are REGISTER, WIRE, or CONSTANT.
-(PARAMETER is also valid from MODULE forms.)"
-  '(member 'register 'wire 'constant))
+  "The type of variable representations."
+  '(member 'register 'wire 'constant 'parameter 'module))
 
 
 (defun representation-p (rep)
@@ -41,7 +38,7 @@ Valid representations in LET forms are REGISTER, WIRE, or CONSTANT.
 
 Signal REPRESENTATION-MISMATCH as an error if not."
   (unless (representation-p rep)
-    (error 'representation-mismatch :expected (list 'register 'wire 'constant) :got rep)))
+    (error 'representation-mismatch :expected '(register wire constant parameter module) :got rep)))
 
 
 ;; ---------- Local frames ----------
@@ -147,9 +144,14 @@ The name is the first element, whether or not DECL is a list."
 		      (compute-type v))
 		    '(unsigned-byte 1))))
 
-	;; arrays types are known at construction, so don't need to be inferred
-	(if (subtype-p ty 'array)
-	    (set-variable-property n 'type ty))
+	;; array and module types are known at construction, so don't need to be inferred
+	(when (or (subtype-p ty 'array)
+		  (subtype-p ty 'module))
+	  (set-variable-property n 'type ty)
+
+	  ;; modules also are their own representation
+	  (when (subtype-p ty 'module)
+	    (set-variable-property n 'as 'module)))
 
 	;; constrain the variable
 	(add-type-constraint n ty)))))
@@ -216,6 +218,11 @@ The name is the first element, whether or not DECL is a list."
       args
 
     (with-local-frame decls
+      ;; do representation inference on initial values
+      (dolist (n (variables-declared-in-current-frame))
+	(if-let ((v (variable-property n 'initial-value)))
+	  (infer-representation v)))
+
       ;; do representation inference in body
       (infer-representation (with-implicit-progn body))
 
