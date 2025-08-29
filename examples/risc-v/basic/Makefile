@@ -41,14 +41,6 @@ ASM_SOURCES = firmware.s
 RM = rm -fr
 
 
-# ---------- Derived filenames ----------
-
-ASM_STEMS = $(foreach fn,$(ASM_SOURCES), $(shell basename $(fn) .s))
-ASM_GENERATED = $(foreach stem,$(ASM_STEMS),$(stem).o $(stem).hex)
-ASM_OBJECTS = $(foreach stem,$(ASM_STEMS),$(stem).o)
-ASM_HEXES = $(foreach stem,$(ASM_STEMS),$(stem).hex)
-
-
 # ---------- Top-level targets ----------
 
 # Build the target bitstream
@@ -56,6 +48,11 @@ $(TARGET): $(OBJECT) $(CONFIG)
 
 
 $(OBJECT): $(ASM_HEXES) $(SOURCES)
+
+
+# Clean-up the build directory
+clean:
+	$(RM) $(OBJECT) $(GENERATED)
 
 
 # Print a help message

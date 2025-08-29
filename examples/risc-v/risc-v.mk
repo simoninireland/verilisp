@@ -46,6 +46,13 @@ AS_OPTS = -march=rv32i -mabi=ilp32 -mno-relax -fPIC
 LD_OPTS = -T bram.ld -m elf32lriscv -nostdlib
 GCC_OPTS = -nostdlib $(AS_OPTS) -static -Wl,--section-start=.text=$(BASE_ADDRESS)
 
+# Generated files
+ASM_STEMS = $(foreach fn,$(ASM_SOURCES), $(shell basename $(fn) .s))
+GENERATED += $(foreach stem,$(ASM_STEMS),$(stem).o $(stem).hex)
+ASM_OBJECTS = $(foreach stem,$(ASM_STEMS),$(stem).o)
+ASM_HEXES = $(foreach stem,$(ASM_STEMS),$(stem).hex)
+
+
 # Command to run tools in a container (if requested)
 ifneq ($(RISCV_CONTAINER_TAG),)
 RISCV_IN_CONTAINER = $(DOCKER) run -it --rm --mount type=bind,source=`pwd`,target=/work $(RISCV_CONTAINER_TAG)

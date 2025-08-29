@@ -53,7 +53,7 @@ endif
 
 # Generated files
 FPGA_STEMS = $(foreach fn,$(SOURCES), $(shell basename $(fn) .lisp))
-FPGA_GENERATED += $(foreach stem,$(FPGA_STEMS),$(stem).v $(stem).asc $(stem).bin $(stem).json)
+GENERATED += $(foreach stem,$(FPGA_STEMS),$(stem).v $(stem).asc $(stem).bin $(stem).json)
 
 # Command to run tools in a container (if requested)
 # (Container must run privileged to be able to upload to the device.)
@@ -71,11 +71,6 @@ target: $(TARGET)
 # Upload the target bitstream to the device
 upload: $(TARGET)
 	$(ICESTORM_IN_CONTAINER) $(PROGRAM) $(PROGRAM_OPTS) $(TARGET)
-
-
-# Clean-up the build directory
-clean:
-	$(RM) $(OBJECT) $(FPGA_GENERATED)
 
 
 # ---------- Implicit rules ----------
