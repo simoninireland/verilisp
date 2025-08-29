@@ -118,6 +118,11 @@ A dependency is a variable that's read in assigning values to N."
   (set-variable-property n 'read t))
 
 
+(defun mark-variables-as-read (ns)
+  "Annotate all variables in NS as having been read."
+  (mapc #'mark-variable-as-read ns))
+
+
 (defun variable-read-p (n)
   "Test whether N is accessed as part of a read operation."
   (variable-property n 'read))
@@ -126,6 +131,11 @@ A dependency is a variable that's read in assigning values to N."
 (defun mark-variable-as-written (n)
   "Annotate N as having been written to."
   (set-variable-property n 'written t))
+
+
+(defun mark-variables-as-written (ns)
+  "Annotate all variables in NS as having been written to."
+  (mapc #'mark-variable-as-written ns))
 
 
 (defun variable-written-p (n)
