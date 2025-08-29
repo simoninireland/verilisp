@@ -525,16 +525,45 @@ Signal VALUE-MISMATCH as an error if not."
     (unquote modname)
 
     ;; add type constraints for all variables in the interface
-    (let ((intf (get-module-interface modname))
-	  (modargs (adjacent-pairs initargs)))
+    (let* ((intf (get-module-interface modname))
+	   (modargs (adjacent-pairs initargs))
+	   (f (module-frame intf)))
 
       (dolist (n (module-arguments intf))
-	(let ((v (cadr (assoc (module-argument-name-to-keyword n) modargs)))
-	      (ty (with-frame (module-frame intf)
-		    (get-type n))))
+	(let ((v (cadr (assoc (module-argument-name-to-keyword n) modargs))))
 	  (when (and (not (null v))
 		     (symbolp v))
-	    (add-type-constraint v ty)))))))
+	    (add-type-constraint v (with-frame f (get-type n))))))
+
+      intf)))
+
+
+(defmethod infer-representation-sexp ((fun (eql 'make-instance)) args)
+  (declare (optimize debug))
+
+  (destructuring-bind (modname &rest initargs)
+      args
+
+    ;; skip over leading quote of module name,
+    ;; for compatability with Common Lisp usage
+    (unquote modname)
+
+    (let* ((intf (get-module-interface modname))
+	   (modargs (adjacent-pairs initargs))
+	   (f (module-frame intf)))
+
+      ;; convert directions into read/written constraints
+      (dolist (n (module-arguments intf))
+	(let* ((v (cadr (assoc (module-argument-name-to-keyword n) modargs)))
+	       (rs (read-variables v)))
+
+	  (unless (null rs)
+	    (let ((dir (with-frame f (get-direction n))))
+
+	      (when (eql dir 'in)
+		(mark-variables-as-read rs))
+	      (when (member dir '(out inout))
+		(mark-variables-as-written rs)))))))))
 
 
 (defun ensure-module-arguments-match-interface (modname initargs intf)
@@ -598,7 +627,19 @@ Signal VALUE-MISMATCH as an error if not."
 	    (let ((v (cadr m))
 		  (ty (with-frame (module-frame intf)
 			(get-type n))))
-	      (ensure-subtype (compute-type v) ty))))))))
+	      (ensure-subtype (compute-type v) ty))))
+
+	;; if an argument is written to, it must be a generalised place
+	(let ((written-args (with-frame (module-frame intf)
+			      (remove-if-not #'variable-written-p (module-arguments intf)))))
+	  (dolist (n written-args)
+	    (let* ((k (module-argument-name-to-keyword n))
+		   (v (cadr (assoc k kv))))
+
+	      (unless (generalised-place-p v)
+		(error 'not-importable :module modname
+				       :arg k
+				       :hint "Argument must be a generalised place")))))))))
 
 
 (defmethod read-variables-sexp ((fun (eql 'make-instance)) args)
