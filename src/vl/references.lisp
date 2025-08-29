@@ -29,6 +29,10 @@
     (error 'unknown-variable :variable form)))
 
 
+(defmethod read-variables ((form (eql nil)))
+  nil)
+
+
 (defmethod read-variables ((form symbol))
   (list form))
 
