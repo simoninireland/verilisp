@@ -204,6 +204,35 @@ Use VERILOG-OPERATOR if provided for synthesis."
 (define-fixed-width-binary-bitwise-operator logxor "^")
 
 
+(defmacro define-fixed-width-unary-bitwise-operator (symbol &optional verilog-operator)
+  "Declare the necessary functions for SYMBOL.
+
+Use VERILOG-OPERATOR if provided for synthesis."
+  (unless verilog-operator
+    (setq verilog-operator symbol))
+
+  `(progn
+     (defmethod compute-type-sexp ((fun (eql ',symbol)) args)
+       '(unsigned-byte 1))
+
+
+     (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
+       (destructuring-bind (l)
+	   args
+	 (ensure-fixed-width (compute-type l))))
+
+
+     (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
+       (destructuring-bind (l)
+	   args
+	 (as-literal "(")
+	 (as-literal ,(format nil "~a " verilog-operator))
+	 (synthesise l)
+	 (as-literal ")")))))
+
+(define-fixed-width-unary-bitwise-operator lognot "!")
+
+
 ;; ---------- Logical ----------
 
 (defmacro define-fixed-width-nary-logical-operator (symbol &optional verilog-operator)
