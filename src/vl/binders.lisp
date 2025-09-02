@@ -78,15 +78,17 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 
 ;; ---------- Dependencies ----------
 
-(defun compute-let-dependencies ()
+(defun compute-let-dependencies (decls)
   "Compute the dependencies of all variables in the current frame."
   (dolist (n (variables-declared-in-current-frame))
-    (with-recover-on-error
-	;; leave dependencies alone on error
-	t
+    (let ((decl (assoc-decls n decls)))
+      (with-current-form decl
+	(with-recover-on-error
+	    ;; leave dependencies alone on error
+	    t
 
-      (if-let ((v (get-initial-value n)))
-	(add-dependencies n (read-variables v))))))
+	  (if-let ((v (get-initial-value n)))
+	    (add-dependencies n (read-variables v))))))))
 
 
 (defmethod compute-dependencies-sexp ((fun (eql 'let)) args)
@@ -94,7 +96,7 @@ Signal REPRESENTATION-MISMATCH as an error if not."
       args
 
     (with-local-frame decls
-      (compute-let-dependencies)
+      (compute-let-dependencies decls)
 
       (compute-dependencies (with-implicit-progn body)))))
 
@@ -332,24 +334,13 @@ The name is the first element, whether or not DECL is a list."
 
 ;; ---------- Macro expansion ----------
 
-(defun expand-macros-key (l kv)
-  "Expand macros in the value part of a key-value pair KV to build L."
-  (destructuring-bind (k v)
-      kv
-    (let ((nv (expand-macros v)))
-      (append l (list k nv)))))
-
-
 (defun expand-macros-decl (decl)
   "Expand macros in the value of DECL."
   (if (listp decl)
-      ;; full declaration, expand the value and keys
-      (destructuring-bind (n v &rest keys)
+      ;; full declaration, expand the value
+      (destructuring-bind (n v)
 	  decl
-	(let ((newkeys (foldr #'expand-macros-key
-			      (adjacent-pairs keys)
-			      '())))
-	  `(,n ,(expand-macros v) ,@newkeys)))
+	`(,n ,(expand-macros v)))
 
       ;; naked name, leave it alone
       decl))
@@ -517,7 +508,8 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 		      ;; width is of the type itself
 		      (bitwidth type))))
 
-      (if (signed-byte-p type)
+      (if (and (fixed-width-p type)
+	       (not (unsigned-byte-p type)))
 	  (as-literal "signed "))
 
       (when (or (not (numberp width))
@@ -536,49 +528,50 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 	      (progn
 		  (as-literal " = ")
 		  (synthesise v))))
-      (as-literal ";"))))
+      (as-literal ";")))
 
 
-(defun synthesise-wire (n)
-  "Synthesise a wire N a LET block."
-  (let ((v (get-initial-value n :default 0)))
-    (as-literal "wire ")
-    (let* ((type (get-type n))
-	   (width (if (array-type-p type)
-		      ;; width is the width of the element type
-		      (bitwidth (element-type-of-array type))
+  (defun synthesise-wire (n)
+    "Synthesise a wire N a LET block."
+    (let ((v (get-initial-value n :default 0)))
+      (as-literal "wire ")
+      (let* ((type (get-type n))
+	     (width (if (array-type-p type)
+			;; width is the width of the element type
+			(bitwidth (element-type-of-array type))
 
-		      ;; width is of the type itself
-		      (bitwidth type))))
+			;; width is of the type itself
+			(bitwidth type))))
 
-      (if (signed-byte-p type)
-	  (as-literal "signed "))
+	(if (and (fixed-width-p type)
+		 (not (unsigned-byte-p type)))
+	    (as-literal "signed "))
 
-      (when (or (not (numberp width))
-		(> width 1))
-	;; we have a width (or a width expression)
-	(as-literal"[ ")
-	(synthesise width)
-	(as-literal " - 1 : 0 ] "))
-      (synthesise n)
-      (if (array-value-p v)
-	  ;; synthesise the array constructor
-	  (synthesise-array-init n v)
+	(when (or (not (numberp width))
+		  (> width 1))
+	  ;; we have a width (or a width expression)
+	  (as-literal"[ ")
+	  (synthesise width)
+	  (as-literal " - 1 : 0 ] "))
+	(synthesise n)
+	(if (array-value-p v)
+	    ;; synthesise the array constructor
+	    (synthesise-array-init n v)
 
-	  ;; synthesise the assignment to the initial value if there is one
-	  (if v
-	      (if (static-constant-p v)
-		  (let ((iv (ensure-static v)))
-		    (unless (= iv 0)
-		      ;; initial value isn't statially zero, synthesise
+	    ;; synthesise the assignment to the initial value if there is one
+	    (if v
+		(if (static-constant-p v)
+		    (let ((iv (ensure-static v)))
+		      (unless (= iv 0)
+			;; initial value isn't statially zero, synthesise
+			(as-literal " = ")
+			(synthesise v)))
+
+		    ;; initial value is an expression, synthesise
+		    (progn
 		      (as-literal " = ")
-		      (synthesise v)))
-
-		  ;; initial value is an expression, synthesise
-		  (progn
-		    (as-literal " = ")
-		    (synthesise v)))))
-      (as-literal";"))))
+		      (synthesise v)))))
+	(as-literal";")))))
 
 
 (defun synthesise-constant (n)
