@@ -15,18 +15,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this software. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-include ../../icestick.mk
-include ../risc-v.mk
+VERILISP_ROOT = ../../..
+include $(VERILISP_ROOT)/examples/icestick.mk
+include $(VERILISP_ROOT)/examples/risc-v/risc-v.mk
 
 
 # ---------- Target code ----------
 
 # Bitstream
 TARGET = rv32i.bin
-TOPMODULE = rv32i
+TOPMODULE = soc
 
 # Sources
-SOURCES = rv32i.lisp
+SOURCES = clockworks.lisp rv32i.lisp
 CONFIG = rv32i.pcf
 OBJECT = rv32i.v
 
@@ -40,14 +41,6 @@ ASM_SOURCES = firmware.s
 RM = rm -fr
 
 
-# ---------- Derived filenames ----------
-
-ASM_STEMS = $(foreach fn,$(ASM_SOURCES), $(shell basename $(fn) .s))
-ASM_GENERATED = $(foreach stem,$(ASM_STEMS),$(stem).o $(stem).hex)
-ASM_OBJECTS = $(foreach stem,$(ASM_STEMS),$(stem).o)
-ASM_HEXES = $(foreach stem,$(ASM_STEMS),$(stem).hex)
-
-
 # ---------- Top-level targets ----------
 
 # Build the target bitstream
@@ -55,11 +48,6 @@ $(TARGET): $(OBJECT) $(CONFIG)
 
 
 $(OBJECT): $(ASM_HEXES) $(SOURCES)
-
-
-# Upload the target bitstream to the device
-upload: $(TARGET)
-	$(IN_CONTAINER) $(PROGRAM) $(PROGRAM_OPTS) $<
 
 
 # Clean-up the build directory

@@ -17,15 +17,25 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
+(use-package :alexandria)
 
-;; ---------- Supporting modules ----------
 
-;; RAM
-(defmodule/vl ram (addr rd/wr write-mask data
-		   &key (words 256))
-  (declare (type (unsigned-byte 32) addr data)
-	   (type bit rd/wr)
-	   (type (unsigned-byte 4) write-mask))
+;; ---------- Supporting modules and macros ----------
+
+(defmacro/vl flip32 (v)
+  (let ((es (mapcar (lambda (i)
+		      `(bref ,v ,i))
+		    (iota 32))))
+    `(make-bitfields ,@es)))
+
+
+(defmodule/vl ram (clk rd/wr
+		       addr read-data write-mask write-data
+		       &key (words 256))
+  (declare (type (unsigned-byte 32) addr read-data write-data)
+	   (type bit clk rd/wr)
+	   (type (unsigned-byte 4) write-mask)
+	   (ignore clk))
 
   (let ((mem (make-array (words) :element-type (unsigned-byte 32)
 				 :initial-element 0)))
@@ -34,354 +44,339 @@
        (let ((word-addr (>> addr 2)))
 	 (if rd/wr
 	     ;; writing
-	     (let ((updated (aref mem word-addr)))
-	       (with-bitfields ((b3 8) (b2 8) (b1 8) (b0 8))
-		 updated
-		 ;;TODO: Is the mask being interpreted correctly?
-		 (when (asserted-p (bref write-mask 0))
-		   (setf b0 (bref data 7 :width 8)))
-		 (when (asserted-p (bref write-mask 1))
-		   (setf b1 (bref data 15 :width 8)))
-		 (when (asserted-p (bref write-mask 2))
-		   (setf b2 (bref data 23 :width 8)))
-		 (when (asserted-p (bref write-mask 3))
-		   (setf b3 (bref data 31 :width 8))))
+	     (with-bitfields ((b3 8) (b2 8) (b1 8) (b0 8))
+	       (aref mem word-addr)
 
-	       ;; write the update data through
-	       (setf (aref mem word-addr) updated))
+	       (when (asserted-p (bref write-mask 0))
+		 (setf b0 (bref write-data 7 :width 8)))
+	       (when (asserted-p (bref write-mask 1))
+		 (setf b1 (bref write-data 15 :width 8)))
+	       (when (asserted-p (bref write-mask 2))
+		 (setf b2 (bref write-data 23 :width 8)))
+	       (when (asserted-p (bref write-mask 3))
+		 (setf b3 (bref write-data 31 :width 8))))
 
 	     ;; reading
-	     (setf data (aref mem word-addr)))))))
-
-
-;; Simple ALU
-(defmodule/vl rv32i-alu (a b add/sub sign-extending-p
-			 op shift c)
-  (declare (type (unsigned-byte 32) a b c)
-	   (type bit add/sub sign-extending-p)
-	   (type (unsigned-byte 3) op)
-	   (type (unsigned-byte 5) shift))
-
-  (@ (*)
-     (case op
-       (#2r000
-	;; add or subtract
-	(setq c (if (asserted-p add/sub)
-		    (coerce (- a b) '(unsigned-byte 32))
-		    (coerce (+ a b) '(unsigned-byte 32)))))
-
-       (#2r001
-	;; left shift
-	(setq c (coerce (<< a b) '(unsigned-byte 32))))
-
-       (#2r010
-	;; less-than unsigned
-	(setq c  (< (the '(unsigned-byte 32) a) ;TODO: TEST ME
-		    (the '(unsigned-byte 32) b))))
-
-       (#2r011
-	;; less-than signed
-	(setq c  (< (the '(signed-byte 32) a) ;TODO: TEST ME
-		    (the '(signed-byte 32) b))))
-
-       (#2r100
-	;; exclusive or
-	(setq c (logxor a b)))
-
-       (#2r101
-	;; right shift, logical or arithmetic
-	(setq c (if (asserted-p sign-extending-p)
-		    (>> a b) ;TODO: FIX ME: get the sign extension right
-		    (>> a b))))
-
-       (#2r110
-	;; or
-	(setq c (logior a b)))
-
-       (#2r100
-	;; and
-	(setq c (logand a b))))))
-
-
-;; Simple comparator
-(defmodule/vl rv32i-comparator (a b op c)
-  (declare (type (unsigned-byte 32) a b c)
-	   (type (unsigned-byte 3) op)
-	   (direction out c))
-
-  (@ (*)
-     (case op
-       (#2r000
-	;; equality
-	(setq c (= a b)))
-
-       (#2r001
-	;; inequality
-	(setq c (/= a b)))
-
-       (#2r100
-	;; less-than (signed)
-	(setq c (< a b)))
-
-       (#2r101
-	;; greater-than or equal-to (signed)
-	(setq c (>= a b)))
-
-       (#2r110
-	;; less-than (unsigned)
-	(setq c (< a b)))		;TODO:  FIX ME
-
-       (#2r111
-	;; greater-than or equal-to (unsigned)
-	(setq c (>= a b)))		;TODO:  FIX ME
-
-       (t
-	(setq c 0)))))
+	     (setf read-data (aref mem word-addr)))))))
 
 
 ;; ---------- Core ----------
 
-(defmodule/vl rv32i (clk reset)
-  (declare (type bit clk reset))
+(defmodule/vl rv32i (clk reset
+			 rd/wr addr read-data write-mask write-data
+			 status)
+  (declare (type (unsigned-byte 32) addr read-data write-data)
+	   (type bit clk reset rd/wr)
+	   (type (unsigned-byte 4) write-mask)
+	   (type (unsigned-byte 5) status))
 
   ;; state
-  (let ((pc 0)
-	(instr 0)
+  (let ((pc    0)
+	(instr 0))
+    (declare (type (unsigned-byte 32) pc instr))
 
-	;; working registers
-	(rs1             0)
-	(rs2             0)
-	(write-back-data 0)
-	(next-pc         0)
+    ;; instruction decoding
+    (with-bitfields ((funct7 7) (rs2Id 5) (rs1Id 5) (funct3 3) (rdId 5) (opcode 7))
+      instr
 
-	;; registers
-	(register-file (make-array (32) :element-type (unsigned-byte 32)
-					:initial-element 0)))
-    (declare (type (unsigned-byte 32) pc instr rs1 rs2 write-back-data next-pc))
+      (let (;; instruction classes
+	    (ALUreg-p (= opcode #2r0110011))
+	    (ALUimm-p (= opcode #2r0010011))
+	    (branch-p (= opcode #2r1100011))
+	    (JALR-p   (= opcode #2r1100111))
+	    (JAL-p    (= opcode #2r1101111))
+	    (AUIPC-p  (= opcode #2r0010111))
+	    (LUI-p    (= opcode #2r0110111))
+	    (load-p   (= opcode #2r0000011))
+	    (store-p  (= opcode #2r0100011))
+	    (system-p (= opcode #2r1110011))
 
-    ;; wiring
-    (let (a b c compare
+	    ;; immediate values
+	    (Uimm (the '(unsigned-byte 32) (make-bitfields (bref instr 31 :end 12)
+							   (extend-bits 0 12))))
+	    (Iimm (coerce (the '(signed-byte 12) (bref instr 31 :end 20))
+			  '(signed-byte 32)))
+	    (Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31 :end 25)
+								 (bref instr 11 :end 7)))
+			  '(signed-byte 32)))
+	    (Bimm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
+								 (bref instr 7)
+								 (bref instr 30 :end 25)
+								 (bref instr 11 :end 8)
+								 0))
+			  '(signed-byte 32)))
+	    (Jimm (coerce (the '(signed-byte 20) (make-bitfields (bref instr 31)
+								 (bref instr 19 :end 12)
+								 (bref instr 20)
+								 (bref instr 30 :end 21)
+								 0))
+			  '(signed-byte 32)))
 
-	  (op      0)
-	  (add/sub 0)
-	  shift-amount
+	    ;; register file and working registers
+	    (register-file    (make-array '(32) :element-type (unsigned-byte 32)
+						:initial-element 0))
+	    (rs1              0)
+	    (rs2              0)
+	    (writeback-data   0)
+	    (writeback-p      0)
 
-	  ;; memory access
-	  (addr       0)
-	  (data       0)
-	  (rd/wr      0)
-	  (write-mask 0))
-      (declare (type (unsigned-byte 32) a b c addr data)
-	       (type (unsigned-byte 3) op)
-	       (type (unsigned-byte 4) write-mask)
-	       (type bit add/sub rd/wr))
+	    ;; ALU
+	    (aluIn1 rs1)
+	    (aluIn2 (if (or ALUreg-p branch-p)
+			rs2
+			Iimm))
+	    aluOut
+	    (alu-plus (+ aluIn1 aluIn2))
+	    (alu-minus (+ (make-bitfields 1 (lognot aluIn2))
+			  (make-bitfields 1 aluIn1)
+			  (extend-bits 1 33)))
 
-      (let ((mem (make-instance 'ram :addr addr :data data
-				     :rd/wr rd/wr :write-mask write-mask))
-	    (alu (make-instance 'rv32i-alu :a a :b b :c c
-					   :op op :add/sub add/sub :sign-extending-p 1
-					   :shift shift-amount))
-	    (comparator (make-instance 'rv32i-comparator :a a :b b :c compare
-							 :op op)))
+	    ;; comparator
+	    (LT (if (logxor (bref aluIn1 31)
+			    (bref aluIn2 31))
+		    (bref aluIn1 31)
+		    (bref alu-minus 32)))
+	    (LTU (bref alu-minus 32))
+	    (EQ (0= (bref alu-minus 31 :end 0)))
+	    take-branch-p
 
-	;; decoding
-	(with-bitfields ((funct7 7) (rs2id 5) (rs1id 5) (funct3 3) (rdid 5) (opcode 7))
-	    instr
+	    ;; shifters
+	    (shamt (if ALUreg-p
+		       (bref rs2 4 :end 0)
+		       (bref instr 24 :end 20)))
+	    (shifter-in (if (= funct3 1)
+			    (flip32 aluIn1)
+			    aluIn1))
+	    (shifter (>> (the 'signed-byte (make-bitfields (and (bref instr 30)
+								(bref aluIn1 31))
+							   shifter-in))
+			 (bref aluIn2 4 :end 0)))
+	    (left-shift (flip32 shifter)))
+	(declare (type (unsigned-byte 32) rs1 rs2 writeback-data ))
 
-	  (let ((Uimm (coerce (the '(signed-byte 12) (bref instr 31 :end 12))
-			      '(signed-byte 32)))
-		(Iimm (coerce (the '(signed-byte 12) (bref instr 31 :end 20))
-			      '(signed-byte 32)))
-		(Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
-								     (bref instr 30 :end 25)
-								     (bref instr 11 :end 7)))
-			      '(signed-byte 32)))
-		(Bimm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
-								     (bref instr 7)
-								     (bref instr 30 :end 25)
-								     (bref instr 11 :end 8)
-								     0))
-			      '(signed-byte 32)))
-		(Jimm (coerce (the '(signed-byte 22) (make-bitfields (bref instr 31)
-								     (bref instr 19 :end 12)
-								     (bref instr 20)
-								     (bref instr 30 :end 21)
-								     0))
-			      '(signed-byte 32))))
+	;; ALU operations
+	(@ (*)
+	   (case funct3
+	     (#2r000
+	      (setq aluOut (if (and (bref funct7 5)
+				    (bref instr 5))
+			       (bref alu-minus 31 :end 0)
+			       alu-plus)))
+	     (#2r001
+	      (setq aluOut left-shift))
 
-	    ;; state machine
-	    (@ (posedge clk)
+	     (#2r010
+	      (setq aluOut (coerce LT '(unsigned-byte 32))))
 
-	       (if (asserted-p reset)
-		   ;; reset line asserted, perform a reset
-		   (progn
-		     (setf pc 0)
-		     (setf instr 0))
+	     (#2r010
+	      (setq aluOut (coerce LTU '(unsigned-byte 32))))
 
-		   ;; run main behaviour
-		   (tagbody
-		    instruction-fetch
-		      ;; fetch next instruction
-		      (setq addr pc)
-		      (setq rd/wr 0)
-		      (setq instr data)
-		      (setf next-pc (+ pc 4))
+	     (#2r011
+	      (setq aluOut (coerce LTU '(unsigned-byte 32))))
 
-		    data-fetch
-		      ;; fetch registers
-		      (setq rs1 (aref register-file rs1id))
-		      (setq rs2 (aref register-file rs2id))
+	     (#2r100
+	      (setq aluOut (logxor aluIn1 aluIn2)))
 
-		    execute
-		      ;; execute the behaviour for the current instruction
-		      (case opcode
-			;; ALU register-with-register arithmetic (ALUreg)
-			(#2r0110011
-			 (setq a rs1)
-			 (setq b rs2)
-			 (setq op funct3)
-			 (setq add/sub  (logand (bref funct7 5)
-						(bref instr 5)))
-			 (setf shift-amount (bref rs2 4 :end 0))
-			 (setf write-back-data c))
+	     (#2r101
+	      (setq aluOut shifter))
 
-			;; ALU register-with-immediate arithmetic (ALUimm)
-			(#2r0010011
-			 (setq a rs1)
-			 (setq b Iimm)
-			 (setq op funct3)
-			 (setq add/sub (logand (bref funct7 5)
-					       (bref instr 5)))
-			 (setf shift-amount (bref instr 24 :end 20))
-			 (setf write-back-data c))
+	     (#2r110
+	      (setq aluOut (logior aluIn1 aluIn2)))
 
-			;; conditional branch (BR)
-			(#2r1100011
-			 (setq a rs1)
-			 (setq b rs2)
-			 (setq op funct3)
-			 (if compare
-			     (setf next-pc (+ pc Bimm))))
+	     (#2r111
+	      (setq aluOut (logand aluIn1 aluIn2)))))
 
-			;; jump and link relative to register (JALR)
-			(#2r1100111
-			 (setf write-back-data (+ pc 4))
-			 (setf next-pc (+ rs1 Iimm) ))
+	;; branch-taking predicate
+	(@ (*)
+	   (case funct3
+	     (#2r000
+	      (setq take-branch-p EQ))
 
-			;; jump and link relative to PC (JAL)
-			(#2r1101111
-			 (setf write-back-data (+ pc 4))
-			 (setf next-pc (+ pc Jimm)))
+	     (#2r001
+	      (setq take-branch-p (not EQ)))
 
-			;; add upper immediate to PC (AUIPC)
-			(#2r0010111
-			 (setf write-back-data (+ pc Uimm)))
+	     (#2r100
+	      (setq take-branch-p LT))
 
-			;; load upper immediate (LUI)
-			(#2r0110111
-			 (setf write-back-data Uimm))
+	     (#2r101
+	      (setq take-branch-p (not LT)))
 
-			;; load relative to register (L)
-			(#2r0000011
-			 (let ((read-type (bref funct3 1 :width 2))
-			       (sign-extending (= (bref funct3 2) 1)))
+	     (#2r110
+	      (setq take-branch-p LTU))
 
-			   ;; load data
-			   (setq addr (+ rs1 Iimm))
-			   (setq rd/wr 0)
+	     (#2r111
+	      (setq take-branch-p (not LTU)))
 
-			   ;; extract loaded data from read data
-			   (cond ((= read-type #2r00)
-				  ;; load byte
-				  (setq write-back-data
-					(if (asserted-p (bref addr 0))
-					    (if (asserted-p (bref addr 1))
-						;; upper byte of upper half-word
-						(bref (bref data 31 :end 16) 15 :end 8)
+	     (t
+	      (setq take-branch-p 0))))
 
-						;; lower byte of upper half-word
-						(bref (bref data 31 :end 16) 7 :end 0))
+	;; memory operations
+	(let ((byte-access-p      (= (bref funct3 1 :width 2) 1))
+	      (half-word-access-p (= (bref funct3 1 :width 2) 1))
+	      (load-half-word     (if (bref load-store-addr 1)
+				      (bref read-data 31 :width 16)
+				      (bref read-data 15 :width 16)))
+	      (load-byte          (if (bref load-store-addr 0)
+				      (bref load-half-word 15 :width 8)
+				      (bref load-half-word 7 :width 8)))
+	      (load-sign-extend-p (and (not (bref funct3 2))
+				       (if byte-access-p
+					   (bref load-byte 7)
+					   (bref load-half-word 15))))
+	      (load-data (cond (byte-access-p
+				(if load-sign-extend-p
+				    (coerce load-byte (signed-byte 32))
+				    (coerce load-byte (unsigned-byte 32))))
+			       (half-word-access-p
+				(if load-sign-extend-p
+				    (coerce load-half-word (signed-byte 32))
+				    (coerce load-half-word (unsigned-byte 32))))
+			       (t
+				read-data)))
 
-					    (if (asserted-p (bits addr 1))
-						;; upper byte of lower half-word
-						(bref (bref data 15 :end 0) 15 :end 8)
+	      (store-write-mask (cond (byte-access-p
+				       (if (bref load-store-addr 1)
+					   (if (bref load-store-addr 0)
+					       #2r1000
+					       #2r0100)
+					   (if (bref load-store-addr 0)
+					       #2r0010
+					       #2r0001)))
+				      (half-word-access-p
+				       (if (bref load-store-addr 1)
+					   #2r1100
+					   #2r0011))
 
-						;; lower byte of lower half-word
-						(bref (bref data 15 :end 0) 7 :end 0))))
+				      (t
+				       #2r1111)))
 
-				  ;; sign-extend if requested
-				  (if sign-extending
-				      (setf write-back-data (coerce write-back-data '(signed-byte 8)))))
+	      ;; address computations
+	      (pc-plus-imm (+ PC (cond ((bref instr 3)
+					Jimm)
+				       ((bref instr 4)
+					Uimm)
+				       (t
+					Bimm))))
+	      (pc-plus-4 (+ PC 4))
+	      (next-pc (cond ((or (and branch-p take-branch-p)
+				  JAL-p)
+			      pc-plus-imm)
+			     (JALR-p
+			      (make-bitfields (bref alu-plus 31 :end 1) 0))
+			     (t
+			      pc-plus-4)))
+	      (load-store-addr (+ rs1 (if store-p
+					  Simm
+					  Iimm))))
 
-				 ((= read-type #2r01)
-				  ;; load half-word
-				  (setq write-back-data
-					(if (asserted-p (bref addr 1))
-					    ;; upper half-word
-					    (bref data 31 :end 16)
+	  ;; write-back
+	  (setq writeback-data (cond ((or JAL-p JALR-p)
+				      pc-plus-4)
+				     (LUI-p
+				      Uimm)
+				     (AUIPC-p
+				      pc-plus-imm)
+				     (load-p
+				      load-data)
+				     (t
+				      aluOut)))
 
-					    ;; lower half-word
-					    (bref data 15 :end 0)))
+	  ;; store assignments
+	  (setf (bref write-data 7 :width 8)
+		(bref rs2 7 :width 8))
+	  (setf (bref write-data 15 :width 8)
+		(if (bref load-store-addr 0)
+		    (bref rs2  7 :width 8)
+		    (bref rs2 15 :width 8)))
+	  (setf (bref write-data 23 :width 8)
+		(if (bref load-store-addr 1)
+		    (bref rs2  7 :width 8)
+		    (bref rs2 23 :width 8)))
+	  (setf (bref write-data 31 :width 8)
+		(if (bref load-store-addr 0)
+		    (bref rs2 7 :width 8)
+		    (if (bref load-store-addr 1)
+			(bref rs2 15 :width 8)
+			(bref rs2 31 :width 8))))
 
-				  ;; sign-extend if requested
-				  (if sign-extending
-				      (setf write-back-data (coerce write-back-data '(signed-byte 16)))))
+	  ;; main state machine
+	  (@ (posedge clk)
+	     (tagbody
+	      instruction-fetch
+		(when (asserted-p reset)
+		  ;; reset
+		  (setf pc 0)
+		  (setf instr 0)
+		  (go instruction-fetch))
 
-				 (t
-				  ;; load word
-				  (setf write-back-data data)))))
+	      instruction-wait
+		;; read the next instruction
+		(setq rd/wr 0)
+		(setq addr pc)
+		(setq instr read-data)
 
-			;; store relative to register (S)
-			(#2r0100011
-			 (let ((write-type (bref funct3 1 :width 2)))
-			   (setq write-mask (cond ((= write-type #2r00)
-						   ;; store byte
-						   (if (asserted-p (bref addr 1))
-						       ;; writing to byte in upper half-word
-						       (if (asserted-p (bref addr 0))
-							   #2r1000
-							   #2r0100)
+	      register-fetch
+		;; fetch registers
+		(setq rs1 (aref register-file rs1id))
+		(setq rs2 (aref register-file rs2id))
 
-						       ;; writing to byte in lower half-word
-						       (if (asserted-p (bref addr 0))
-							   #2r0010
-							   #2r0001)))
+	      execute
+		;; execute the behaviour for the current instruction
+		(cond (system-p
+		       (setq pc next-pc))
 
-						  ((= write-type #2r01)
-						   ;; store half-word
-						   (if (asserted-p (bref addr 1))
-						       ;; writing to upper half-word
-						       #2r1100
+		      (load-p
+		       (go load))
 
-						       ;; writing to lower half-word
-						       #2r0011))
+		      (store-p
+		       (go store)))
 
-						  (t
-						   ;; store word
-						   #2r1111)))
+		(go write-back)
 
-			   ;; store the value
-			   (setq addr (+ rs1 Simm))
-			   (setq rd/wr 1)
-			   (setq data rs2)))
+	      load
+		(setq rd/wr 0)
+		(setq addr load-store-addr)
+		(go write-back)
 
-			;; system (SYSTEM)
-			(#2r1110011
-			 ;; for now just stop execution here
-			 (setf next-pc pc)))
+	      store
+		(setq rd/wr 1)
+		(setq addr load-store-addr)
+		(setq write-mask store-write-mask)
+		(go write-back)
 
-		    write-back
-		      ;; write-back register
-		      (when (and (/= rdid 0)
-				 (or (= opcode #2r0110011) ; ALUreg
-				     (= opcode #2r0010011) ; ALUimm
-				     (= opcode #2r1100111) ; JALR
-				     (= opcode #2r1101111) ; JAL
-				     (= opcode #2r0010111) ; AUIPC
-				     (= opcode #2r0110111) ; LUI
-				     (= opcode #2r0000011) ; L
-				     ))
-			(setf (aref register-file rdid) write-back-data))
+	      write-back
+		(when (and writeback-p
+			   (0/= rdId))
+		  (setf (aref register-file rdId) writeback-data))
+		(when (= rdId 1)
+		  (setq status (bref (aref register-file 1) 4 :width 5)))
+		(go instruction-fetch))))))))
 
-		      ;; update PC
-		      (setf pc next-pc))))))))))
+
+;; ---------- SoC ----------
+
+(defmodule/vl soc (system-clk system-reset
+		   leds
+		   rxd txd)
+  (declare (type bit system-clk system-reset rxd txd)
+	   (type (unsigned-byte 5) leds))
+
+  (let (clk reset
+	addr rd/wr
+	read-data
+	write-data write-mask)
+
+    (let ((soc-clock (make-instance 'clockworks :clk-in system-clk :clk clk
+						:reset-in system-reset :reset reset))
+	  (soc-ram (make-instance 'ram :clk clk
+				       :addr addr :rd/wr rd/wr
+				       :read-data read-data
+				       :write-data write-data :write-mask write-mask))
+	  (soc-core (make-instance 'rv32i :clk clk :reset reset
+					  :addr addr :rd/wr rd/wr
+					  :read-data read-data
+					  :write-data write-data :write-mask write-mask
+					  :status leds)))
+
+      ;; UART not used for now
+      (setq txd 0))))
