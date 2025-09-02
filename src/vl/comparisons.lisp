@@ -44,7 +44,7 @@ in many applications."
       args
     (as-literal "(")
     (synthesise v)
-    (as-literal " != 0")))
+    (as-literal " != 0)")))
 
 
 ;; ---------- Maths ----------
