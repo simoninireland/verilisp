@@ -54,6 +54,7 @@
    #:safe-car
    #:safe-cadr
    #:safe-car-cdr
+   #:assoc-decls
    #:mapappend
    #:merge-alists
 

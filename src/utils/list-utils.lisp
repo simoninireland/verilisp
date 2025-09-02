@@ -107,6 +107,25 @@ If either element is null, the pair is omitted."
 	      (zip-without-null (cdr xs) (cdr ys))))))
 
 
+;; ---------- Alists with non-list elements (i.e., decls) ----------
+
+(defun assoc-decls (n decls)
+  "Find the binding of N in DECLS.
+
+DECLS is basically an alist, but may contain non-list elements.
+
+Return with the association or the matching singleton element."
+  (block finder
+    (dolist (e decls)
+      (if (or (and (listp e)
+		   (eql (car e) n))
+	      (eql e n))
+	  (return-from finder e)))
+
+    ;; failed to match
+    nil))
+
+
 ;; ---------- Filtering nulls ----------
 
 (defun remove-nulls (l)
