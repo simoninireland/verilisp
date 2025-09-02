@@ -37,9 +37,36 @@
       (mapc #'ensure-fixed-width tys))))
 
 
+(defun synthesise-fixed-width-constant (c width &optional (base 2))
+  "Synthesise C as a constant with the given WIDTH.
+
+The BASE used can be 2, 8, 10, or 16."
+  (synthesise width)
+  (as-literal "'")
+  (as-literal (ecase base
+		(2  "b")
+		(8  "o")
+		(10 "d")
+		(16 "x")))
+  (let ((*print-base* base))
+    (synthesise c)))
+
+
+(defun synthesise-make-bitfields-field (f)
+  "Synthesise a field F in a bitfield."
+  (if (static-constant-p f)
+      ;; value is a static constant, output it
+      (let ((w (bits-for-integer (ensure-static f))))
+	(synthesise-fixed-width-constant f w))
+
+      ;; value is an expression, synthesise it
+      (progn
+	(synthesise f))))
+
+
 (defmethod synthesise-sexp ((fun (eql 'make-bitfields)) args)
   (as-literal "{")
-  (as-inline-forms args :sep ", ")
+  (as-inline-forms args :sep ", " :process #'synthesise-make-bitfields-field)
   (as-literal "}"))
 
 
@@ -67,33 +94,11 @@
     (foldr #'union (mapcar #'read-variables (list bs times)) '())))
 
 
-(defun synthesise-fixed-width-constant (c width &optional (base 2))
-  "Synthesise C as a constant with the given WIDTH.
-
-The BASE used can be 2, 8, 10, or 16."
-  (synthesise width)
-  (as-literal "'")
-  (as-literal (ecase base
-		(2  "b")
-		(8  "o")
-		(10 "d")
-		(16 "x")))
-  (let ((*print-base* base))
-    (synthesise c)))
-
-
 (defmethod synthesise-sexp ((fun (eql 'extend-bits)) args)
   (destructuring-bind (bs width)
       args
     (as-literal "{")
     (synthesise width)
     (as-literal "{")
-    (if (static-constant-p bs)
-	;; value is a static constant, output it
-	(let ((w (bits-for-integer (ensure-static bs))))
-	  (synthesise-fixed-width-constant bs w))
-
-	;; value is an expression, synthesise it
-	(progn
-	  (synthesise bs)))
+    (synthesise-make-bitfields-field bs)
     (as-literal "}}")))
