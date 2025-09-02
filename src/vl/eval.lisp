@@ -157,7 +157,14 @@ EVAL-IN-STATIC-ENVIRONMENT."
   (declare (optimize debug))
 
   (let ((closed-form (close-form-in-static-environment form)))
-    (eval closed-form)))
+    (handler-bind
+	((warning (lambda (c)
+		    (declare (ignore c))
+		    (muffle-warning))))
+
+      ;; any warnings caused by this evaluation will be silently
+      ;; ignored; any errors will be propagated
+      (eval closed-form))))
 
 
 ;; ---------- Verilisp evaluation ----------
