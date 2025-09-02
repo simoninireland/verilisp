@@ -75,14 +75,7 @@
 
     (if (in-expression-context-p)
 	;; in expression, synthesise as a conditional expression
-	(progn
-	  (as-literal "((")
-	  (synthesise condition)
-	  (as-literal ") ? (")
-	  (synthesise  then)
-	  (as-literal ") : (")
-	  (synthesise (car else))
-	  (as-literal "))"))
+	(synthesise-if-expression `(if ,condition ,then ,@else))
 
 	;; elsewhere, synthesise as a conditional statement
 	(progn
