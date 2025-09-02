@@ -377,3 +377,28 @@
   (is (null (min-null '())))
   (is (= (min-null 1 2 3) 1))
   (is (= (min-null 5 2 nil 4 1) 1)))
+
+
+;; ---------- Assoc over decls ----------
+
+(test test-assoc-decls
+  "Test we can perform ASSOC over decls."
+  ;; null list
+  (is (null (assoc-decls 'a '())))
+
+  ;; normal assoc
+  (is (equal (assoc-decls 'a '((a 1) (b 2) (c 3)))
+	     '(a 1)))
+  (is (equal (assoc-decls 'b '((a 1) (b 2) (c 3)))
+	     '(b 2)))
+  (is (null (assoc-decls 'd '((a 1) (b 2) (c 3)))))
+
+  ;; assoc with singletons
+  (is (equal (assoc-decls 'a '((a 1) b (c 3)))
+	     '(a 1)))
+  (is (equal (assoc-decls 'b '((a 1) b (c 3)))
+	     'b))
+  (is (null (assoc-decls 'd '((a 1) b (c 3)))))
+
+
+  )
