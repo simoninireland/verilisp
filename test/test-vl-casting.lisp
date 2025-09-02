@@ -65,60 +65,61 @@
 
 (test test-synthesise-coerce-equal-width-same-sign
   "Test we can coerce equal-width and -signedness numbers."
-  (vl:::with-new-frame
-    (vl:::declare-variable 'a '((:type (unsigned-byte 8))))
+  (vl::with-new-frame
+    (vl::declare-variable 'a '((type (unsigned-byte 8))))
     (is (vl::synthesise '(coerce a (unsigned-byte 8))))
 
-    (vl:::declare-variable 'b '((:type (signed-byte 8))))
+    (vl::declare-variable 'b '((type (signed-byte 8))))
     (is (vl::synthesise '(coerce b (signed-byte 8))))
 
-    (vl:::declare-variable 'c '((:type (unsigned-byte 8))))
+    (vl::declare-variable 'c '((type (unsigned-byte 8))))
     (is (vl::synthesise '(coerce c (signed-byte 8))))
 
-    (vl:::declare-variable 'd '((:type (signed-byte 8))))
+    (vl::declare-variable 'd '((type (signed-byte 8))))
     (is (vl::synthesise '(coerce d (unsigned-byte 8))))))
 
 
 (test test-synthesise-coerce-narrower-same-sign
   "Test we can coerce narrower numbers."
-  (vl:::with-new-frame
-    (vl:::declare-variable 'a '((:type (unsigned-byte 16))))
-    (is (vl::synthesise '(coerce a (unsigned-byte 8))))
+  (vl::with-new-frame
+    (vl::declare-variable 'a '((type (unsigned-byte 16))))
+    (is (vl:synthesise '(coerce a (unsigned-byte 8))))
 
-    (vl:::declare-variable 'b '((:type (signed-byte 16))))
+    (vl::declare-variable 'b '((type (signed-byte 16))))
     (is (vl::synthesise '(coerce b (signed-byte 8))))
 
-    (vl:::declare-variable 'c '((:type (unsigned-byte 16))))
+    (vl::declare-variable 'c '((type (unsigned-byte 16))))
     (is (vl::synthesise '(coerce c (signed-byte 8))))
 
-    (vl:::declare-variable 'd '((:type (signed-byte 16))))
+    (vl::declare-variable 'd '((type (signed-byte 16))))
     (is (vl::synthesise '(coerce d (unsigned-byte 8))))))
 
 
 (test test-synthesise-coerce-wider-same-sign
   "Test we can coerce wider numbers."
-  (vl:::with-new-frame
-    (vl:::declare-variable 'a '((:type (unsigned-byte 8))))
+  (vl::with-new-frame
+    (vl::declare-variable 'a '((type (unsigned-byte 8))))
     (is (vl::synthesise '(coerce a (unsigned-byte 16))))
 
-    (vl:::declare-variable 'b '((:type (signed-byte 8))))
+    (vl::declare-variable 'b '((type (signed-byte 8))))
     (is (vl::synthesise '(coerce b (signed-byte 16))))
 
-    (vl:::declare-variable 'c '((:type (unsigned-byte 8))))
+    (vl::declare-variable 'c '((type (unsigned-byte 8))))
     (is (vl::synthesise '(coerce c (signed-byte 16))))
 
-    (vl:::declare-variable 'd '((:type (signed-byte 8))))
+    (vl::declare-variable 'd '((type (signed-byte 8))))
     (is (vl::synthesise '(coerce d (unsigned-byte 16))))))
 
 
 (test test-synthesise-coerce-real
   "Test coercions against a real expression."
-  (let ((p (vl::expand/vl '(let ((instr 0 :width 32)
+  (let ((p (vl::expand/vl '(let ((instr 0)
 				a)
-			   (let ((bs (vl::bref instr 31 :end 20)))
-			     (let ((Iimm (coerce bs
-						 (signed-byte 32))))
-			       (setq a Iimm)))))))
+			    (declare (width 32 instr))
+			    (let ((bs (vl::bref instr 31 :end 20)))
+			      (let ((Iimm (coerce bs
+						  (signed-byte 32))))
+				(setq a Iimm)))))))
 
     (vl::typecheck p)
     (is (vl::synthesise p))))

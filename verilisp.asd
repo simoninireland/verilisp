@@ -106,6 +106,7 @@
 	       (:file "test-vl-arrays")
 	       (:file "test-vl-operators")
 	       (:file "test-vl-comparisons")
+	       (:file "test-vl-casting")
 	       (:file "test-vl-binders")
 	       (:file "test-vl-control-flow")
 	       (:file "test-vl-conditionals")
