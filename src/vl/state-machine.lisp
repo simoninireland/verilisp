@@ -37,11 +37,7 @@
    (synthetic-p
     :documentation "Flag whether the state is synthetic."
     :initform nil
-    :reader synthetic-p)
-   (go-target-p
-    :documentation "Flag whether the state is the target of a GO form."
-    :initform nil
-    :accessor go-target-p))
+    :reader synthetic-p))
   (:documentation "Abstract state in a state machine."))
 
 
@@ -238,11 +234,24 @@ form fell-through and should therefore continue to EXIT-STATE.")
 		 ;; add the condition to the current state
 		 (appendf (body current-state) (list cform))
 
-		 ;; add the start of trailing states to the current state
+		 ;; continue into the trailing states, if any
 		 (when trailing-state
-		   (appendf (body current-state) (body trailing-state))
+		   (if (synthetic-p trailing-state)
+		       (progn
+			 ;; trailing state is synthetic, remove it and
+			 ;; fold its body into the current state
+			 (appendf (body current-state) (body trailing-state))
 
-		   (cdr trailing-states)))))
+			 ;; don't then synthesise this merged state
+			 (cdr trailing-states))
+
+		       (progn
+			 ;; trailing state isn't synthetic, add a drop-through
+			 ;; jump to it
+			 (appendf (body current-state) `((go ,trailing-label)))
+
+			 ;; retain the state in the machine
+			 trailing-states))))))
 
 	    ((or (null else-states)
 		 (= (length else-states) 1))
