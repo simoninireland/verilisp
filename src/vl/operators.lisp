@@ -230,7 +230,7 @@ Use VERILOG-OPERATOR if provided for synthesis."
 	 (synthesise l)
 	 (as-literal ")")))))
 
-(define-fixed-width-unary-bitwise-operator lognot "!")
+(define-fixed-width-unary-bitwise-operator lognot "~")
 
 
 ;; ---------- Logical ----------
