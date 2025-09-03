@@ -41,7 +41,7 @@
 
     (@ (posedge clk)
        (let ((word-addr (bref addr 31 :end 2)))
-	 (if rd/wr
+	 (if (asserted-p rd/wr)
 	     ;; writing
 	     (with-bitfields ((b3 8) (b2 8) (b1 8) (b0 8))
 	       (aref mem word-addr)
@@ -172,7 +172,8 @@
 							   shifter-in))
 			 (bref aluIn2 4 :end 0)))
 	    (left-shift (flip32 shifter)))
-	(declare (type (unsigned-byte 32) rs1 rs2 alu-plus writeback-data)
+	(declare (type (unsigned-byte 32) rs1 rs2 alu-plus writeback-data Uimm)
+		 (type (signed-byte 32) Iimm Simm Bimm Jimm)
 		 (type (unsigned-byte 33) alu-minus))
 
 	;; ALU operations
@@ -185,25 +186,18 @@
 			       alu-plus)))
 	     (#2r001
 	      (setq aluOut left-shift))
-
 	     (#2r010
 	      (setq aluOut (coerce LT '(unsigned-byte 32))))
-
 	     (#2r010
 	      (setq aluOut (coerce LTU '(unsigned-byte 32))))
-
 	     (#2r011
 	      (setq aluOut (coerce LTU '(unsigned-byte 32))))
-
 	     (#2r100
 	      (setq aluOut (logxor aluIn1 aluIn2)))
-
 	     (#2r101
 	      (setq aluOut shifter))
-
 	     (#2r110
 	      (setq aluOut (logior aluIn1 aluIn2)))
-
 	     (#2r111
 	      (setq aluOut (logand aluIn1 aluIn2)))))
 
@@ -212,28 +206,23 @@
 	   (case funct3
 	     (#2r000
 	      (setq take-branch-p EQ))
-
 	     (#2r001
 	      (setq take-branch-p (not EQ)))
-
 	     (#2r100
 	      (setq take-branch-p LT))
-
 	     (#2r101
 	      (setq take-branch-p (not LT)))
-
 	     (#2r110
 	      (setq take-branch-p LTU))
-
 	     (#2r111
 	      (setq take-branch-p (not LTU)))
-
 	     (t
 	      (setq take-branch-p 0))))
 
 	;; memory operations
 	(let ((byte-access-p      (= (bref funct3 1 :width 2) 1))
 	      (half-word-access-p (= (bref funct3 1 :width 2) 1))
+
 	      (load-half-word     (if (bref load-store-addr 1)
 				      (bref read-data 31 :width 16)
 				      (bref read-data 15 :width 16)))
@@ -301,6 +290,9 @@
 				      load-data)
 				     (t
 				      aluOut)))
+	  (setq writeback-p (and (not branch-p)
+				 (not store-p)
+				 (not load-p)))
 
 	  ;; store assignments
 	  (setf (bref write-data 7 :width 8)
@@ -327,67 +319,42 @@
 		(when (asserted-p reset)
 		  ;; reset
 		  (setf pc 0)
-		  (setf instr 0)
 		  (go instruction-fetch))
 
 		;; set up the fetch
 		(setq status #2r10000)
-		(setq writeback-p 0)
 		(setq rd/wr 0)
 		(setq addr pc)
 
 	      instruction-wait
 		;; read the instruction
 		(setq instr read-data)
-		(setq status (make-bitfields 0 (bref instr 3 :end 0)))
 
 	      register-fetch
 		;; fetch registers
-		(setq status #2r11100)
 		(setq rs1 (aref register-file rs1id))
 		(setq rs2 (aref register-file rs2id))
 
 	      execute
 		;; execute the behaviour for the current instruction
-		(setq writeback-p (and (not branch-p)
-				       (not store-p)
-				       (not load-p)))
-		(setq status #2r11110)
 		(if (not system-p)
 		    (setq pc next-pc))
-		(go write-back)
 		(cond (load-p
-		       (go load))
+		       (setq rd/wr 0)
+		       (setq addr load-store-addr))
 
 		      (store-p
-		       (go store))
+		       (setq rd/wr 1)
+		       (setq addr load-store-addr)
+		       (setq write-mask store-write-mask)))
 
-		      (t
-		       (go write-back)))
-
-	      load
-		;; set up for load
-		(setq writeback-p 1)
-		(setq rd/wr 0)
-		(setq addr load-store-addr)
-
-	      data-wait
-		;; allow data to be written
-		(go instruction-fetch)
-
-	      store
-		(setq writeback-p 0)
-		(setq rd/wr 1)
-		(setq addr load-store-addr)
-		(setq write-mask store-write-mask)
-
-	      write-back
-		(setq status #2r11111)
+		;; write-back data to registers
 		(when (and writeback-p
 			   (0/= rdId))
 		  (setf (aref register-file rdId) writeback-data))
 		(when (= rdId 1)
-		  (setq status (bref (aref register-file 1) 4 :width 5)))
+		  ;;(setq status (bref (aref register-file 1) 4 :width 5))
+		  (setq status #2r00001))
 		(go instruction-fetch))))))))
 
 
