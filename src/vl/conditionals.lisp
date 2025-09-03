@@ -211,7 +211,7 @@ Each test element must be testable against TY."
 	(as-list match :sep ", ")
 
 	(if (eql match t)
-	    (as-literal "otherwise")
+	    (as-literal "default")
 	    (synthesise match)))
     (as-literal ": ")
     (as-newline)
