@@ -22,7 +22,8 @@
 		   leds-out
 		   rxd txd)
   (declare (type bit clk-in rxd txd)
-	   (type (unsigned-byte 5) leds-out))
+	   (type (unsigned-byte 5) leds-out)
+	   (ignorable rxd txd))
 
   (let (clk reset
 

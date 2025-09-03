@@ -1,8 +1,8 @@
-set_io leds_out[0] 44
-set_io leds_out[1] 45
-set_io leds_out[2] 47
-set_io leds_out[3] 48
-set_io leds_out[4] 56
+set_io leds_out[0] 99
+set_io leds_out[1] 98
+set_io leds_out[2] 97
+set_io leds_out[3] 96
+set_io leds_out[4] 95
 
 set_io clk_in 21
 
