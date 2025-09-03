@@ -528,50 +528,50 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 	      (progn
 		  (as-literal " = ")
 		  (synthesise v))))
-      (as-literal ";")))
+      (as-literal ";"))))
 
 
-  (defun synthesise-wire (n)
-    "Synthesise a wire N a LET block."
-    (let ((v (get-initial-value n :default 0)))
-      (as-literal "wire ")
-      (let* ((type (get-type n))
-	     (width (if (array-type-p type)
-			;; width is the width of the element type
-			(bitwidth (element-type-of-array type))
+(defun synthesise-wire (n)
+  "Synthesise a wire N a LET block."
+  (let ((v (get-initial-value n :default 0)))
+    (as-literal "wire ")
+    (let* ((type (get-type n))
+	   (width (if (array-type-p type)
+		      ;; width is the width of the element type
+		      (bitwidth (element-type-of-array type))
 
-			;; width is of the type itself
-			(bitwidth type))))
+		      ;; width is of the type itself
+		      (bitwidth type))))
 
-	(if (and (fixed-width-p type)
-		 (not (unsigned-byte-p type)))
-	    (as-literal "signed "))
+      (if (and (fixed-width-p type)
+	       (not (unsigned-byte-p type)))
+	  (as-literal "signed "))
 
-	(when (or (not (numberp width))
-		  (> width 1))
-	  ;; we have a width (or a width expression)
-	  (as-literal"[ ")
-	  (synthesise width)
-	  (as-literal " - 1 : 0 ] "))
-	(synthesise n)
-	(if (array-value-p v)
-	    ;; synthesise the array constructor
-	    (synthesise-array-init n v)
+      (when (or (not (numberp width))
+		(> width 1))
+	;; we have a width (or a width expression)
+	(as-literal"[ ")
+	(synthesise width)
+	(as-literal " - 1 : 0 ] "))
+      (synthesise n)
+      (if (array-value-p v)
+	  ;; synthesise the array constructor
+	  (synthesise-array-init n v)
 
-	    ;; synthesise the assignment to the initial value if there is one
-	    (if v
-		(if (static-constant-p v)
-		    (let ((iv (ensure-static v)))
-		      (unless (= iv 0)
-			;; initial value isn't statially zero, synthesise
-			(as-literal " = ")
-			(synthesise v)))
-
-		    ;; initial value is an expression, synthesise
-		    (progn
+	  ;; synthesise the assignment to the initial value if there is one
+	  (if v
+	      (if (static-constant-p v)
+		  (let ((iv (ensure-static v)))
+		    (unless (= iv 0)
+		      ;; initial value isn't statially zero, synthesise
 		      (as-literal " = ")
-		      (synthesise v)))))
-	(as-literal";")))))
+		      (synthesise v)))
+
+		  ;; initial value is an expression, synthesise
+		  (progn
+		    (as-literal " = ")
+		    (synthesise v)))))
+      (as-literal";"))))
 
 
 (defun synthesise-constant (n)
