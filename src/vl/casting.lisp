@@ -68,12 +68,15 @@
       args
     (unquote ty)
 
-    (if (subtype-p ty 'signed-byte)
-	(progn
-	  (as-literal "$signed(")
-	  (synthesise val)
-	  (as-literal ")"))
-	(synthrsise val))))
+    ;; (if (and (signed-byte-p ty)
+    ;;	     (not (unsigned-byte-p ty)))
+    ;;	(progn
+    ;;	  (as-literal "$signed(")
+    ;;	  (synthesise val)
+    ;;	  (as-literal ")"))
+    ;;	(synthesise val))
+    (synthesise val)
+    ))
 
 
 ;; ---------- Type coercions ----------
@@ -117,8 +120,8 @@
     (unquote ty)
 
     (let* ((vty (compute-type val))
-	   (tyw (bitwidth ty))
-	   (vtyw (bitwidth vty)))
+	   (tyw (bitwidth (lub ty)))
+	   (vtyw (bitwidth (lub vty))))
 
       (cond
 	;; type are both unsigned
@@ -158,7 +161,7 @@
 	       (t
 		;; value is narrower, sign-extend
 		(let ((signbit (1- vtyw))
-		      (signs (- tyw vtyw)))
+		      (signs (1- (- tyw vtyw))))
 		  (synthesise `(make-bitfields (extend-bits (bref ,val ,signbit) ,signs)
 					       ,val))))))
 
