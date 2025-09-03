@@ -248,10 +248,8 @@ Use VERILOG-OPERATOR if provided for synthesis."
 
 
      (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
-       (destructuring-bind (l r)
-	   args
-	 (ensure-boolean (compute-type l))
-	 (ensure-boolean (compute-type r))))
+       (dolist (a args)
+	 (ensure-boolean (compute-type a))))
 
 
      (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
