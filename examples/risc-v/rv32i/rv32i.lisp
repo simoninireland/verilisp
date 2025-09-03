@@ -34,14 +34,13 @@
 		       &key (words 256))
   (declare (type (unsigned-byte 32) addr read-data write-data)
 	   (type bit clk rd/wr)
-	   (type (unsigned-byte 4) write-mask)
-	   (ignore clk))
+	   (type (unsigned-byte 4) write-mask))
 
   (let ((mem (make-array (words) :element-type (unsigned-byte 32)
-				 :initial-element 0)))
+				 :initial-contents (:file "firmware.hex"))))
 
-    (@ (*)
-       (let ((word-addr (>> addr 2)))
+    (@ (posedge clk)
+       (let ((word-addr (bref addr 31 :end 2)))
 	 (if rd/wr
 	     ;; writing
 	     (with-bitfields ((b3 8) (b2 8) (b1 8) (b0 8))
@@ -92,25 +91,46 @@
 	    (system-p (= opcode #2r1110011))
 
 	    ;; immediate values
+
+	    ;; the type-driven coercion doesn't work yet because of issues
+	    ;; addressing into MAKE-BITFIELDS constructions
+
+	    ;; (Uimm (the '(unsigned-byte 32) (make-bitfields (bref instr 31 :end 12)
+	    ;;						   (extend-bits 0 12))))
+	    ;; (Iimm (coerce (the '(signed-byte 12) (bref instr 31 :end 20))
+	    ;;		  '(signed-byte 32)))
+	    ;; (Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31 :end 25)
+	    ;;							 (bref instr 11 :end 7)))
+	    ;;		  '(signed-byte 32)))
+	    ;; (Bimm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
+	    ;;							 (bref instr 7)
+	    ;;							 (bref instr 30 :end 25)
+	    ;;							 (bref instr 11 :end 8)
+	    ;;							 0))
+	    ;;		  '(signed-byte 32)))
+	    ;; (Jimm (coerce (the '(signed-byte 20) (make-bitfields (bref instr 31)
+	    ;;							 (bref instr 19 :end 12)
+	    ;;							 (bref instr 20)
+	    ;;							 (bref instr 30 :end 21)
+	    ;;							 0))
+	    ;;		  '(signed-byte 32)))
 	    (Uimm (the '(unsigned-byte 32) (make-bitfields (bref instr 31 :end 12)
 							   (extend-bits 0 12))))
-	    (Iimm (coerce (the '(signed-byte 12) (bref instr 31 :end 20))
-			  '(signed-byte 32)))
-	    (Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31 :end 25)
-								 (bref instr 11 :end 7)))
-			  '(signed-byte 32)))
-	    (Bimm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
-								 (bref instr 7)
-								 (bref instr 30 :end 25)
-								 (bref instr 11 :end 8)
-								 0))
-			  '(signed-byte 32)))
-	    (Jimm (coerce (the '(signed-byte 20) (make-bitfields (bref instr 31)
-								 (bref instr 19 :end 12)
-								 (bref instr 20)
-								 (bref instr 30 :end 21)
-								 0))
-			  '(signed-byte 32)))
+	    (Iimm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 21)
+							 (bref instr 30 :end 20))))
+	    (Simm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 21)
+							 (bref instr 30 :end 25)
+							 (bref instr 11 :end 7))))
+	    (Bimm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 20)
+							 (bref instr 7)
+							 (bref instr 30 :end 25)
+							 (bref instr 11 :end 8)
+							 0)))
+	    (Jimm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 12)
+							 (bref instr 19 :end 12)
+							 (bref instr 20)
+							 (bref instr 30 :end 21)
+							 0)))
 
 	    ;; register file and working registers
 	    (register-file    (make-array '(32) :element-type (unsigned-byte 32)
@@ -147,12 +167,13 @@
 	    (shifter-in (if (= funct3 1)
 			    (flip32 aluIn1)
 			    aluIn1))
-	    (shifter (>> (the 'signed-byte (make-bitfields (and (bref instr 30)
-								(bref aluIn1 31))
+	    (shifter (>> (the 'signed-byte (make-bitfields (logand (bref instr 30)
+								   (bref aluIn1 31))
 							   shifter-in))
 			 (bref aluIn2 4 :end 0)))
 	    (left-shift (flip32 shifter)))
-	(declare (type (unsigned-byte 32) rs1 rs2 writeback-data ))
+	(declare (type (unsigned-byte 32) rs1 rs2 alu-plus writeback-data)
+		 (type (unsigned-byte 33) alu-minus))
 
 	;; ALU operations
 	(@ (*)
@@ -309,42 +330,59 @@
 		  (setf instr 0)
 		  (go instruction-fetch))
 
-	      instruction-wait
-		;; read the next instruction
+		;; set up the fetch
+		(setq status #2r10000)
+		(setq writeback-p 0)
 		(setq rd/wr 0)
 		(setq addr pc)
+
+	      instruction-wait
+		;; read the instruction
 		(setq instr read-data)
+		(setq status (make-bitfields 0 (bref instr 3 :end 0)))
 
 	      register-fetch
 		;; fetch registers
+		(setq status #2r11100)
 		(setq rs1 (aref register-file rs1id))
 		(setq rs2 (aref register-file rs2id))
 
 	      execute
 		;; execute the behaviour for the current instruction
-		(cond (system-p
-		       (setq pc next-pc))
-
-		      (load-p
+		(setq writeback-p (and (not branch-p)
+				       (not store-p)
+				       (not load-p)))
+		(setq status #2r11110)
+		(if (not system-p)
+		    (setq pc next-pc))
+		(go write-back)
+		(cond (load-p
 		       (go load))
 
 		      (store-p
-		       (go store)))
+		       (go store))
 
-		(go write-back)
+		      (t
+		       (go write-back)))
 
 	      load
+		;; set up for load
+		(setq writeback-p 1)
 		(setq rd/wr 0)
 		(setq addr load-store-addr)
-		(go write-back)
+
+	      data-wait
+		;; allow data to be written
+		(go instruction-fetch)
 
 	      store
+		(setq writeback-p 0)
 		(setq rd/wr 1)
 		(setq addr load-store-addr)
 		(setq write-mask store-write-mask)
-		(go write-back)
 
 	      write-back
+		(setq status #2r11111)
 		(when (and writeback-p
 			   (0/= rdId))
 		  (setf (aref register-file rdId) writeback-data))
@@ -355,11 +393,12 @@
 
 ;; ---------- SoC ----------
 
-(defmodule/vl soc (system-clk system-reset
+(defmodule/vl soc (system-clk
 		   leds
 		   rxd txd)
-  (declare (type bit system-clk system-reset rxd txd)
-	   (type (unsigned-byte 5) leds))
+  (declare (type bit system-clk rxd txd)
+	   (type (unsigned-byte 5) leds)
+	   (ignorable rxd txd))
 
   (let (clk reset
 	addr rd/wr
@@ -367,7 +406,8 @@
 	write-data write-mask)
 
     (let ((soc-clock (make-instance 'clockworks :clk-in system-clk :clk clk
-						:reset-in system-reset :reset reset))
+						:reset-in 0 :reset reset
+						:slow 22))
 	  (soc-ram (make-instance 'ram :clk clk
 				       :addr addr :rd/wr rd/wr
 				       :read-data read-data
