@@ -178,7 +178,7 @@
 			     :hint "Make sure width bits can be extracted"))
 
     ;; check whether variable should be widened
-    (let ((ty (compute-type place)))
+    (let ((ty (eval-type (compute-type place))))
       (let ((vw (bitwidth ty)))
 
 	(when (> width vw)
