@@ -350,24 +350,25 @@ form fell-through and should therefore continue to EXIT-STATE.")
     (appendf (body current-state) (list (cons fun args)))
 
     ;; check whether there is unreachable code on this path
-    (if (not (or (null forms)
-		 (state-label-p (car forms))))
-	(progn
-	  ;; next form does not start a new state
-	  (warn 'unreachable-code :hint "Check the logic")
+    (when (not (or (null forms)
+		   (state-label-p (car forms))))
+      ;; next form does not start a new state, and so is unreachable
+      ;; report against the offending (unreachable) form, not the GO form
+      (with-current-form (car forms)
+	(warn 'unreachable-code :label (label current-state)
+				:hint "Check the logic"))
 
-	  ;; skip to the next state marker
-	  (do ()
-	      ((or (null forms)
-		   (state-label-p (car forms)))
-	       forms)
-	    (setq forms (cdr forms)))))
+      ;; skip to the next state marker
+      (do ()
+	  ((or (null forms)
+	       (state-label-p (car forms)))
+	   forms)
+	(setq forms (cdr forms))))
 
-    (let ((trailing-states (if (not (null forms))
-			       (parse-tagbody-forms forms
-						    nil
-						    exit-state))))
-      trailing-states)))
+    (if (not (null forms))
+	(parse-tagbody-forms forms
+			     nil
+			     exit-state))))
 
 
 (defun count-tagbody-forms (forms)
@@ -415,36 +416,37 @@ Return a list of of states created, initial state first."
       (destructuring-bind (form &rest rest)
 	  forms
 
-	(if (state-label-p form)
-	    ;; new state marker
-	    (let ((new-state (make-instance 'state :label form)))
-	      (if current-state
-		  ;; link current state to new state
-		  (appendf (body current-state) (list `(go ,(label new-state)))))
+	(with-current-form form
+	  (if (state-label-p form)
+	      ;; new state marker
+	      (let ((new-state (make-instance 'state :label form)))
+		(if current-state
+		    ;; link current state to new state
+		    (appendf (body current-state) (list `(go ,(label new-state)))))
 
-	      ;; use this new state as the current state going forward
-	      (cons new-state
-		    (parse-tagbody-forms rest new-state exit-state)))
+		;; use this new state as the current state going forward
+		(cons new-state
+		      (parse-tagbody-forms rest new-state exit-state)))
 
-	    ;; executable form
-	    (if (null current-state)
-		;; no current state, create one and re-parse
-		(let ((initial-state (make-instance 'state)))
-		  (cons initial-state
-			(parse-tagbody-forms forms initial-state exit-state)))
+	      ;; executable form
+	      (if (null current-state)
+		  ;; no current state, create one and re-parse
+		  (let ((initial-state (make-instance 'state)))
+		    (cons initial-state
+			  (parse-tagbody-forms forms initial-state exit-state)))
 
-		(if (listp form)
-		    ;; handle sexp
-		    (destructuring-bind (fun &rest args)
-			form
-		      (parse-tagbody-forms-sexp fun args
-						rest
-						current-state exit-state))
+		  (if (listp form)
+		      ;; handle sexp
+		      (destructuring-bind (fun &rest args)
+			  form
+			(parse-tagbody-forms-sexp fun args
+						  rest
+						  current-state exit-state))
 
-		    (progn
-		      ;; singleton form that isn't a state marker
-		      (appendf (body current-state) (list form))
-		      (parse-tagbody-forms rest current-state exit-state))))))))
+		      (progn
+			;; singleton form that isn't a state marker
+			(appendf (body current-state) (list form))
+			(parse-tagbody-forms rest current-state exit-state)))))))))
 
 
 (defun build-state-machine (forms)
