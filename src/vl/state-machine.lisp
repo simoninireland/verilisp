@@ -128,11 +128,10 @@ FUN applied to ARGS, integrate it into CURRENT-STATE, and then
 proceed to parse FORMS (typically by calling PARSE-TAGBODY-FORMS).
 
 EXIT-STATE is the 'fall-through' state that the form should transition
-to when it exits
+to when it exits.
 
 Returns a list consisting of a list of the states created, with
-the entry state first, and a boolean indicating whether the
-form fell-through and should therefore continue to EXIT-STATE.")
+the entry state first.")
   (:method (fun args forms current-state exit-state)
     ;; "normal" form, add to body of current state
     (appendf (body current-state) (list (cons fun args)))
