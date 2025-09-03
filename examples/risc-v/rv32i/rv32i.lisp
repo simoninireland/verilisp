@@ -20,7 +20,7 @@
 (use-package :alexandria)
 
 
-;; ---------- Supporting modules and macros ----------
+;; ---------- Components and macros ----------
 
 (defmacro/vl flip32 (v)
   (let ((es (mapcar (lambda (i)
@@ -58,8 +58,6 @@
 	     ;; reading
 	     (setf read-data (aref mem word-addr)))))))
 
-
-;; ---------- Core ----------
 
 (defmodule/vl rv32i (clk reset
 			 rd/wr addr read-data write-mask write-data
@@ -137,8 +135,6 @@
 						:initial-element 0))
 	    (rs1              0)
 	    (rs2              0)
-	    (writeback-data   0)
-	    (writeback-p      0)
 
 	    ;; ALU
 	    (aluIn1 rs1)
@@ -172,7 +168,7 @@
 							   shifter-in))
 			 (bref aluIn2 4 :end 0)))
 	    (left-shift (flip32 shifter)))
-	(declare (type (unsigned-byte 32) rs1 rs2 alu-plus writeback-data Uimm)
+	(declare (type (unsigned-byte 32) rs1 rs2 alu-plus aluOut Uimm)
 		 (type (signed-byte 32) Iimm Simm Bimm Jimm)
 		 (type (unsigned-byte 33) alu-minus))
 
@@ -260,10 +256,26 @@
 				      (t
 				       #2r1111)))
 
+	      ;; write-back to registers
+	      (writeback-data (cond ((or JAL-p JALR-p)
+				     pc-plus-4)
+				    (LUI-p
+				     Uimm)
+				    (AUIPC-p
+				     pc-plus-imm)
+				    (load-p
+				     load-data)
+				    (t
+				     aluOut)))
+	      (writeback-p (or ALUReg-p
+			       ALUImm-p
+			       JAL-p
+			       JALR-p))
+
 	      ;; address computations
-	      (pc-plus-imm (+ PC (cond ((bref instr 3)
+	      (pc-plus-imm (+ PC (cond (JAL-p
 					Jimm)
-				       ((bref instr 4)
+				       (AUIPC-p
 					Uimm)
 				       (t
 					Bimm))))
@@ -278,21 +290,7 @@
 	      (load-store-addr (+ rs1 (if store-p
 					  Simm
 					  Iimm))))
-
-	  ;; write-back
-	  (setq writeback-data (cond ((or JAL-p JALR-p)
-				      pc-plus-4)
-				     (LUI-p
-				      Uimm)
-				     (AUIPC-p
-				      pc-plus-imm)
-				     (load-p
-				      load-data)
-				     (t
-				      aluOut)))
-	  (setq writeback-p (and (not branch-p)
-				 (not store-p)
-				 (not load-p)))
+	  (declare (type (unsigned-byte 32) writeback-data next-pc load-store-addr))
 
 	  ;; store assignments
 	  (setf (bref write-data 7 :width 8)
@@ -314,11 +312,11 @@
 
 	  ;; main state machine
 	  (@ (posedge clk)
-	     (tagbody
+	     (forever
 	      instruction-fetch
 		(when (asserted-p reset)
 		  ;; reset
-		  (setf pc 0)
+		  (setq pc 0)
 		  (go instruction-fetch))
 
 		;; set up the fetch
@@ -335,10 +333,12 @@
 		(setq rs1 (aref register-file rs1id))
 		(setq rs2 (aref register-file rs2id))
 
-	      execute
-		;; execute the behaviour for the current instruction
+	      execute-writeback
+		;; update PC for next instruction
 		(if (not system-p)
 		    (setq pc next-pc))
+
+		;; set up load/store memory accesses
 		(cond (load-p
 		       (setq rd/wr 0)
 		       (setq addr load-store-addr))
@@ -352,10 +352,11 @@
 		(when (and writeback-p
 			   (0/= rdId))
 		  (setf (aref register-file rdId) writeback-data))
+
+		;; write contents of X1 to status LEDs
 		(when (= rdId 1)
 		  ;;(setq status (bref (aref register-file 1) 4 :width 5))
-		  (setq status #2r00001))
-		(go instruction-fetch))))))))
+		  (setq status #2r00001)))))))))
 
 
 ;; ---------- SoC ----------
