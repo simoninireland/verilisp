@@ -328,7 +328,7 @@ Signal VALUE-MISMATCH as an error if not."
 			    (variables-declared-in-current-frame)))
 	(let ((read (variable-property n 'read))
 	      (written (variable-property n 'written))
-	      (ignored (variable-property n 'ignored))
+	      (ignored (variable-property n 'ignore))
 	      (ignorable (variable-property n 'ignorable)))
 
 	  (let ((dir (if written
