@@ -443,25 +443,15 @@ shape for the array. Usually this can be fixed by simply reformatting
 the data, and/or making sure there's the right amount of it."))
 
 
-(define-condition state-machine-mismatch (vl-error)
-  ((state
-    :documentation "The state."
-    :initarg :state
-    :reader state))
-  (:report (lambda (c str)
-	     (format-condition-context (format nil "Unrecognised state ~a"
-					       (state c))
-				       c str)))
-  (:documentation "Condition signalled when an unrecognised state is encountered.
-
-This usualy happens when a state is targeted as the next state (using the
-NEXT macro) that isn't defined in the surrounding state machine."))
-
-
 (define-condition unreachable-code (vl-warning)
-  ()
+  ((label
+    :documentation "The state with the unreachable code."
+    :initarg :label
+    :reader label))
   (:report (lambda (c str)
-	     (format-condition-context "Uneachable code" c str)))
+	     (format-condition-context (format nil "Unreachable code in state ~s"
+					       (label c))
+				       c str)))
   (:documentation "Condition signalled when some code is unreachable.
 
 This usually happens in state machines, where a GO form is followed
@@ -477,10 +467,10 @@ can be reached."))
     :initarg :tag
     :reader tag))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Unrecognised declaration annotation ~a"
+	     (format-condition-context (format nil "Unrecognised declaration ~a"
 					       (tag c))
 				       c str)))
-  (:documentation "Condition signalled when an unrecognised annotationis encountered.
+  (:documentation "Condition signalled when an unrecognised annotation is encountered.
 
 This is often benign, indicating that an annotation has appeared
 in a DECLARE form that isn't (yet) handled by Verilisp."))

@@ -159,38 +159,44 @@
    #:elaborate/vl
    #:synthesise/vl
 
-   ;; conditions
+   ;; base conditions
    #:vl-condition
    #:vl-error
    #:vl-warning
+
+   ;; restarts
    #:recover
+
+   ;; errors
    #:not-synthesisable
    #:not-representable
-   #:syntax-error
    #:unknown-variable
-   #:unknown-module
-   #:unknown-state
    #:unknown-form
-   #:unrecognised-declaration
+   #:syntax-error
+   #:unknown-module
+   #:module-mismatch
+   #:unknown-state
    #:duplicate-variable
-   #:duplicate-module
-   #:duplicate-macro
    #:duplicate-state
    #:not-importable
    #:not-static
+   #:value-mismatch
+   #:shape-mismatch
+   #:no-local-frame
+
+   ;; warnings
    #:unused-variable
    #:used-variable
-   #:value-mismatch
+   #:duplicate-module
+   #:duplicate-macro
    #:direction-mismatch
    #:type-mismatch
    #:coercion-mismatch
    #:precision-mismatch
    #:bitfield-mismatch
-   #:module-mismatch
-   #:shape-mismatch
-   #:state-machine-mismatch
    #:unreachable-code
+   #:unrecognised-declaration
    #:type-inferred
    #:resources-created
    #:representation-mismatch
-   #:no-local-frame))
+   ))

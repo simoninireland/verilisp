@@ -38,14 +38,14 @@
   "The warning conditions that should be treated as errors.")
 
 
-(defvar *warning-flags* '(("bitfield" . bitfield-mismatch)
-			  ("value"    . value-mismatch)
-			  ("type"     . type-mismatch)
-			  ("rep"      . representation-mismatch)
-			  ("coerce"   . coercion-mismatch)
-			  ("prec"     . precision-mismatch)
-			  ("declare"  . unrecognised-declaration)
-			  ("infer"    . type-inferred))
+(defvar *warning-flags* '(("dup"       duplicate-module duplicate-macro)
+			  ("mismatch"  type-mismatch direction-mismatch coercion-mismatch
+				       representation-mismatch precision-mismatch bitfield-mismatch)
+			  ("declare"   unrecognised-declaration)
+			  ("infer"     type-inferred)
+			  ("resources" resources-created)
+			  ("reach"     unreachable-code)
+			  ("use"       unused-variable used-variable))
   "An alist mapping warning flags on the command line to warning class names.")
 
 
@@ -70,7 +70,7 @@ accepts \"none\" and \"all\" as abbreviations."
 
     ;; flag not found, try abbreviaions
     (cond ((string-equal w "all")
-	   (mapcar #'cdr *warning-flags*))
+	   (flatten (mapcar #'cdr *warning-flags*)))
 
 	  ((string-equal w "none")
 	   '())
