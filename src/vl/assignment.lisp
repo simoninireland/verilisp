@@ -199,7 +199,10 @@ generalised places."
     ;; ensure the types match
     (let* ((tyvar (compute-type place))
 	   (tyval (compute-type val)))
-      (ensure-subtype tyval tyvar))))
+      (ensure-subtype tyval tyvar))
+
+    (apply-type-constraints place)
+    (apply-type-constraints val)))
 
 
 (defmethod synthesise-sexp ((fun (eql 'setf)) args)
