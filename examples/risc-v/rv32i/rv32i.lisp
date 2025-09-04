@@ -34,7 +34,8 @@
 		       &key (words 256))
   (declare (type (unsigned-byte 32) addr read-data write-data)
 	   (type bit clk rd/wr)
-	   (type (unsigned-byte 4) write-mask))
+	   (type (unsigned-byte 4) write-mask)
+	   (as register read-data))
 
   (let ((mem (make-array (words) :element-type (unsigned-byte 32)
 				 :initial-contents (:file "firmware.hex"))))
@@ -89,29 +90,6 @@
 	    (system-p (= opcode #2r1110011))
 
 	    ;; immediate values
-
-	    ;; the type-driven coercion doesn't work yet because of issues
-	    ;; addressing into MAKE-BITFIELDS constructions
-
-	    ;; (Uimm (the '(unsigned-byte 32) (make-bitfields (bref instr 31 :end 12)
-	    ;;						   (extend-bits 0 12))))
-	    ;; (Iimm (coerce (the '(signed-byte 12) (bref instr 31 :end 20))
-	    ;;		  '(signed-byte 32)))
-	    ;; (Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31 :end 25)
-	    ;;							 (bref instr 11 :end 7)))
-	    ;;		  '(signed-byte 32)))
-	    ;; (Bimm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31)
-	    ;;							 (bref instr 7)
-	    ;;							 (bref instr 30 :end 25)
-	    ;;							 (bref instr 11 :end 8)
-	    ;;							 0))
-	    ;;		  '(signed-byte 32)))
-	    ;; (Jimm (coerce (the '(signed-byte 20) (make-bitfields (bref instr 31)
-	    ;;							 (bref instr 19 :end 12)
-	    ;;							 (bref instr 20)
-	    ;;							 (bref instr 30 :end 21)
-	    ;;							 0))
-	    ;;		  '(signed-byte 32)))
 	    (Uimm (the '(unsigned-byte 32) (make-bitfields (bref instr 31 :end 12)
 							   (extend-bits 0 12))))
 	    (Iimm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 21)
@@ -144,7 +122,7 @@
 	    aluOut
 	    (alu-plus (+ aluIn1 aluIn2))
 	    (alu-minus (+ (make-bitfields 1 (lognot aluIn2))
-			  (make-bitfields 1 aluIn1)
+			  (make-bitfields 0 aluIn1)
 			  (extend-bits 1 33)))
 
 	    ;; comparator
@@ -184,8 +162,6 @@
 	      (setq aluOut left-shift))
 	     (#2r010
 	      (setq aluOut (coerce LT '(unsigned-byte 32))))
-	     (#2r010
-	      (setq aluOut (coerce LTU '(unsigned-byte 32))))
 	     (#2r011
 	      (setq aluOut (coerce LTU '(unsigned-byte 32))))
 	     (#2r100
@@ -290,7 +266,7 @@
 	      (load-store-addr (+ rs1 (if store-p
 					  Simm
 					  Iimm))))
-	  (declare (type (unsigned-byte 32) writeback-data next-pc load-store-addr))
+	  (declare (type (unsigned-byte 32) writeback-data pc-plus-imm pc-plus-4 next-pc load-store-addr))
 
 	  ;; store assignments
 	  (setf (bref write-data 7 :width 8)
@@ -314,57 +290,56 @@
 	  (@ (posedge clk)
 	     (forever
 	      instruction-fetch
-		(when (asserted-p reset)
-		  ;; reset
-		  (setq pc 0)
-		  (go instruction-fetch))
+	      ;; check for reset
+	      (when (not (asserted-p reset))
+		(setq pc 0)
+		(go instruction-fetch))
 
-		;; set up the fetch
-		(setq status #2r10000)
-		(setq rd/wr 0)
-		(setq addr pc)
+	      ;; set up the fetch
+	      ;;(setq status #2r10000)
+	      (setq rd/wr 0)
+	      (setq addr pc)
 
 	      instruction-wait
-		;; read the instruction
-		(setq instr read-data)
+	      ;; read the instruction
+	      (setq instr read-data)
 
 	      register-fetch
-		;; fetch registers
-		(setq rs1 (aref register-file rs1id))
-		(setq rs2 (aref register-file rs2id))
+	      ;; fetch registers
+	      (setq rs1 (aref register-file rs1id))
+	      (setq rs2 (aref register-file rs2id))
 
 	      execute-writeback
-		;; update PC for next instruction
-		(if (not system-p)
-		    (setq pc next-pc))
+	      ;; update PC for next instruction
+	      (if (not system-p)
+		  (setq pc next-pc))
 
-		;; set up load/store memory accesses
-		(cond (load-p
-		       (setq rd/wr 0)
-		       (setq addr load-store-addr))
+	      ;; set up load/store memory accesses
+	      (cond (load-p
+		     (setq rd/wr 0)
+		     (setq addr load-store-addr))
 
-		      (store-p
-		       (setq rd/wr 1)
-		       (setq addr load-store-addr)
-		       (setq write-mask store-write-mask)))
+		    (store-p
+		     (setq rd/wr 1)
+		     (setq addr load-store-addr)
+		     (setq write-mask store-write-mask)))
 
-		;; write-back data to registers
-		(when (and writeback-p
-			   (0/= rdId))
-		  (setf (aref register-file rdId) writeback-data))
+	      ;; write-back data to registers
+	      (when (and writeback-p
+			 (0/= rdId))
+		(setf (aref register-file rdId) writeback-data))
 
-		;; write contents of X1 to status LEDs
-		(when (= rdId 1)
-		  ;;(setq status (bref (aref register-file 1) 4 :width 5))
-		  (setq status #2r00001)))))))))
+	      ;; write contents of X1 to status LEDs
+	      (when (= rdId 1)
+		(setq status (bref (aref register-file 1) 4 :width 5))))))))))
 
 
 ;; ---------- SoC ----------
 
-(defmodule/vl soc (system-clk
-		   leds
-		   rxd txd)
-  (declare (type bit system-clk rxd txd)
+(defmodule/vl soc (system-clk system-reset
+			      leds
+			      rxd txd)
+  (declare (type bit system-clk system-reset rxd txd)
 	   (type (unsigned-byte 5) leds)
 	   (ignorable rxd txd))
 
@@ -375,11 +350,12 @@
 
     (let ((soc-clock (make-instance 'clockworks :clk-in system-clk :clk clk
 						:reset-in 0 :reset reset
-						:slow 22))
+						:slow 19))
 	  (soc-ram (make-instance 'ram :clk clk
 				       :addr addr :rd/wr rd/wr
 				       :read-data read-data
-				       :write-data write-data :write-mask write-mask))
+				       :write-data write-data :write-mask write-mask
+				       :words 256))
 	  (soc-core (make-instance 'rv32i :clk clk :reset reset
 					  :addr addr :rd/wr rd/wr
 					  :read-data read-data
