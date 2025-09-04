@@ -5,6 +5,7 @@ set_io leds[3] 96
 set_io leds[4] 95
 
 set_io system_clk 21
+set_io system_reset 47
 
 set_io txd  8
 set_io rxd  9
