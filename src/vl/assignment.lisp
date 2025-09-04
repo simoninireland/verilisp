@@ -219,9 +219,13 @@ generalised places."
 	;; elsewhere (in a block)
 	(progn
 	  (synthesise var)
-	  (if sync
-	      (as-literal " = ")
-	      (as-literal " <= "))
+	  (if (and (in-synchronous-block-context-p)
+		   (not sync))
+	      ;; use non-blocking assignment
+	      (as-literal " <= ")
+
+	      ;; use blocking assignment
+	      (as-literal " = "))
 	  (synthesise val)))
 
     (as-literal ";")))

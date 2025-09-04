@@ -327,6 +327,27 @@ occurs immediately within a LET form."
   (find-if-list #'block-form-p (cdr *current-form-queue*)))
 
 
+(defun in-combinatorial-block-context-p ()
+  "Test whether the current context is a combinatorial block.
+
+Combinatorial blocks have sensitivities that depend on the values
+of signals, not on edges (which are synchronous blocks)."
+  (if-let ((bl (in-block-context-p)))
+    (destructuring-bind (sensitivities &rest body)
+	(cdr (car bl))
+      (not (edge-trigger-p sensitivities)))))
+
+
+(defun in-synchronous-block-context-p ()
+  "Test whether the current context is a synchronous block.
+
+Synchronous blocks have sensitivities that depend on signal edges."
+  (if-let ((bl (in-block-context-p)))
+    (destructuring-bind (sensitivities &rest body)
+	(cdr (car bl))
+      (edge-trigger-p sensitivities))))
+
+
 (defun in-setf-context-p ()
   "Test if we're in a SETF or SETQ context."
   (find-if-list #'assignment-form-p *current-form-queue*))

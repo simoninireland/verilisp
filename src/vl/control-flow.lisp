@@ -92,7 +92,7 @@ block, and are represented by the symbol *."
 (defmethod compute-type-sexp ((fun (eql '@)) args)
   (destructuring-bind (sensitivities &rest body)
       args
-    ;; We accept single variables or lists of variables as senasitivity,
+    ;; We accept single variables or lists of variables as sensitivity,
     ;; but there's an ambiguity over posedge and negedge operators, so
     ;; we explicity check the car of any list to see whether it's
     ;; "really" an atom
@@ -126,20 +126,20 @@ block, and are represented by the symbol *."
 
 This includes all the named variables, and excluses the * wildcard."
   (let ((rws (if (listp sensitivities)
-		     (cond ((combinatorial-trigger-p sensitivities)
-			    ;; sensitive to everything
-			    '())
+		 (cond ((combinatorial-trigger-p sensitivities)
+			;; sensitive to everything
+			'())
 
-			   ((edge-trigger-p sensitivities)
-			    ;; a single instance of a trigger operator
-			    (read-variables sensitivities))
+		       ((edge-trigger-p sensitivities)
+			;; a single instance of a trigger operator
+			(read-variables sensitivities))
 
-			   (t
-			    ;; a list of sensitivities
-			    (foldr #'union (mapcar #'read-variables sensitivities) '())))
+		       (t
+			;; a list of sensitivities
+			(foldr #'union (mapcar #'read-variables sensitivities) '())))
 
-		     ;; an atom
-		     (read-variables sensitivities))))
+		 ;; an atom
+		 (read-variables sensitivities))))
 
     ;; discard any wildcard
     (set-difference rws (list '*))))
