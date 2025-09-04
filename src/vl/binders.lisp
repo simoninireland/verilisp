@@ -508,9 +508,9 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 		      ;; width is of the type itself
 		      (bitwidth type))))
 
-      (if (and (fixed-width-p type)
-	       (not (unsigned-byte-p type)))
-	  (as-literal "signed "))
+      ;; (if (and (fixed-width-p type)
+      ;;	       (not (unsigned-byte-p type)))
+      ;;	  (as-literal "signed "))
 
       (when (or (not (numberp width))
 		(> width 1))
@@ -543,9 +543,9 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 		      ;; width is of the type itself
 		      (bitwidth type))))
 
-      (if (and (fixed-width-p type)
-	       (not (unsigned-byte-p type)))
-	  (as-literal "signed "))
+      ;; (if (and (fixed-width-p type)
+      ;;	       (not (unsigned-byte-p type)))
+      ;;	  (as-literal "signed "))
 
       (when (or (not (numberp width))
 		(> width 1))
