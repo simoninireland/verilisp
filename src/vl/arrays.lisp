@@ -227,10 +227,25 @@ Verilisp, but don't *require* it."
 		:per-row 16))
 
 
+(defun synthesise-array-init-from-value (n v shape)
+  "Insert V into all elements of N using SHAPE.
+
+This is implemented using late initialisation."
+  (flet ((initialise-array-from-value ()
+	   (dotimes (i (car shape))
+	     (synthesise n)
+	     (as-literal "[")
+	     (synthesise i)
+	     (as-literal "] = ")
+	     (synthesise v)
+	     (as-literal ";" :newline t))))
+    (add-module-late-initialisation #'initialise-array-from-value)))
+
+
 (defun synthesise-array-init-from-file (n fn)
   "Synthesise the code to load array data for N from a file FN.
 
-Thi is implemented using a late initialisation function."
+This is implemented using a late initialisation function."
   (flet ((initialise-array-from-file ()
 	   (as-literal "$readmemh(\"")
 	   (as-literal fn)
@@ -259,18 +274,21 @@ Otheriwse it is read as a literal list."
     (as-literal " - 1 ]")
 
     ;; intialisation data, if any
-    (when initial-contents
-      (if (listp initial-contents)
-	  (cond ((eql (car initial-contents) :file)
-		 ;; initialising from file
-		 (let ((fn (cadr initial-contents)))
-		   (synthesise-array-init-from-file n fn)))
+    (cond (initial-contents
+	   (if (listp initial-contents)
+	       (cond ((eql (car initial-contents) :file)
+		      ;; initialising from file
+		      (let ((fn (cadr initial-contents)))
+			(synthesise-array-init-from-file n fn)))
 
-		(t
-		 ;; inline initial data
-		 (as-literal " = " :newline t)
-		 (with-indentation
-		   (synthesise-array-init-from-data initial-contents shape))))))))
+		     (t
+		      ;; inline initial data
+		      (as-literal " = " :newline t)
+		      (with-indentation
+			(synthesise-array-init-from-data initial-contents shape))))))
+
+	  (initial-element
+	   (synthesise-array-init-from-value n initial-element shape)))))
 
 
 ;; ---------- Array access ----------
