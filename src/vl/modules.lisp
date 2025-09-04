@@ -450,11 +450,14 @@ Signal VALUE-MISMATCH as an error if not."
 
     (let* ((width (bitwidth type))
 	   (w (eval-in-static-environment width)))
-      (as-literal (format nil "~a ~a"
+      (as-literal (format nil "~a ~a ~a"
 			  (case direction
 			    (in    "input")
 			    (out   "output")
 			    (inout "inout"))
+			  (if (eql as 'register)
+			      "reg"
+			      "")
 			  (if (and (integerp w)
 				   (= w 1))
 			      ""
@@ -477,10 +480,11 @@ Signal VALUE-MISMATCH as an error if not."
 	(synthesise modname)
 
 	;; parameters
-	(as-argument-list (mapcar 'safe-car keys)
-			  :before " #(" :after ")"
-			  :sep ", "
-			  :process #'synthesise-param)
+	(when (> (length keys) 0)
+	  (as-argument-list (mapcar 'safe-car keys)
+			    :before " #(" :after ")"
+			    :sep ", "
+			    :process #'synthesise-param))
 
 	;; arguments
 	(as-argument-list (append reqs (mapcar #'safe-car opts))
