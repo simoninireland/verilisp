@@ -84,7 +84,7 @@ upload: $(TARGET)
 	$(ICESTORM_IN_CONTAINER) $(SYNTH) $(SYNTH_OPTS) -p "synth_ice40 -top $(TOPMODULE) -json $*.json" $(VERILOG_SOURCES) $<
 
 .json.asc:
-	$(ICESTORM_IN_CONTAINER) $(PNR) $(PNR_OPTS) --$(FPGA_DEVICE) --package $(FPGA_PACKAGE) --json $*.json --pcf $*.pcf --asc $*.asc
+	$(ICESTORM_IN_CONTAINER) $(PNR) $(PNR_OPTS) --$(FPGA_DEVICE) --package $(FPGA_PACKAGE) --json $*.json --pcf $(CONFIG) --asc $*.asc
 
 .asc.bin:
 	$(ICESTORM_IN_CONTAINER) $(PACK) $< $*.bin
