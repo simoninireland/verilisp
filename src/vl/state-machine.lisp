@@ -47,6 +47,29 @@
     (setf (slot-value s 'synthetic-p) t)))
 
 
+;; ---------- Jump targets ----------
+
+(defvar *jump-targets* nil
+  "Set of jump targets in the current machine synthesis.
+
+A jump target is a state label that is the target of a GO expression.")
+
+
+(defun clear-jump-targets ()
+  "Clear the current jump targets."
+  (setq *jump-targets* nil))
+
+
+(defun mark-state-label-as-jump-target (label)
+  "Mark LABEL as the target for a GO."
+  (setq *jump-targets* (union *jump-targets* (list label))))
+
+
+(defun jump-target-p (label)
+  "Test whether LABEL is ever jumped to explicitly."
+  (member label  *jump-targets*))
+
+
 ;; ---------- TAGBODY ----------
 
 (defun state-label-p (form)
@@ -185,32 +208,30 @@ the entry state first.")
 	   (trailing-state (if trailing-states
 			       (car trailing-states)
 			       exit-state))
-	   (trailing-label (if trailing-state
-			       (label trailing-state)))
+
 	   (then-states (parse-tagbody-forms (list then-branch)
 					     nil trailing-state))
 	   (then-state (car then-states))
-	   (then-label (label then-state))
+
 	   (else-states (if else-branch
 			    (parse-tagbody-forms else-branch
 						 nil trailing-state)))
 	   (else-state (if else-states
-			   (car else-states)))
-	   (else-label (if else-states
-			   (label else-state))))
+			   (car else-states))))
 
       ;; compile the conditional, with optimisations
       (cond ((and (= (length then-states) 1)
 		  (or (null else-states)
 		      (= (length else-states) 1)))
 	     ;; then arm is a single state, else is either a single state
-	     ;; or missing, so we can coalesce both diretly into this state
+	     ;; or missing, so we can coalesce both directly into this state
 	     ;; rather than creating new intermediate states
 
 	     ;; recompile the arms to fall-through
 	     (let* ((then-states (parse-tagbody-forms (list then-branch)
 						      nil nil))
 		    (then-state (car then-states))
+
 		    (else-states (if else-branch
 				     (parse-tagbody-forms else-branch
 							  nil nil)))
@@ -235,7 +256,8 @@ the entry state first.")
 
 		 ;; continue into the trailing states, if any
 		 (when trailing-state
-		   (if (synthetic-p trailing-state)
+		   (if (and (synthetic-p trailing-state)
+			    (not (jump-target-p (label trailing-state))))
 		       (progn
 			 ;; trailing state is synthetic, remove it and
 			 ;; fold its body into the current state
@@ -247,7 +269,8 @@ the entry state first.")
 		       (progn
 			 ;; trailing state isn't synthetic, add a drop-through
 			 ;; jump to it
-			 (appendf (body current-state) `((go ,trailing-label)))
+			 (appendf (body current-state) `((go ,(label trailing-state))))
+			 (mark-state-label-as-jump-target (label trailing-state))
 
 			 ;; retain the state in the machine
 			 trailing-states))))))
@@ -260,15 +283,20 @@ the entry state first.")
 	     ;; then arm to jump back to
 	     (let ((cform (if else-states
 			      ;; two arms
-			      `(if ,condition
-				   (go ,then-label)
-				   (progn
-				     ,@(body else-state)))
+			      (prog1
+				  `(if ,condition
+				       (go ,(label then-state))
+				       (progn
+					 ,@(body else-state)))
+				(mark-state-label-as-jump-target (label then-state)))
 
 			      ;; one arm
-			      `(if ,condition
-				   (go ,then-label)
-				   (go ,trailing-label)))))
+			      (prog1
+				  `(if ,condition
+				       (go ,(label then-state))
+				       (go ,(label trailing-state)))
+				(mark-state-label-as-jump-target (label then-state))
+				(mark-state-label-as-jump-target (label trailing-state))))))
 
 	       ;; add the condition to the current state
 	       (appendf (body current-state) (list cform))
@@ -282,10 +310,13 @@ the entry state first.")
 	     ;; then arm is a single state but the else arm is a full
 	     ;; state machine, so integrate the then arm but keep the
 	     ;; trailing states as a state for the else arm to jump to
-	     (let ((cform `(if ,condition
-			       (progn
-				 ,@(body then-state))
-			       (go ,else-label))))
+	     (let ((cform (prog1
+			      `(if ,condition
+				   (progn
+				     ,@(body then-state))
+				   (go ,(label else-state)))
+			    (mark-state-label-as-jump-target (label then-state))
+			    (mark-state-label-as-jump-target (label else-state)))))
 
 	       ;; add the condition to the current state
 	       (appendf (body current-state) (list cform))
@@ -299,14 +330,20 @@ the entry state first.")
 	     ;; default creates new states for both arms
 	     (let ((cform (if else-states
 			      ;; two arms
-			      `(if ,condition
-				   (go ,then-label)
-				   (go ,else-label))
+			      (prog1
+				  `(if ,condition
+				       (go ,(label then-state))
+				       (go ,(label else-state)))
+				(mark-state-label-as-jump-target (label then-state))
+				(mark-state-label-as-jump-target (label else-state)))
 
 			      ;; one arm, jump to the trailing state on false
-			      `(if ,condition
-				   (go ,then-label)
-				   (go ,trailing-label)))))
+			      (prog1
+				  `(if ,condition
+				       (go ,(label then-state))
+				       (go ,(label trailing-state)))
+				(mark-state-label-as-jump-target (label then-state))
+				(mark-state-label-as-jump-target (label trailing-state))))))
 
 	       ;; add condition to current state
 	       (appendf (body current-state) (list cform))
@@ -352,17 +389,17 @@ the entry state first.")
 	      trailing-states))))
 
 
-(defmethod parse-tagbody-forms-sexp ((fun (eql 'go)) args forms current-state exit-state)
-  (let ((label (car args)))
-    ;; add form to current state
-    (appendf (body current-state) (list (cons fun args)))
+(defun chew-unreachable-code (current-state forms)
+  "Chew-up any unreachable code in CURRENT-STATE from FORMS.
 
-    ;; check whether there is unreachable code on this path
-    (when (not (or (null forms)
-		   (state-label-p (car forms))))
+Forms are deleted until either FORMS is exhausted or we hit
+a state marker. An UNREACHABLE-CODE warning is signalled if code
+if skipped."
+  (when (not (or (null forms)
+		 (state-label-p (car forms))))
       ;; next form does not start a new state, and so is unreachable
-      ;; report against the offending (unreachable) form, not the GO form
       (with-current-form (car forms)
+	;; report against the offending (unreachable) form, not the GO form
 	(warn 'unreachable-code :label (label current-state)
 				:hint "Check the logic"))
 
@@ -373,10 +410,21 @@ the entry state first.")
 	   forms)
 	(setq forms (cdr forms))))
 
-    (if (not (null forms))
-	(parse-tagbody-forms forms
-			     nil
-			     exit-state))))
+  ;; return the remaining forms (if any)
+  forms)
+
+
+(defmethod parse-tagbody-forms-sexp ((fun (eql 'go)) args forms current-state exit-state)
+  (let ((label (car args)))
+    ;; add form to current state
+    (appendf (body current-state) (list (cons fun args)))
+    (mark-state-label-as-jump-target label)
+
+    ;; skip any unreachable code on this path, and continue parsing from there
+    (if-let ((newforms (chew-unreachable-code current-state forms)))
+      (parse-tagbody-forms newforms
+			   nil
+			   exit-state))))
 
 
 (defun count-tagbody-forms (forms)
@@ -467,6 +515,10 @@ be built that run once and then stop. Use explicit GO forms, or
 looping macros like FOREVER, to keep the machine running."
   (declare (optimize debug))
 
+  ;; clear the jump targets table
+  (clear-jump-targets)
+
+  ;; parse with a final passivating state
   (let* ((passive-state (make-instance 'state))
 	 (states (parse-tagbody-forms forms nil passive-state)))
 
