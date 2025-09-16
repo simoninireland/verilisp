@@ -38,26 +38,29 @@
 	   (as register read-data))
 
   (let ((mem (make-array (words) :element-type (unsigned-byte 32)
-				 :initial-contents (:file "firmware.hex"))))
+				 :initial-contents (:file "firmware.hex")))
+	(word-addr (bref addr 31 :end 2)))
 
     (@ (posedge clk)
-       (let ((word-addr (bref addr 31 :end 2)))
-	 (if (asserted-p rd/wr)
-	     ;; writing
-	     (with-bitfields ((b3 8) (b2 8) (b1 8) (b0 8))
-	       (aref mem word-addr)
+       (if (asserted-p rd/wr)
+	   ;; writing
+	   (with-bitfields ((b3 8) (b2 8) (b1 8) (b0 8))
+	     (aref mem word-addr)
+
+	     (with-bitfields ((d3 8) (d2 8) (d1 8) (d0 8))
+	       write-data
 
 	       (when (asserted-p (bref write-mask 0))
-		 (setf b0 (bref write-data 7 :width 8)))
+		 (setf b0 d0))
 	       (when (asserted-p (bref write-mask 1))
-		 (setf b1 (bref write-data 15 :width 8)))
+		 (setf b1 d1))
 	       (when (asserted-p (bref write-mask 2))
-		 (setf b2 (bref write-data 23 :width 8)))
+		 (setf b2 d2))
 	       (when (asserted-p (bref write-mask 3))
-		 (setf b3 (bref write-data 31 :width 8))))
+		 (setf b3 d3))))
 
-	     ;; reading
-	     (setf read-data (aref mem word-addr)))))))
+	   ;; reading
+	   (setf read-data (aref mem word-addr))))))
 
 
 (defmodule/vl rv32i (clk reset
@@ -148,7 +151,7 @@
 	    (left-shift (flip32 shifter)))
 	(declare (type (unsigned-byte 32) rs1 rs2 alu-plus aluOut Uimm)
 		 (type (signed-byte 32) Iimm Simm Bimm Jimm)
-		 (type (unsigned-byte 33) alu-minus))
+		 (type (unsigned-byte 33) alu-minus))!
 
 	;; ALU operations
 	(@ (*)
@@ -192,7 +195,7 @@
 	      (setq take-branch-p 0))))
 
 	;; memory operations
-	(let ((byte-access-p      (= (bref funct3 1 :width 2) 1))
+	(let ((byte-access-p      (= (bref funct3 1 :width 2) 0))
 	      (half-word-access-p (= (bref funct3 1 :width 2) 1))
 
 	      (load-half-word     (if (bref load-store-addr 1)
@@ -243,10 +246,7 @@
 				     load-data)
 				    (t
 				     aluOut)))
-	      (writeback-p (or ALUReg-p
-			       ALUImm-p
-			       JAL-p
-			       JALR-p))
+	      (writeback-p (not (or branch-p store-p)))
 
 	      ;; address computations
 	      (pc-plus-imm (+ PC (cond (JAL-p
@@ -269,69 +269,87 @@
 	  (declare (type (unsigned-byte 32) writeback-data pc-plus-imm pc-plus-4 next-pc load-store-addr))
 
 	  ;; store assignments
-	  (setf (bref write-data 7 :width 8)
-		(bref rs2 7 :width 8))
-	  (setf (bref write-data 15 :width 8)
-		(if (bref load-store-addr 0)
-		    (bref rs2  7 :width 8)
-		    (bref rs2 15 :width 8)))
-	  (setf (bref write-data 23 :width 8)
-		(if (bref load-store-addr 1)
-		    (bref rs2  7 :width 8)
-		    (bref rs2 23 :width 8)))
-	  (setf (bref write-data 31 :width 8)
-		(if (bref load-store-addr 0)
-		    (bref rs2 7 :width 8)
-		    (if (bref load-store-addr 1)
-			(bref rs2 15 :width 8)
-			(bref rs2 31 :width 8))))
+	  (with-bitfields ((w3 8) (w2 8) (w1 8) (w0 8))
+	    write-data
+
+	    (with-bitfields ((d3 8) (d2 8) (d1 8) (d0 8))
+	      rs2
+
+	      (setf w0 d0)
+	      (setf w1 (if (bref load-store-addr 0)
+			   d0
+			   d1))
+	      (setf w2 (if (bref load-store-addr 1)
+			   d0
+			   d2))
+	      (setf w3 (if (bref load-store-addr 0)
+			   d0
+			   (if (bref load-store-addr 1)
+			       d1
+			       d3)))))
 
 	  ;; main state machine
 	  (@ (posedge clk)
-	     (forever
+	     (tagbody
 	      instruction-fetch
-	      ;; check for reset
-	      (when (not (asserted-p reset))
-		(setq pc 0)
-		(go instruction-fetch))
-
-	      ;; set up the fetch
-	      ;;(setq status #2r10000)
-	      (setq rd/wr 0)
-	      (setq addr pc)
+		;; check for reset
+		;; (when (not (asserted-p reset))
+		;;   (setq pc 0)
+		;;   (go instruction-fetch))
+		(setq status #2r10000)
+		;; set up the fetch
+		(setq rd/wr 0)
+		(setq addr pc)
 
 	      instruction-wait
-	      ;; read the instruction
-	      (setq instr read-data)
+		;; read the instruction
+		(setq instr read-data)
 
 	      register-fetch
-	      ;; fetch registers
-	      (setq rs1 (aref register-file rs1id))
-	      (setq rs2 (aref register-file rs2id))
+		;; fetch registers
+		(setq rs1 (aref register-file rs1id))
+		(setq rs2 (aref register-file rs2id))
+		(cond (aluREG-p
+		       (setq status #2r00001))
+		      (aluIMM-p
+		       (setq status #2r00100))
+		      (JAL-p
+		       (setq status #2r00010))
+		      (system-p
+		       (setq status #2r11111))
+		      (t
+		       (setq status #2r00000)))
 
-	      execute-writeback
-	      ;; update PC for next instruction
-	      (if (not system-p)
-		  (setq pc next-pc))
+	      execute
+		;; set up load/store memory accesses
+		(cond (load-p
+		       (setq rd/wr 0)
+		       (setq addr load-store-addr))
 
-	      ;; set up load/store memory accesses
-	      (cond (load-p
-		     (setq rd/wr 0)
-		     (setq addr load-store-addr))
+		      (store-p
+		       (setq rd/wr 1)
+		       (setq addr load-store-addr)
+		       (setq write-mask store-write-mask)))
 
-		    (store-p
-		     (setq rd/wr 1)
-		     (setq addr load-store-addr)
-		     (setq write-mask store-write-mask)))
+	      writeback
+		;; write-back data to registers
+		(when (and writeback-p
+			   (0/= rdId))
+		  (setf (aref register-file rdId) writeback-data))
 
-	      ;; write-back data to registers
-	      (when (and writeback-p
-			 (0/= rdId))
-		(setf (aref register-file rdId) writeback-data))
+		;; write contents of X1 to status LEDs
+		;; (when (= rdId 1)
+		;;   (setq status (bref (aref register-file 1) 4 :width 5)))
 
-	      ;; write contents of X1 to status LEDs
-	      (when (= rdId 1)
-		(setq status (bref (aref register-file 1) 4 :width 5))))))))))
+	      next
+		;; update PC for next instruction
+		(when (not system-p)
+		  (setq pc next-pc)
+		  (go instruction-fetch))
+
+	      stop
+		;; system instructions come here and halt the core
+		(go stop))))))))
 
 
 ;; ---------- SoC ----------
@@ -350,7 +368,7 @@
 
     (let ((soc-clock (make-instance 'clockworks :clk-in system-clk :clk clk
 						:reset-in 0 :reset reset
-						:slow 19))
+						:slow 21))
 	  (soc-ram (make-instance 'ram :clk clk
 				       :addr addr :rd/wr rd/wr
 				       :read-data read-data
