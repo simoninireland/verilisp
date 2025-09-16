@@ -274,7 +274,7 @@ Use VERILOG-OPERATOR if provided for synthesis."
      (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
        (destructuring-bind (v)
 	   args
-	 (ensure-boolean (compute-type (v)))))
+	 (ensure-boolean (compute-type v))))
 
 
      (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
