@@ -138,9 +138,8 @@
 
 	       (t
 		;; value is narrower, zero-extend
-		(let ((zeros (- tyw vtyw)))
-		  (synthesise `(make-bitfields (extend-bits 0 ,zeros)
-					       ,val))))))
+		(synthesise `(make-bitfields (extend-bits 0 ,(- tyw vtyw))
+					     (bref ,val ,(- vtyw 1) :end 0))))))
 
 	;; type are both signed
 	((and (signed-byte-p vty)
@@ -153,17 +152,13 @@
 	       ((> vtyw tyw)
 		;; value is wider, shrink it by using the same
 		;; sign bit and the low-order bits
-		(let* ((signbit (1- vtyw))
-		       (startbit (- tyw 2)))
-		  (synthesise `(make-bitfields (bref ,val ,signbit)
-					       (bref ,val ,startbit :end 0)))))
+		(synthesise `(make-bitfields (bref ,val ,(1- vtyw))
+					     (bref ,val , (- tyw 2) :end 0))))
 
 	       (t
 		;; value is narrower, sign-extend
-		(let ((signbit (1- vtyw))
-		      (signs (1- (- tyw vtyw))))
-		  (synthesise `(make-bitfields (extend-bits (bref ,val ,signbit) ,signs)
-					       ,val))))))
+		(synthesise `(make-bitfields (extend-bits (bref ,val ,(1- vtyw)) ,(- tyw vtyw))
+					     (bref ,val ,(- vtyw 1) :end 0))))))
 
 	;; value is unsigned, needed as signed
 	((and (unsigned-byte-p vty)
@@ -171,49 +166,39 @@
 	 (cond ((or (null tyw)
 		    (= vtyw tyw))
 		;; types have equal width, reduce value and zero-extend
-		(let ((reduced (- tyw 2)))
-		  (synthesise `(make-bitfields 0
-					       (bref ,val ,reduced :end 0)))))
+		(synthesise `(make-bitfields 0
+					     (bref ,val ,(- tyw 1) :end 0))))
 
-		((> vtyw tyw)
-		 ;; value is wider, shrink it
-		 (let* ((startbit (- tyw 2)))
-		   (synthesise `(make-bitfields 0
-						(bref ,val ,startbit :end 0)))))
+	       ((> vtyw tyw)
+		;; value is wider, shrink it
+		(synthesise `(make-bitfields 0
+					     (bref ,val ,(- tyw 2) :end 0))))
 
-		(t
-		 ;; value is narrower, zero-extend
-		 (let ((signs (- tyw vtyw)))
-		   (synthesise `(make-bitfields (extend-bits 0 ,signs)
-						,val))))))
+	       (t
+		;; value is narrower, zero-extend
+		(synthesise `(make-bitfields (extend-bits 0 , (- tyw vtyw))
+					     (bref ,val ,(- vtyw 1) :end 0))))))
 
 	;; value is signed, needed as unsigned
 	((and (signed-byte-p vty)
 	      (unsigned-byte-p ty))
 	 (cond ((= vtyw tyw)
 		;; types have equal width, reduce value and zero-extend
-		(let ((reduced (- tyw 2)))
-		  (synthesise `(make-bitfields 0
-					       (bref (if (< ,val 0)
-							 (- ,val)
-							 ,val)
-						     ,reduced :end 0)))))
+		(synthesise `(make-bitfields 0
+					     (if (< ,val 0)
+						 (+ (lognot (bref a ,(- tyw 2) :end 0)) 1)
+						 (bref a ,(- tyw 2) :end 0)))))
 
 	       ((> vtyw tyw)
 		;; value is wider, shrink it
-		(let ((reduced (- tyw 2)))
-		  (synthesise `(make-bitfields 0
-					       (bref (if (< ,val 0)
-							 (- ,val)
-							 ,val)
-						     ,reduced :end 0)))))
+		(synthesise `(make-bitfields 0
+					     (if (< ,val 0)
+						 (+ (lognot (bref a ,(- tyw 2) :end 0)) 1)
+						 (bref a ,(- tyw 2) :end 0)))))
 
 	       (t
 		;; value is narrower, zero-extend
-		(let ((signs (1+ (- tyw vtyw)))
-		      (reduced (- vtyw 2)))
-		  (synthesise `(make-bitfields (extend-bits 0 ,signs)
-					       (bref (if (< ,val 0)
-							 (- ,val)
-							 ,val)
-						     ,reduced :end 0)))))))))))
+		(synthesise `(make-bitfields (extend-bits 0 ,(- tyw vtyw))
+					     (if (< ,val 0)
+						 (+ (lognot (bref a ,(- vtyw 2) :end 0)) 1)
+						 (bref a ,(- vtyw 2) :end 0)))))))))))
