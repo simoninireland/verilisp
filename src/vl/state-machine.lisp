@@ -34,8 +34,12 @@
     :initarg :body
     :initform nil
     :accessor body)
+   (successor
+    :documentation "The state this state will fall-through to (if it does)."
+    :initform nil
+    :accessor successor-state)
    (synthetic-p
-    :documentation "Flag whether the state is synthetic."
+    :documentation "Flag indicating that the state is synthetic."
     :initform nil
     :reader synthetic-p))
   (:documentation "Abstract state in a state machine."))
@@ -43,8 +47,22 @@
 
 (defmethod initialize-instance :after ((s state) &key label &allow-other-keys)
   (unless label
+    ;; no label given, construct oe and mark it as synthetic
     (setf (slot-value s 'label) (gensym))
     (setf (slot-value s 'synthetic-p) t)))
+
+
+(defun append-to-body (state form)
+  "Append FORM to the body of STATE."
+  (appendf (body state) (list form)))
+
+
+(defun falls-through-p (state)
+  "Test whether STATE has a successor state.
+
+States without successor states exit through explicit GO forms; those
+with successors will have a GO appended to them."
+  (not (null (successor-state state))))
 
 
 ;; ---------- Jump targets ----------
@@ -56,7 +74,7 @@ A jump target is a state label that is the target of a GO expression.")
 
 
 (defun clear-jump-targets ()
-  "Clear the current jump targets."
+  "Clear the list of jump targets."
   (setq *jump-targets* nil))
 
 
@@ -82,7 +100,8 @@ This simply tests whether FORM is a symbol."
 (defun extract-states (forms)
   "Extract the states from FORMS.
 
-Return a list of lists, each element being a state label and the state body."
+Return a list of lists, each element being a state label and the
+corresponding state body."
   (flet ((extract-state (states form)
 	   (if (state-label-p form)
 	       ;; new state
@@ -197,6 +216,10 @@ the entry state first.")
 		trailing-states))))
 
 
+(defun name (args)
+  "doc"
+  )
+
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'if)) args forms current-state exit-state)
   (declare (optimize debug))
 
@@ -220,111 +243,7 @@ the entry state first.")
 			   (car else-states))))
 
       ;; compile the conditional, with optimisations
-      (cond ((and (= (length then-states) 1)
-		  (or (null else-states)
-		      (= (length else-states) 1)))
-	     ;; then arm is a single state, else is either a single state
-	     ;; or missing, so we can coalesce both directly into this state
-	     ;; rather than creating new intermediate states
-
-	     ;; recompile the arms to fall-through
-	     (let* ((then-states (parse-tagbody-forms (list then-branch)
-						      nil nil))
-		    (then-state (car then-states))
-
-		    (else-states (if else-branch
-				     (parse-tagbody-forms else-branch
-							  nil nil)))
-		    (else-state (if else-states
-				    (car else-states))))
-
-	       (let ((cform (if else-states
-				;; two arms
-				`(if ,condition
-				     (progn
-				       ,@(body then-state))
-				     (progn
-				       ,@(body else-state)))
-
-				;; one arm
-				`(if ,condition
-				     (progn
-				       ,@(body then-state))))))
-
-		 ;; add the condition to the current state
-		 (appendf (body current-state) (list cform))
-
-		 ;; continue into the trailing states, if any
-		 (when trailing-state
-		   (if (and (synthetic-p trailing-state)
-			    (not (jump-target-p (label trailing-state))))
-		       (progn
-			 ;; trailing state is synthetic, remove it and
-			 ;; fold its body into the current state
-			 (appendf (body current-state) (body trailing-state))
-
-			 ;; don't then synthesise this merged state
-			 (cdr trailing-states))
-
-		       (progn
-			 ;; trailing state isn't synthetic, add a drop-through
-			 ;; jump to it
-			 (appendf (body current-state) `((go ,(label trailing-state))))
-			 (mark-state-label-as-jump-target (label trailing-state))
-
-			 ;; retain the state in the machine
-			 trailing-states))))))
-
-	    ((or (null else-states)
-		 (= (length else-states) 1))
-	     ;; then arm is a full state machine but else is either a
-	     ;; single state or missing, so we can build it into this state
-	     ;; but we need to keep the trailing states as a state for the
-	     ;; then arm to jump back to
-	     (let ((cform (if else-states
-			      ;; two arms
-			      (prog1
-				  `(if ,condition
-				       (go ,(label then-state))
-				       (progn
-					 ,@(body else-state)))
-				(mark-state-label-as-jump-target (label then-state)))
-
-			      ;; one arm
-			      (prog1
-				  `(if ,condition
-				       (go ,(label then-state))
-				       (go ,(label trailing-state)))
-				(mark-state-label-as-jump-target (label then-state))
-				(mark-state-label-as-jump-target (label trailing-state))))))
-
-	       ;; add the condition to the current state
-	       (appendf (body current-state) (list cform))
-
-	       ;; return all the states created
-	       (append then-states
-		       (if trailing-states
-			   trailing-states))))
-
-	    ((= (length then-states) 1)
-	     ;; then arm is a single state but the else arm is a full
-	     ;; state machine, so integrate the then arm but keep the
-	     ;; trailing states as a state for the else arm to jump to
-	     (let ((cform (prog1
-			      `(if ,condition
-				   (progn
-				     ,@(body then-state))
-				   (go ,(label else-state)))
-			    (mark-state-label-as-jump-target (label then-state))
-			    (mark-state-label-as-jump-target (label else-state)))))
-
-	       ;; add the condition to the current state
-	       (appendf (body current-state) (list cform))
-
-	       ;; return all the states created
-	       (append else-states
-		       (if trailing-states
-			   trailing-states))))
+      (cond
 
 	    (t
 	     ;; default creates new states for both arms
@@ -346,7 +265,7 @@ the entry state first.")
 				(mark-state-label-as-jump-target (label trailing-state))))))
 
 	       ;; add condition to current state
-	       (appendf (body current-state) (list cform))
+	       (append-to-body current-state cform)
 
 	       ;; return all the states created
 	       (append then-states
@@ -383,7 +302,7 @@ the entry state first.")
       ;; add new case to current state
       (let ((cform `(case ,condition
 		      ,@new-arms)))
-	(appendf (body current-state) (list cform)))
+	(append-to-body current-state cform))
 
       (append arm-states
 	      trailing-states))))
@@ -394,21 +313,21 @@ the entry state first.")
 
 Forms are deleted until either FORMS is exhausted or we hit
 a state marker. An UNREACHABLE-CODE warning is signalled if code
-if skipped."
+is skipped."
   (when (not (or (null forms)
 		 (state-label-p (car forms))))
-      ;; next form does not start a new state, and so is unreachable
-      (with-current-form (car forms)
-	;; report against the offending (unreachable) form, not the GO form
-	(warn 'unreachable-code :label (label current-state)
-				:hint "Check the logic"))
+    ;; next form does not start a new state, and so is unreachable
+    ;; report against the offending (unreachable) form, not the current form
+    (with-current-form (car forms)
+      (warn 'unreachable-code :label (label current-state)
+			      :hint "Check the logic"))
 
-      ;; skip to the next state marker
-      (do ()
-	  ((or (null forms)
-	       (state-label-p (car forms)))
-	   forms)
-	(setq forms (cdr forms))))
+    ;; skip to the next state marker
+    (do ()
+	((or (null forms)
+	     (state-label-p (car forms)))
+	 forms)
+      (setq forms (cdr forms))))
 
   ;; return the remaining forms (if any)
   forms)
@@ -417,8 +336,11 @@ if skipped."
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'go)) args forms current-state exit-state)
   (let ((label (car args)))
     ;; add form to current state
-    (appendf (body current-state) (list (cons fun args)))
+    (append-to-body current-state (cons fun args))
     (mark-state-label-as-jump-target label)
+
+    ;; current state is ended and doesn't fall-through
+    (setf (successor-state current-state) nil)
 
     ;; skip any unreachable code on this path, and continue parsing from there
     (if-let ((newforms (chew-unreachable-code current-state forms)))
@@ -457,15 +379,13 @@ Return a list of of states created, initial state first."
       (progn
 	(if current-state
 	    (when exit-state
-		;; we have a current state, append a jump to the exit state
-		(appendf (body current-state) (list `(go ,(label exit-state))))
-		nil)
+		;; we have a current state
+		(setf (successor-state current-state) exit-state) nil)
 
 	    (when exit-state
-		;; we don't have a current state, create one to hold the jump
-		;; (which may then be optimised away later)
+		;; we don't have a current state, create one
 		(let ((jump-state (make-instance 'state)))
-		  (appendf (body jump-state) (list `(go ,(label exit-state))))
+		  (setf (successor-state jump-state) exit-state)
 		  (list jump-state)))))
 
       ;; forms to do
@@ -476,9 +396,9 @@ Return a list of of states created, initial state first."
 	  (if (state-label-p form)
 	      ;; new state marker
 	      (let ((new-state (make-instance 'state :label form)))
-		(if current-state
-		    ;; link current state to new state
-		    (appendf (body current-state) (list `(go ,(label new-state)))))
+		(when current-state
+		  ;; link current state to new state
+		  (setf (successor-state current-state) new-state))
 
 		;; use this new state as the current state going forward
 		(cons new-state
@@ -501,7 +421,7 @@ Return a list of of states created, initial state first."
 
 		      (progn
 			;; singleton form that isn't a state marker
-			(appendf (body current-state) (list form))
+			(append-to-body current-state form)
 			(parse-tagbody-forms rest current-state exit-state)))))))))
 
 
@@ -521,6 +441,11 @@ looping macros like FOREVER, to keep the machine running."
   ;; parse with a final passivating state
   (let* ((passive-state (make-instance 'state))
 	 (states (parse-tagbody-forms forms nil passive-state)))
+
+    ;; link all states to their successors where necessary
+    (dolist (state states)
+      (if (falls-through-p state)
+	  (append-to-body state `(go ,(label (successor-state state))))))
 
     ;; return all the states, passivating state last
     (append states (list passive-state))))
