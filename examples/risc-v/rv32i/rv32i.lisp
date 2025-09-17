@@ -131,9 +131,6 @@
 			    (extend-bits 1 33)))
 
 	      ;; shifters
-	      (shamt (if ALUreg-p
-			 (bref rs2 4 :end 0)
-			 (bref instr 24 :end 20)))
 	      (shifter-in (if (= funct3 1)
 			      (flip32 aluIn1)
 			      aluIn1))
