@@ -134,12 +134,17 @@
 
 	       ((> vtyw tyw)
 		;; value is wider, shrink it
-		(synthesise `(bref ,val ,(- tyw 1) :end 0)))
+		(if (> vtyw 1)
+		    (synthesise `(bref ,val ,(- tyw 1) (:end 0)))
+		    (synthesise val)))
 
 	       (t
 		;; value is narrower, zero-extend
-		(synthesise `(make-bitfields (extend-bits 0 ,(- tyw vtyw))
-					     (bref ,val ,(- vtyw 1) :end 0))))))
+		(if (> vtyw 1)
+		    (synthesise `(make-bitfields (extend-bits 0 ,(- tyw vtyw))
+						 (bref ,val ,(- vtyw 1) :end 0)))
+		    (synthesise `(make-bitfields (extend-bits 0 ,(- tyw vtyw))
+						 ,val))))))
 
 	;; type are both signed
 	((and (signed-byte-p vty)
