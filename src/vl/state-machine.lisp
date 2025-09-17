@@ -451,6 +451,8 @@ looping macros like FOREVER, to keep the machine running."
     (append states (list passive-state))))
 
 
+;; TODO: Do this before linking states above
+
 (defun merge-state-machine-empty-states (machine)
   "Return an alist mapping states in MACHINE to only the necessary states.
 
@@ -459,10 +461,11 @@ A state is unnecessary if it consists purely of a GO to another state."
 
   (labels ((mergeable-state (m)
 	     (let ((b (body m)))
-	       (if (and (not (null b))                          ; body not empty
-			(= (length b) 1)                        ; single form
-			(eql (caar b) 'go)                      ; ... which is a GO
-			(not (eql (cadr (car b)) (label m))))   ; ... and isn't back to the same state
+	       (if (and (synthetic-p m)			      ; a synthetic state
+			(not (null b))			      ; ... with a body not empty
+			(= (length b) 1)                      ; ... containing a single form
+			(eql (caar b) 'go)                    ; ... which is a GO
+			(not (eql (cadr (car b)) (label m)))) ; ... and isn't back to the same state
 
 		   ;; mergeable, return its target state
 		   (destructuring-bind (fun target)
