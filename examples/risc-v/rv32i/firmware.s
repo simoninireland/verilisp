@@ -1,5 +1,6 @@
 /*
-	Simple loop incrementing the x1 register, used to drive LEDs
+	Countdown subroutine decrementing the x11 register, used to drive LEDs
+	and exercise subroutine instructions and load/stores.
 
 	Copyright (C) 2024--2025 Simon Dobson
 
@@ -24,7 +25,15 @@
 .global	_start
 
 _start:
-	add  x1, x0, x0
-.L0:
-	addi x1, x1, 1
-	jal  x0, .L0
+	li	x10, 15
+	sw	x10, 100(x0)
+	call	_countdown
+	j	_start
+
+_countdown:
+	lw	x10, 100(x0)
+	addi	x10, x10, -1
+	sw	x10, 100(x0)
+	add	x11, x0, x10
+	bnez	x10, _countdown
+	ret
