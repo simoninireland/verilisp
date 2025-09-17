@@ -221,10 +221,18 @@ Verilisp, but don't *require* it."
 ;; Only works for one-dimensional arrays at the moment
 ;; Should expand constants
 
-(defun synthesise-array-init-from-data (data shape)
-  "Return the initialisation of DATA with the given SHAPE."
-  (as-list data :before "{ " :after " }"
-		:per-row 16))
+(defun synthesise-array-init-from-data (n data shape)
+  "Return the initialisation of N using DATA with the given SHAPE."
+  (flet ((initialise-array-from-data ()
+	   (dotimes (i (car shape))
+	     (synthesise n)
+	     (as-literal "[")
+	     (synthesise i)
+	     (as-literal "] = ")
+	     (synthesise (nth i data))
+	     (as-literal ";" :newline t))))
+
+    (add-module-late-initialisation #'initialise-array-from-data)))
 
 
 (defun synthesise-array-init-from-value (n v shape)
@@ -239,6 +247,7 @@ This is implemented using late initialisation."
 	     (as-literal "] = ")
 	     (synthesise v)
 	     (as-literal ";" :newline t))))
+
     (add-module-late-initialisation #'initialise-array-from-value)))
 
 
@@ -252,6 +261,7 @@ This is implemented using a late initialisation function."
 	   (as-literal "\", ")
 	   (synthesise n)
 	   (as-literal ");" :newline t)))
+
     (add-module-late-initialisation #'initialise-array-from-file)))
 
 
@@ -283,11 +293,10 @@ Otheriwse it is read as a literal list."
 
 		     (t
 		      ;; inline initial data
-		      (as-literal " = " :newline t)
-		      (with-indentation
-			(synthesise-array-init-from-data initial-contents shape))))))
+		      (synthesise-array-init-from-data n initial-contents shape)))))
 
 	  (initial-element
+	   ;; initial single element
 	   (synthesise-array-init-from-value n initial-element shape)))))
 
 
