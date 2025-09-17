@@ -39,7 +39,7 @@
 
   (let ((mem (make-array (words) :element-type (unsigned-byte 32)
 				 :initial-contents (:file "firmware.hex")))
-	(word-addr (bref addr 31 :end 2)))
+	(word-addr (bref addr 31 :width 30)))
 
     (@ (posedge clk)
        (if (asserted-p rd/wr)
@@ -115,241 +115,236 @@
 	    (register-file    (make-array '(32) :element-type (unsigned-byte 32)
 						:initial-element 0))
 	    (rs1              0)
-	    (rs2              0)
+	    (rs2              0))
+	(declare (type (unsigned-byte 32) rs1 rs2 Uimm)
+		 (type (signed-byte 32) Iimm Simm Bimm Jimm))
 
-	    ;; ALU
-	    (aluIn1 rs1)
-	    (aluIn2 (if (or ALUreg-p branch-p)
-			rs2
-			Iimm))
-	    aluOut
-	    (alu-plus (+ aluIn1 aluIn2))
-	    (alu-minus (+ (make-bitfields 1 (lognot aluIn2))
-			  (make-bitfields 0 aluIn1)
-			  (extend-bits 1 33)))
+	;; ALU
+	(let ((aluIn1 rs1)
+	      (aluIn2 (if (or ALUreg-p branch-p)
+			  rs2
+			  Iimm))
+	      aluOut
+	      (alu-plus (+ aluIn1 aluIn2))
+	      (alu-minus (+ (make-bitfields 1 (lognot aluIn2))
+			    (make-bitfields 0 aluIn1)
+			    (extend-bits 1 33)))
 
-	    ;; comparator
-	    (LT (if (logxor (bref aluIn1 31)
-			    (bref aluIn2 31))
-		    (bref aluIn1 31)
-		    (bref alu-minus 32)))
-	    (LTU (bref alu-minus 32))
-	    (EQ (0= (bref alu-minus 31 :end 0)))
-	    take-branch-p
+	      ;; shifters
+	      (shamt (if ALUreg-p
+			 (bref rs2 4 :end 0)
+			 (bref instr 24 :end 20)))
+	      (shifter-in (if (= funct3 1)
+			      (flip32 aluIn1)
+			      aluIn1))
+	      (shifter (>> (the 'signed-byte (make-bitfields (logand (bref instr 30)
+								     (bref aluIn1 31))
+							     shifter-in))
+			   (bref aluIn2 4 :end 0)))
+	      (left-shift (flip32 shifter))
 
-	    ;; shifters
-	    (shamt (if ALUreg-p
-		       (bref rs2 4 :end 0)
-		       (bref instr 24 :end 20)))
-	    (shifter-in (if (= funct3 1)
-			    (flip32 aluIn1)
-			    aluIn1))
-	    (shifter (>> (the 'signed-byte (make-bitfields (logand (bref instr 30)
-								   (bref aluIn1 31))
-							   shifter-in))
-			 (bref aluIn2 4 :end 0)))
-	    (left-shift (flip32 shifter)))
-	(declare (type (unsigned-byte 32) rs1 rs2 alu-plus aluOut Uimm)
-		 (type (signed-byte 32) Iimm Simm Bimm Jimm)
-		 (type (unsigned-byte 33) alu-minus))!
+	      ;; comparator
+	      (LT (if (logxor (bref aluIn1 31)
+			      (bref aluIn2 31))
+		      (bref aluIn1 31)
+		      (bref alu-minus 32)))
+	      (LTU (bref alu-minus 32))
+	      (EQ (0= (bref alu-minus 31 :end 0)))
+	      take-branch-p)
+	  (declare (type (unsigned-byte 32) alu-plus aluOut)
+		   (type (unsigned-byte 33) alu-minus))
 
-	;; ALU operations
-	(@ (*)
-	   (case funct3
-	     (#2r000
-	      (setq aluOut (if (and (bref funct7 5)
-				    (bref instr 5))
-			       (bref alu-minus 31 :end 0)
-			       alu-plus)))
-	     (#2r001
-	      (setq aluOut left-shift))
-	     (#2r010
-	      (setq aluOut (coerce LT '(unsigned-byte 32))))
-	     (#2r011
-	      (setq aluOut (coerce LTU '(unsigned-byte 32))))
-	     (#2r100
-	      (setq aluOut (logxor aluIn1 aluIn2)))
-	     (#2r101
-	      (setq aluOut shifter))
-	     (#2r110
-	      (setq aluOut (logior aluIn1 aluIn2)))
-	     (#2r111
-	      (setq aluOut (logand aluIn1 aluIn2)))))
+	  ;; ALU operations
+	  (@ (*)
+	     (case funct3
+	       (#2r000
+		(setq aluOut (if (and (bref funct7 5)
+				      (bref instr 5))
+				 (bref alu-minus 31 :end 0)
+				 alu-plus)))
+	       (#2r001
+		(setq aluOut left-shift))
+	       (#2r010
+		(setq aluOut (coerce LT '(unsigned-byte 32))))
+	       (#2r011
+		(setq aluOut (coerce LTU '(unsigned-byte 32))))
+	       (#2r100
+		(setq aluOut (logxor aluIn1 aluIn2)))
+	       (#2r101
+		(setq aluOut shifter))
+	       (#2r110
+		(setq aluOut (logior aluIn1 aluIn2)))
+	       (#2r111
+		(setq aluOut (logand aluIn1 aluIn2)))))
 
-	;; branch-taking predicate
-	(@ (*)
-	   (case funct3
-	     (#2r000
-	      (setq take-branch-p EQ))
-	     (#2r001
-	      (setq take-branch-p (not EQ)))
-	     (#2r100
-	      (setq take-branch-p LT))
-	     (#2r101
-	      (setq take-branch-p (not LT)))
-	     (#2r110
-	      (setq take-branch-p LTU))
-	     (#2r111
-	      (setq take-branch-p (not LTU)))
-	     (t
-	      (setq take-branch-p 0))))
+	  ;; branch-taking predicate
+	  (@ (*)
+	     (case funct3
+	       (#2r000
+		(setq take-branch-p EQ))
+	       (#2r001
+		(setq take-branch-p (not EQ)))
+	       (#2r100
+		(setq take-branch-p LT))
+	       (#2r101
+		(setq take-branch-p (not LT)))
+	       (#2r110
+		(setq take-branch-p LTU))
+	       (#2r111
+		(setq take-branch-p (not LTU)))
+	       (t
+		(setq take-branch-p 0))))
 
-	;; memory operations
-	(let ((byte-access-p      (= (bref funct3 1 :width 2) 0))
-	      (half-word-access-p (= (bref funct3 1 :width 2) 1))
+	  ;; memory operations
+	  (let ((byte-access-p      (= (bref funct3 1 :width 2) 0))
+		(half-word-access-p (= (bref funct3 1 :width 2) 1))
 
-	      (load-half-word     (if (bref load-store-addr 1)
-				      (bref read-data 31 :width 16)
-				      (bref read-data 15 :width 16)))
-	      (load-byte          (if (bref load-store-addr 0)
-				      (bref load-half-word 15 :width 8)
-				      (bref load-half-word 7 :width 8)))
-	      (load-sign-extend-p (and (not (bref funct3 2))
-				       (if byte-access-p
-					   (bref load-byte 7)
-					   (bref load-half-word 15))))
-	      (load-data (cond (byte-access-p
-				(if load-sign-extend-p
-				    (coerce load-byte (signed-byte 32))
-				    (coerce load-byte (unsigned-byte 32))))
-			       (half-word-access-p
-				(if load-sign-extend-p
-				    (coerce load-half-word (signed-byte 32))
-				    (coerce load-half-word (unsigned-byte 32))))
-			       (t
-				read-data)))
+		(load-half-word     (if (bref load-store-addr 1)
+					(bref read-data 31 :width 16)
+					(bref read-data 15 :width 16)))
+		(load-byte          (if (bref load-store-addr 0)
+					(bref load-half-word 15 :width 8)
+					(bref load-half-word  7 :width 8)))
 
-	      (store-write-mask (cond (byte-access-p
-				       (if (bref load-store-addr 1)
-					   (if (bref load-store-addr 0)
-					       #2r1000
-					       #2r0100)
-					   (if (bref load-store-addr 0)
-					       #2r0010
-					       #2r0001)))
-				      (half-word-access-p
-				       (if (bref load-store-addr 1)
-					   #2r1100
-					   #2r0011))
+		(load-sign-extend-p (not (bref funct3 2)))
+		(load-data (cond (byte-access-p
+				  (if load-sign-extend-p
+				      (coerce (the (signed-byte 8) load-byte) (signed-byte 32))
+				      (coerce load-byte (unsigned-byte 32))))
 
-				      (t
-				       #2r1111)))
+				 (half-word-access-p
+				  (if load-sign-extend-p
+				      (coerce (the (signed-byte 16) load-half-word) (signed-byte 32))
+				      (coerce load-half-word (unsigned-byte 32))))
 
-	      ;; write-back to registers
-	      (writeback-data (cond ((or JAL-p JALR-p)
-				     pc-plus-4)
-				    (LUI-p
-				     Uimm)
-				    (AUIPC-p
-				     pc-plus-imm)
-				    (load-p
-				     load-data)
-				    (t
-				     aluOut)))
-	      (writeback-p (not (or branch-p store-p)))
+				 (t
+				  read-data)))
 
-	      ;; address computations
-	      (pc-plus-imm (+ PC (cond (JAL-p
-					Jimm)
-				       (AUIPC-p
-					Uimm)
+		(store-write-mask (cond (byte-access-p
+					 (if (bref load-store-addr 1)
+					     (if (bref load-store-addr 0)
+						 #2r1000
+						 #2r0100)
+					     (if (bref load-store-addr 0)
+						 #2r0010
+						 #2r0001)))
+
+					(half-word-access-p
+					 (if (bref load-store-addr 1)
+					     #2r1100
+					     #2r0011))
+
+					(t
+					 #2r1111)))
+
+		(load-store-addr (+ rs1 (if store-p
+					    Simm
+					    Iimm))))
+	    (declare (type (unsigned-byte 32) load-store-addr))
+
+	    ;; store assignments
+	    (with-bitfields ((w3 8) (w2 8) (w1 8) (w0 8))
+	      write-data
+
+	      (with-bitfields ((d3 8) (d2 8) (d1 8) (d0 8))
+		rs2
+
+		(setf w0 d0)
+		(setf w1 (if (bref load-store-addr 0)
+			     d0
+			     d1))
+		(setf w2 (if (bref load-store-addr 1)
+			     d0
+			     d2))
+		(setf w3 (if (bref load-store-addr 0)
+			     d0
+			     (if (bref load-store-addr 1)
+				 d1
+				 d3)))))
+
+	    ;; main state machine
+	    (@ (posedge clk)
+	       (tagbody
+		instruction-fetch
+		  ;; check for reset
+		  ;; (when (not (asserted-p reset))
+		  ;;   (setq pc 0)
+		  ;;   (go instruction-fetch))
+		  (setq rd/wr 0)
+		  (setq addr pc)
+
+		instruction-wait
+		  ;; read the instruction
+
+		instruction-load
+		  ;; load and decode the instruction
+		  (setq instr read-data)
+
+		register-fetch
+		  ;; fetch registers
+		  (setq rs1 (aref register-file rs1id))
+		  (setq rs2 (aref register-file rs2id))
+
+		execute
+		  (if system-p
+		      ;; system instructions stop the core
+		      (go stop)
+
+		      ;; set up load/store memory accesses
+		      (cond (load-p
+			     (setq rd/wr 0)
+			     (setq addr load-store-addr))
+
+			    (store-p
+			     (setq rd/wr 1)
+			     (setq addr load-store-addr)
+			     (setq write-mask store-write-mask))
+
+			    (t
+			     (go writeback))))
+
+		load/store
+		  ;; perform any load/store operation
+
+		writeback
+		  ;; write-back data to registers
+		  (when (and (not (or branch-p store-p))
+			     (0/= rdId))
+		    (setf (aref register-file rdId) (cond ((or JAL-p JALR-p)
+							   (+ pc 4))
+							  (LUI-p
+							   Uimm)
+							  (AUIPC-p
+							   (+ pc Uimm))
+							  (load-p
+							   load-data)
+							  (t
+							   aluOut))))
+
+		  ;; increment the PC according to the instruction class
+		  (let ((next-pc (cond ((and branch-p take-branch-p)
+					(+ pc Bimm))
+				       (JAL-p
+					(+ pc Jimm))
+				       (JALR-p
+					(make-bitfields (bref alu-plus 31 :end 1) 0))
 				       (t
-					Bimm))))
-	      (pc-plus-4 (+ PC 4))
-	      (next-pc (cond ((or (and branch-p take-branch-p)
-				  JAL-p)
-			      pc-plus-imm)
-			     (JALR-p
-			      (make-bitfields (bref alu-plus 31 :end 1) 0))
-			     (t
-			      pc-plus-4)))
-	      (load-store-addr (+ rs1 (if store-p
-					  Simm
-					  Iimm))))
-	  (declare (type (unsigned-byte 32) writeback-data pc-plus-imm pc-plus-4 next-pc load-store-addr))
+					(+ pc 4)))))
+		    (declare (type (unsigned-byte 32) next-pc))
 
-	  ;; store assignments
-	  (with-bitfields ((w3 8) (w2 8) (w1 8) (w0 8))
-	    write-data
+		    (setq pc next-pc))
 
-	    (with-bitfields ((d3 8) (d2 8) (d1 8) (d0 8))
-	      rs2
+		display
+		  ;; write the contents of X11 to the status LEDs
+		  (when (= rdId 11)
+		    (setq status (bref (aref register-file 11) 4 :width 5)))
 
-	      (setf w0 d0)
-	      (setf w1 (if (bref load-store-addr 0)
-			   d0
-			   d1))
-	      (setf w2 (if (bref load-store-addr 1)
-			   d0
-			   d2))
-	      (setf w3 (if (bref load-store-addr 0)
-			   d0
-			   (if (bref load-store-addr 1)
-			       d1
-			       d3)))))
+		  ;; next cycle
+		  (go instruction-fetch)
 
-	  ;; main state machine
-	  (@ (posedge clk)
-	     (tagbody
-	      instruction-fetch
-		;; check for reset
-		;; (when (not (asserted-p reset))
-		;;   (setq pc 0)
-		;;   (go instruction-fetch))
-		(setq status #2r10000)
-		;; set up the fetch
-		(setq rd/wr 0)
-		(setq addr pc)
-
-	      instruction-wait
-		;; read the instruction
-		(setq instr read-data)
-
-	      register-fetch
-		;; fetch registers
-		(setq rs1 (aref register-file rs1id))
-		(setq rs2 (aref register-file rs2id))
-		(cond (aluREG-p
-		       (setq status #2r00001))
-		      (aluIMM-p
-		       (setq status #2r00100))
-		      (JAL-p
-		       (setq status #2r00010))
-		      (system-p
-		       (setq status #2r11111))
-		      (t
-		       (setq status #2r00000)))
-
-	      execute
-		;; set up load/store memory accesses
-		(cond (load-p
-		       (setq rd/wr 0)
-		       (setq addr load-store-addr))
-
-		      (store-p
-		       (setq rd/wr 1)
-		       (setq addr load-store-addr)
-		       (setq write-mask store-write-mask)))
-
-	      writeback
-		;; write-back data to registers
-		(when (and writeback-p
-			   (0/= rdId))
-		  (setf (aref register-file rdId) writeback-data))
-
-		;; write contents of X1 to status LEDs
-		;; (when (= rdId 1)
-		;;   (setq status (bref (aref register-file 1) 4 :width 5)))
-
-	      next
-		;; update PC for next instruction
-		(when (not system-p)
-		  (setq pc next-pc)
-		  (go instruction-fetch))
-
-	      stop
-		;; system instructions come here and halt the core
-		(go stop))))))))
+		stop
+		  ;; system instructions come here and halt the core
+		  (go stop)))))))))
 
 
 ;; ---------- SoC ----------
@@ -368,7 +363,7 @@
 
     (let ((soc-clock (make-instance 'clockworks :clk-in system-clk :clk clk
 						:reset-in 0 :reset reset
-						:slow 21))
+						:slow 18))
 	  (soc-ram (make-instance 'ram :clk clk
 				       :addr addr :rd/wr rd/wr
 				       :read-data read-data
