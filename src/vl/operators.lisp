@@ -115,7 +115,10 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 ;; register, so we provide two different operators instead. (This will
 ;; change if I can figure out a way to synthesise ash.)
 ;;
-;; The result is always unsigned.
+;; The right shift (>>) operator behaves like ash in that it does
+;; sign extension automat6ically based on the type of the value. This
+;; means that Verilog's >>> (arithmetic shoft right) is generated implicitly
+;; by type, rather than being provided explicitly.
 
 (defmethod compute-type-sexp ((fun (eql '<<)) args)
   (declare (optimize debug))
@@ -143,8 +146,6 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
     `(ash ,@vals)))
 
 
-;; We should probably do sign extension here, like Lisp does
-
 (defmethod compute-type-sexp ((fun (eql '>>)) args)
   (ensure-number-of-arguments fun args 2)
 
@@ -153,13 +154,22 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
     (let ((tyval (compute-type val))
 	  (tyoffset (compute-type offset)))
 
-      ;; use the width of the value as the maximum width, since
+      ;; type is the same as the value, since
       ;; shifting right can only make it smaller
       tyval)))
 
 
 (defmethod synthesise-sexp ((fun (eql '>>)) args)
-  (as-infix '>> args))
+  (destructuring-bind (val offset)
+      args
+
+    (let ((ty (compute-type val)))
+      (if (signed-byte-p ty)
+	  ;; value is signed, do arithmetic shift
+	  (as-infix '>>> args)
+
+	  ;; value is unsigned, do logical shift
+	  (as-infix '>> args)))))
 
 
 (defmethod lispify-sexp ((fun (eql '>>)) args)
