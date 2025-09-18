@@ -135,7 +135,7 @@
 	       ((> vtyw tyw)
 		;; value is wider, shrink it
 		(if (> vtyw 1)
-		    (synthesise `(bref ,val ,(- tyw 1) (:end 0)))
+		    (synthesise `(bref ,val ,(- tyw 1) :end 0))
 		    (synthesise val)))
 
 	       (t
