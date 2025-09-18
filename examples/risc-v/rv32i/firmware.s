@@ -25,15 +25,17 @@
 .global	_start
 
 _start:
-	li	x10, 15
+	li	x10, 8
 	sw	x10, 100(x0)
 	call	_countdown
 	j	_start
 
 _countdown:
-	lw	x10, 100(x0)
-	addi	x10, x10, -1
-	sw	x10, 100(x0)
-	add	x11, x0, x10
-	bnez	x10, _countdown
+	lw	x11, 100(x0)
+	beqz	x11, _return
+	addi	x11, x11, -1
+	sw	x11, 100(x0)
+	j	_countdown
+_return:
 	ret
+	ebreak
