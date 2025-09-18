@@ -123,7 +123,10 @@
   (is (vl::unsigned-byte-p 'unsigned-byte))
   (is (not (vl::unsigned-byte-p 'signed-byte)))
   (is (vl::signed-byte-p 'signed-byte))
-  (is (vl::signed-byte-p 'unsigned-byte)))
+
+  ;; signed-byte-p excludes unsigned-byte, but subtype-p admits it
+  (is (not (vl::signed-byte-p 'unsigned-byte)))
+  (is (vl::subtype-p 'unsigned-byte 'signed-byte)))
 
 
 (test test-type-lattice
