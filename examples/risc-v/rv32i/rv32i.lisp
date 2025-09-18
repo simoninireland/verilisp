@@ -111,13 +111,34 @@
 							 (bref instr 30 :end 21)
 							 0)))
 
+	    ;; these are more type-based, but we need to fix coercion to not
+	    ;; introduce subscripts on subscripts
+	    ;; (Uimm (the '(unsigned-byte 32) (make-bitfields (bref instr 31 :end 12)
+	    ;;						   (extend-bits 0 12))))
+	    ;; (Iimm (coerce (the '(signed-byte 12) (bref instr 31 :end 20))
+	    ;;		  '(signed-byte 32)))
+	    ;; (Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31 :end 25)
+	    ;;							 (bref instr 11 :end 7)))
+	    ;;		  '(signed-byte 32)))
+	    ;; (Bimm (coerce (the '(signed-byte 13) (make-bitfields (bref instr 31)
+	    ;;							 (bref instr 7)
+	    ;;							 (bref instr 30 :end 25)
+	    ;;							 (bref instr 11 :end 8)
+	    ;;							 0))
+	    ;;		  '(signed-byte 32)))
+	    ;; (Jimm (coerce (the '(signed-byte 20) (make-bitfields (bref instr 31)
+	    ;;							 (bref instr 19 :end 12)
+	    ;;							 (bref instr 20)
+	    ;;							 (bref instr 30 :end 21)
+	    ;;							 0))
+	    ;;		  '(signed-byte 32)))
+
 	    ;; register file and working registers
 	    (register-file    (make-array '(32) :element-type (unsigned-byte 32)
 						:initial-element 0))
 	    (rs1              0)
 	    (rs2              0))
-	(declare (type (unsigned-byte 32) rs1 rs2 Uimm)
-		 (type (signed-byte 32) Iimm Simm Bimm Jimm))
+	(declare (type (unsigned-byte 32) rs1 rs2))
 
 	;; ALU
 	(let ((aluIn1 rs1)
@@ -128,7 +149,7 @@
 	      (alu-plus (+ aluIn1 aluIn2))
 	      (alu-minus (+ (make-bitfields 1 (lognot aluIn2))
 			    (make-bitfields 0 aluIn1)
-			    (extend-bits 1 33)))
+			    1))
 
 	      ;; shifters
 	      (shifter-in (if (= funct3 1)
@@ -146,7 +167,7 @@
 		      (bref aluIn1 31)
 		      (bref alu-minus 32)))
 	      (LTU (bref alu-minus 32))
-	      (EQ (0= (bref alu-minus 31 :end 0)))
+	      (EQ (0= (coerce alu-minus '(unsigned-byte 32))))
 	      take-branch-p)
 	  (declare (type (unsigned-byte 32) alu-plus aluOut)
 		   (type (unsigned-byte 33) alu-minus))
@@ -157,7 +178,7 @@
 	       (#2r000
 		(setq aluOut (if (and (bref funct7 5)
 				      (bref instr 5))
-				 (bref alu-minus 31 :end 0)
+				 (coerce alu-minus '(unsigned-byte 32))
 				 alu-plus)))
 	       (#2r001
 		(setq aluOut left-shift))
@@ -279,8 +300,8 @@
 
 		register-fetch
 		  ;; fetch registers
-		  (setq rs1 (aref register-file rs1id))
-		  (setq rs2 (aref register-file rs2id))
+		  (setq rs1 (aref register-file rs1Id))
+		  (setq rs2 (aref register-file rs2Id))
 
 		execute
 		  (if system-p
