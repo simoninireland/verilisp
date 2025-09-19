@@ -26,7 +26,7 @@ Redefining modules and macros is permitted, which will overwrite the
 previous definition and result in a DUPLICATE-MODULE or
 DUPLICATE MACRO warning. Definitions can also be removed.
 
-.. cl:function:: forget-variable/vl
+.. cl:function:: forget/vl
 
 
 The core environment

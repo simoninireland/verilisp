@@ -152,7 +152,7 @@
    #:get-modules-for-synthesis
    #:defmodule/vl
    #:importmodule/vl
-   #:forget-variable/vl
+   #:forget/vl
    #:defmacro/vl
    #:macrolet/vl
    #:expand/vl
