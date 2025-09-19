@@ -18,6 +18,9 @@ into Verilisp code. The result is that we can easily extend Verilisp
 with new language constructs, as long as they expand into the core
 synthesisable fragment.
 
+It may be useful to read the :ref:`glossary of concepts
+<core-concepts>` before reading the definitions of the forms.
+
 
 Types
 -----
@@ -45,6 +48,7 @@ code into modules.
    core/binders
    core/declarations
    core/operators
+   core/bits
    core/conditionals
    core/assignment
    core/control-flow

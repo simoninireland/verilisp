@@ -49,4 +49,4 @@ variable, and can take one of the symbols ``register``, ``wire``, and
 
 The declaration ``direction`` assigns directions for variables in and
 out of modules, and can take one of the symbols ``in``, ``out``, or
-``inout``.
+``inout``. It has no effect in other contexts.

@@ -24,7 +24,7 @@ Assignment to a single bit within a variable:
 .. code-block:: lisp
 
    (let ((a 12))
-      (setf (bit a 0) 1))
+      (setf (bref a 0) 1))
 
 Assignment to several slices of bits within a variable:
 
@@ -33,9 +33,9 @@ Assignment to several slices of bits within a variable:
    (let ((a 12))
       (declare (type (unsigned-byte 8) a)
 
-      (setf (bits a 2) #2r101)
-      (setf (bits a 7 :width 1) #2r1)
-      (setf (bits a 2 :end 1) #2r10))
+      (setf (bref a 2) #2r101)
+      (setf (bref a 7 :width 1) #2r1)
+      (setf (bref a 2 :end 1) #2r10))
 
 ``(setq a 1)`` and ``(setf a 1)`` are equivalent. For the other
 generalised places, see under their appropriate access operators.
@@ -48,19 +48,3 @@ generalised places, see under their appropriate access operators.
 There is also a :ref:`parallel assignment <core-psetq>` version of
 ``setq``, as well as operators to :ref:`increment/decrement in place
 <core-incf-decf>`.
-
-
-
-Synchronous and asynchronous assignment
----------------------------------------
-
-By default the assignments made by ``setq`` and ``setf`` are
-asynchronous: they can be interleaved with other operations. To force
-the assignment to complete before control continues they can be
-decorated with the ``:sync`` keyword:
-
-.. code-block:: lisp
-
-   (setq a 24 :sync t)
-
-performs the assignment synchronously.

@@ -28,5 +28,6 @@ to both interpretations, from the same description.
    verilisp
    using
    implementation
+   concepts
    zbibliography
    acknowledgements

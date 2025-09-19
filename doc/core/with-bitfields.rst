@@ -11,12 +11,16 @@ the decomposition. These two macros perform :ref:`matching
 usually binding variables against bits within the number according to
 the pattern
 
+.. note::
+
+   See :ref:`core-bits` for unstructured access to bits within a value.
+
 
 ``if-let-bitfields``
 --------------------
 
-``if-let-bitfields`` works similarly to ``IF-LET`` in that if a
-match succeeded it runs a form with variables bound, and if not runs
+``if-let-bitfields`` works similarly to IF-LET in that if a
+match succeeds it runs a form with variables bound, and if not runs
 another form. For example,
 
 .. code-block:: lisp
@@ -54,43 +58,11 @@ multi-form "then" arm, doing nothing if matching fails.
 	 (setq valid 1)))
 
 
-
-.. _core-with-bitfields-matching:
-
-Matching
---------
-
-A bitfield pattern is simply a list consisting of:
-
-- variable names;
-- the values 0, 1, or -; or
-- lists consisting of one of these followed by a length.
-
-Matching occurs from the right, in the sense that the rightmost
-element of the pattern matches the lowest-order bit.
-
-Variables match against the corresponding bits, which must be
-adjacent.
-
-A value of - matches any bit, essentially ignoring the bit in that
-position. A 0 or 1 matches only that bit in that position.
-
-A list such as ``(a 3)`` is equivalent to a pattern ``a a a``: a
-pattern of length 3, bound to ``a``. Similarly, a pattern ``(1 3)``
-will match three adjacent 1 bits, and ``(- 3)`` will ignore three
-bits.
-
-.. note::
-
-   The lengths appearing in list sub-patterns must be statically
-   known.
-
-
 Assigning to bitfields
 ----------------------
 
 The variables created by the bitfields macros are generalised places
-and so can be assigned to. Assigning will change the corresponding
+and so can be assigned to. Assignment will change the corresponding
 bits in the value that the bitfields are extracted from. For example
 after:
 
@@ -109,3 +81,34 @@ the value of ``opcode`` will be #2r01110001.
    Because the variables created by the bitfields macros are
    generalised places, use ``setf`` to assign values, not
    ``setq``.
+
+
+.. _core-with-bitfields-matching:
+
+Matching
+--------
+
+A bitfield pattern is simply a list consisting of:
+
+- variable names;
+- the values 0, 1, or -; or
+- lists consisting of one of these followed by a length.
+
+Matching occurs from the right, in the sense that the rightmost
+element of the pattern matches the lowest-order bit.
+
+Variables match against the corresponding bits, which must be
+adjacent. The same variable cannot appear in non-adjacent positions.
+
+A value of - matches any bit, essentially ignoring the bit in that
+position. A 0 or 1 matches only that bit in that position.
+
+A list such as ``(a 3)`` is equivalent to a pattern ``a a a``: a
+pattern of length 3, bound to ``a``. Similarly, a pattern ``(1 3)``
+will match three adjacent 1 bits, and ``(- 3)`` will ignore three
+bits.
+
+.. note::
+
+   The lengths appearing in list sub-patterns must be statically
+   known.

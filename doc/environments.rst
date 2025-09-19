@@ -22,6 +22,12 @@ If required, the global environment can be cleared.
 
 .. cl:function:: clear-global-environment
 
+Redefining modules and macros is permitted, which will overwrite the
+previous definition and result in a DUPLICATE-MODULE or
+DUPLICATE MACRO warning. Definitions can also be removed.
+
+.. cl:function:: forget-variable/vl
+
 
 The core environment
 --------------------
@@ -29,4 +35,10 @@ The core environment
 Verilisp also has a *core environment* that contains the macros
 declared within the core language. Entries in this environment are
 available everywhere, like the global environment -- but unlike the
-global environment, the core environment can't be cleared.
+global environment, the core environment can't be cleared and
+definitions can't be overridden.
+
+.. note::
+
+   In Common Lisp terminology, there is a *package lock* on the core
+   environment.

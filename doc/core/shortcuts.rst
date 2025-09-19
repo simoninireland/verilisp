@@ -3,8 +3,7 @@
 Shortcuts
 =========
 
-Several sets of macros provide quick shortcuts for common Lisp
-operations.
+Several sets of macros provide quick shortcuts for common operations.
 
 
 .. _core-maths-shortcuts:
@@ -16,6 +15,9 @@ Maths shortcuts
 - ``(1- v)`` -- subtract one from value
 - ``(2* v)`` -- double value
 - ``(2/ v)`` -- halve value
+
+These shortcuts use ``setf`` and so can be used to update generalised
+places.
 
 
 Comparison shortcuts
