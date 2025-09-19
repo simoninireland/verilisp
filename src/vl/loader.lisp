@@ -225,6 +225,14 @@ into the final bitstream from within the FPGA toolchain."
 	 ',modname))))
 
 
+;; ---------- Forgetting ----------
+
+(defun forget-variable/vl (name)
+  "Forget the macro or module NAME from the global environment."
+  (in-global-environment
+    (forget-variable name)))
+
+
 ;; ---------- Module synthesis ----------
 
 (defun synthesise/vl (m str)
