@@ -24,7 +24,9 @@ The main interface to Verilisp is through a small set of operations.
 
 
 In some projects it may also be useful (or necessary) to import
-existing IP written in Verilog.
+existing IP written in Verilog. This can be done by defining a
+Verilisp interface to the Verilog code that is then imported into the
+FPGA toolchain.
 
 
-.. cl:macro:: importmodule/vl
+.. cl:macro:: defmoduleinterface/vl

@@ -190,18 +190,18 @@ Return the name of the newly-defined module."
 	 ',modname))))
 
 
-(defmacro importmodule/vl (modname decls declarations)
-  "Import a module MODNAME with the given argument DECLS.
+(defmacro defmoduleinterface/vl (modname decls declarations)
+  "Define a module MODNAME with the given argument DECLS.
 
-Importing allows modules written in Verilog to be used within
-Verilisp. This lets Verilisp programs use existing IP.
+Defining just interfaces allows modules written in Verilog to be used
+within Verilisp. This lets Verilisp programs use existing IP.
 
 Verilisp does a lot more work in analysing code than Verilog, however.
 DECLARATIONS should be a DECLARE form providing information about the
 DECLS, typically types and directions of arguments (which Verilisp
 would normally infer from the body of the module).
 
-Imported modules are not scheuled for synthesis, and should be included
+Module interfaces are not scheuled for synthesis, and should be included
 into the final bitstream from within the FPGA toolchain."
   ;; make sure we have a DECLARE form
   (with-current-form declarations
