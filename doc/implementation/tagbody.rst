@@ -3,7 +3,7 @@
 Implementing state machines
 ===========================
 
-Verilisp's ``tagbody`` / ``go`` forms attempt to provide exactly the
+Verilisp's ``TAGBODY`` / ``GO`` forms attempt to provide exactly the
 semantics expected from Common Lisp. By and large they do so, but with
 a couple of subtleties arising from the implementation. In
 applications that require precise control of timing, or when
@@ -14,7 +14,7 @@ may be useful.
 A review of the Lisp forms
 --------------------------
 
-``tagbody`` and ``go`` are usually Lisp special forms, but in
+``TAGBODY`` and ``GO`` are usually Lisp special forms, but in
 Verilisp they are macros that translate the forms into more primitive
 Verilisp constructs.
 
@@ -37,7 +37,7 @@ variable from 0 to 10.
 	  (go start)
 	  (go increment))))
 
-The behaviour of this form in Common Lisp is to enter the ``tagbody``
+The behaviour of this form in Common Lisp is to enter the ``TAGBODY``
 and execute the first state, labelled ``start``. This will continue
 until the condition is met, at which point the machine will
 fall-through to the next state (labelled ``increment``) and execute
@@ -45,7 +45,7 @@ it, then fall-through to the ``count`` state. This state conditionally
 jumps either to ``start`` if the machine has finished, or to
 ``increment`` if not.
 
-(Put another way, ``tagbody`` is basically a ``progn`` with the option
+(Put another way, ``TAGBODY`` is basically a ``progn`` with the option
 to jump to arbitrarily-labelled places within it.)
 
 From this description, it should be clear that this machine *never
@@ -80,8 +80,8 @@ variable to keep track of the state.
 	 (case state
 	   (start
 	    (if (= a 0)
-	      (setq state increment)  ; drop-through
-	      (setq state start))
+	      (setq state start)
+	      (setq state increment)) ; drop-through
 
 	   (increment
 	    (incf a)
@@ -93,10 +93,10 @@ variable to keep track of the state.
 		(setq state increment)))))))
 
 Comparing this to the machine above, the translation is hopefully
-quite clear. We replace ``go`` with ``setq`` of the state variable,
+quite clear. We replace ``GO`` with ``SETQ`` of the state variable,
 where the state labels have been defined as constants containing a
 unique state number. Otherwise the main body of each state is copied
-from the ``tagbody`` form, being enclosed in a ``case`` form to jump
+from the ``TAGBODY`` form, being enclosed in a ``CASE`` form to jump
 to the correct state on entry.
 
 The only detail concerns moving between adjacent states, for example
@@ -104,9 +104,9 @@ from "start" to "increment". The implementation requires that we set
 the state variable explicitly to identify the state the machine should
 be in at the next "turn".
 
-The Verilisp ``tagbody`` and ``go`` compile to this translation
+The Verilisp ``TAGBODY`` and ``GO`` compile to this translation
 needed, including synthesising new names for state variables and
-ensuring that, for example, all ``go`` targets are valid state labels
+ensuring that, for example, all ``GO`` targets are valid state labels
 in the current state machine.
 
 To run this machine we need to repeatedly execute its body, which we
@@ -146,8 +146,9 @@ which means that some common Verilog constructions (like having code
 in other sensitive blocks refer to the state of another state machine)
 can't be built in Verilisp. It also means that outside code can't
 change the state of a machine: the only way to change state is through
-a ``go`` within the ``tagbody`` itself. One can argue that these are
-both advantages in terms of code clarity.
+a ``GO`` within the  ``TAGBODY`` itself. One can argue that these are
+both advantages in terms of code clarity: however, it can make some
+circuits harder to define and/or slower to execute.
 
 
 .. _implementation-tagbody-differences-with-cl:
@@ -166,7 +167,7 @@ it exits. This is necessary to avoid awkward interactions between
 state-based and non-state-based code.
 
 A third distinction, related to the second, concerns the number of
-states. In Common Lisp a ``tagbody`` form has exactly the number of
+states. In Common Lisp a ``TAGBODY`` form has exactly the number of
 states suggested by the code. Verilisp, by contrast, may introduce
 extra "hidden" states to handle the control flow. This is invisible to
 the programmer at the level of computational behaviour, but is visible
@@ -181,33 +182,33 @@ How state machines are compiled
 
 If timing is an issue -- for example when interfacing with
 timing-sensitive hardware, or to get the best performance -- it may be
-worth understanding the translation process for ``tagbody``.
+worth understanding the translation process for ``TAGBODY``.
 
-A ``tagbody`` is basically a ``progn`` with labels. Verilisp traverses
-the body of the ``tagbody`` and creates a new state corresponding to
+A ``TAGBODY`` is basically a ``PROGN`` with labels. Verilisp traverses
+the body of the ``TAGBODY`` and creates a new state corresponding to
 each labelled state (plus one for the initial code, which may not have
 a label given explicitly). The forms within each state are added to
-the state's body, and eventually end up in the arms of a ``case`` form.
+the state's body, and eventually end up in the arms of a ``CASE`` form.
 
-Most forms are simply added to the state body. For ``if`` and ``case``
+Most forms are simply added to the state body. For ``IF`` and ``CASE``
 forms, new state machines are created for each arm of the conditional,
 and a simpler conditional is added to the current state body that
 jumps to these machines according to the condition. This means that
-each ``if`` or ``case`` introduces an extra "turn" of the machine when
+each ``IF`` or ``CASE`` introduces an extra "turn" of the machine when
 it selects the correct arm. Another state is introduced for the code
-following the ``if`` or ``case`` form -- so one new state for each
+following the ``IF`` or ``CASE`` form -- so one new state for each
 arm, plus one state.
 
-A ``go`` form changes the machine's state directly, and ends the
-current state. Any code after the ``go`` is inaccessible unless it is
+A ``GO`` form changes the machine's state directly, and ends the
+current state. Any code after the ``GO`` is inaccessible unless it is
 in a labelled state, and a warning will be raised if code is skipped.
-This means ``go`` never creates a hidden state, but will always
+This means ``GO`` never creates a hidden state, but will always
 cause a wait until the next "turn" selects the targeted state.
 
-A ``tagbody`` form encountered within a ``tagbody`` form generates a
+A ``TAGBODY`` form encountered within a ``TAGBODY`` form generates a
 nested state machine which is called from the surrounding machine. The
 transition from the outer to the inner machine involves waiting a
-"turn" (there is an implicit ``go``). However, the nested machine's
+"turn" (there is an implicit ``GO``). However, the nested machine's
 states become part of the outer machine's states, so the inner machine
 does not need its own state variable. This can save a little space:
 for example, if the outer machine has 7 states (needing a 3-bit state
