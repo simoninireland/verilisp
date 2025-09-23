@@ -80,7 +80,7 @@
     (with-bitfields ((funct7 7) (rs2Id 5) (rs1Id 5) (funct3 3) (rdId 5) (opcode 7))
       instr
 
-      (let (;; instruction classes
+      (let (;; instruction class predicates
 	    (ALUreg-p (= opcode #2r0110011))
 	    (ALUimm-p (= opcode #2r0010011))
 	    (branch-p (= opcode #2r1100011))
@@ -93,45 +93,45 @@
 	    (system-p (= opcode #2r1110011))
 
 	    ;; immediate values
-	    ;; (Uimm (the '(unsigned-byte 32) (make-bitfields (bref instr 31 :end 12)
-	    ;;						   (extend-bits 0 12))))
-	    ;; (Iimm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 21)
-	    ;;						 (bref instr 30 :end 20))))
-	    ;; (Simm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 21)
-	    ;;						 (bref instr 30 :end 25)
-	    ;;						 (bref instr 11 :end 7))))
-	    ;; (Bimm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 20)
-	    ;;						 (bref instr 7)
-	    ;;						 (bref instr 30 :end 25)
-	    ;;						 (bref instr 11 :end 8)
-	    ;;						 0)))
-	    ;; (Jimm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 12)
-	    ;;						 (bref instr 19 :end 12)
-	    ;;						 (bref instr 20)
-	    ;;						 (bref instr 30 :end 21)
-	    ;;						 0)))
+	    (Uimm (the '(unsigned-byte 32) (make-bitfields (bref instr 31 :end 12)
+							   (extend-bits 0 12))))
+	    (Iimm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 21)
+							 (bref instr 30 :end 20))))
+	    (Simm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 21)
+							 (bref instr 30 :end 25)
+							 (bref instr 11 :end 7))))
+	    (Bimm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 20)
+							 (bref instr 7)
+							 (bref instr 30 :end 25)
+							 (bref instr 11 :end 8)
+							 0)))
+	    (Jimm (the '(signed-byte 32) (make-bitfields (extend-bits (bref instr 31) 12)
+							 (bref instr 19 :end 12)
+							 (bref instr 20)
+							 (bref instr 30 :end 21)
+							 0)))
 
 	    ;; these are more type-based, but we need to fix coercion to not
 	    ;; introduce subscripts on subscripts
-	    (Uimm (the '(unsigned-byte 32) (make-bitfields (bref instr 31 :end 12)
-							   (extend-bits 0 12))))
-	    (Iimm (coerce (the '(signed-byte 12) (bref instr 31 :end 20))
-			  '(signed-byte 32)))
-	    (Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31 :end 25)
-								 (bref instr 11 :end 7)))
-			  '(signed-byte 32)))
-	    (Bimm (coerce (the '(signed-byte 13) (make-bitfields (bref instr 31)
-								 (bref instr 7)
-								 (bref instr 30 :end 25)
-								 (bref instr 11 :end 8)
-								 0))
-			  '(signed-byte 32)))
-	    (Jimm (coerce (the '(signed-byte 20) (make-bitfields (bref instr 31)
-								 (bref instr 19 :end 12)
-								 (bref instr 20)
-								 (bref instr 30 :end 21)
-								 0))
-			  '(signed-byte 32)))
+	    ;; (Uimm (the '(unsigned-byte 32) (make-bitfields (bref instr 31 :end 12)
+	    ;;						   (extend-bits 0 12))))
+	    ;; (Iimm (coerce (the '(signed-byte 12) (bref instr 31 :end 20))
+	    ;;		  '(signed-byte 32)))
+	    ;; (Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31 :end 25)
+	    ;;							 (bref instr 11 :end 7)))
+	    ;;		  '(signed-byte 32)))
+	    ;; (Bimm (coerce (the '(signed-byte 13) (make-bitfields (bref instr 31)
+	    ;;							 (bref instr 7)
+	    ;;							 (bref instr 30 :end 25)
+	    ;;							 (bref instr 11 :end 8)
+	    ;;							 0))
+	    ;;		  '(signed-byte 32)))
+	    ;; (Jimm (coerce (the '(signed-byte 20) (make-bitfields (bref instr 31)
+	    ;;							 (bref instr 19 :end 12)
+	    ;;							 (bref instr 20)
+	    ;;							 (bref instr 30 :end 21)
+	    ;;							 0))
+	    ;;		  '(signed-byte 32)))
 
 	    ;; register file and working registers
 	    (register-file    (make-array '(32) :element-type (unsigned-byte 32)
@@ -155,9 +155,9 @@
 	      (shifter-in (if (= funct3 1)
 			      (flip32 aluIn1)
 			      aluIn1))
-	      (shifter (>> (the 'signed-byte (make-bitfields (logand (bref instr 30)
-								     (bref aluIn1 31))
-							     shifter-in))
+	      (shifter (>> (the '(signed-byte 33) (make-bitfields (logand (bref instr 30)
+									  (bref aluIn1 31))
+								  shifter-in))
 			   (bref aluIn2 4 :end 0)))
 	      (left-shift (flip32 shifter))
 
@@ -321,7 +321,7 @@
 			    (t
 			     (go writeback))))
 
-		load/store
+		load/store-wait
 		  ;; perform any load/store operation
 
 		writeback
