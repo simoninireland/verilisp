@@ -138,16 +138,23 @@
 	    ;; default to accessing the single START bit
 	    (setq width 1)
 
-	    ;; compute width from start and end
-	    (setq width `(1+ (- ,start ,end)))))
+	    (progn
+	      ;; start bit and end must be a constants
+	      (ensure-static start)
+	      (ensure-static end)
 
-    (if (symbolp place)
+	      ;; compute width from start and end
+	      (setq width `(1+ (- ,start ,end)))))
+
 	(progn
-	  ;; constrain the written variable
-	  (add-type-constraint place `(unsigned-byte (1+ ,start))))
+	  ;; width must be constant
+	  (let ((w (eval-in-static-environment width)))
+	    ;; if width is not 1, start must be constant
+	    (if (> w 1)
+		(ensure-static start)))))
 
-	;; recurse into the complex place
-	(compute-type place))
+    ;; recurse into the complex place
+    (compute-type place)
 
     ;; type depends on the number of bits extracted
     `(unsigned-byte ,width)))
@@ -159,7 +166,6 @@
   (destructuring-bind (place start &key end width)
       args
     ;; we use the actual values in the constraints
-    (setq start (eval-in-static-environment start))
     (if (null width)
 	(if (null end)
 	    ;; default to accessing the single START bit
@@ -168,14 +174,22 @@
 	    ;; compute width from start and end
 	    (setq width (1+ (- start (eval-in-static-environment end)))))
 
+	;; compute width
 	(setq width (eval-in-static-environment width)))
 
     ;; sanity check bounds
-    (when (or (< width 0)
-	      (> width (1+ start)))
-      (error 'value-mismatch :expected (1+ start)
+    (when (< width 1)
+      ;; negative width
+      (error 'value-mismatch :expected "non-negative number"
 			     :got width
-			     :hint "Make sure width bits can be extracted"))
+			     :hint "Make sure width bits are positive"))
+    (when (static-p start)
+      ;; we have a static start bit so we can check width against it
+      (let ((s (eval-in-static-environment start)))
+	(when (> width (1+ s))
+	  (error 'value-mismatch :expected (1+ s)
+				 :got width
+				 :hint "Make sure width bits can be extracted"))))
 
     ;; check whether variable should be widened
     (let ((ty (eval-type (compute-type place))))

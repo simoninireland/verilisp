@@ -123,3 +123,18 @@
 
     (vl::typecheck p)
     (is (vl::synthesise p))))
+
+
+(test test-coerce-signed-bref
+  "Test we can sign-extend when the body is complicated."
+  (let ((p (vl::expand/vl '(let ((instr 0))
+			    (declare (width 32 instr))
+			    (let ((Simm (coerce (the '(signed-byte 12) (make-bitfields (bref instr 31 :end 26)
+											(bref instr 11 :end 7)))
+						'(signed-byte 32))))
+			      Simm )))))
+
+    (vl::typecheck p)
+    (vl::synthesise p))
+
+  )

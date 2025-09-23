@@ -112,6 +112,14 @@
     (read-variables val)))
 
 
+;; We can make use of some type constraints here. Either:
+;;
+;; - the start bit is a variable and the result has width 1; or
+;; - a width (or end) is specified and is constant, and so is
+;;   the start bit
+;;
+;; These constraints let us expand nested constructs somewhat
+
 (defmethod synthesise-sexp ((fun (eql 'coerce)) args)
   (declare (optimize debug))
 

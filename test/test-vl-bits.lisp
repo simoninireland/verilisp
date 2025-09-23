@@ -30,32 +30,62 @@
 		    '(unsigned-byte 1))))
 
 
+(test test-zero-width-bit
+  "Test we detect a zero width."
+  (signals (value-mismatch)
+    (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
+				    (vl::bref a 1 :width 0))))))
+
+(test test-width-bit-variable
+  "Test we accept a variabke if we're addressing a single bit."
+  (with-new-frame
+    (let ((p (vl::expand/vl '(let ((a 0)
+				   (b 0))
+			      (declare (type (unsigned-byte 8) a b))
+			      (vl::bref a b)))))
+      (is (vl::subtype-p (vl::typecheck p)
+			 '(unsigned-byte 1))))
+
+    ;; also works if width is 1
+    (let ((p (vl::expand/vl '(let ((a 0)
+				   (b 0))
+			      (declare (type (unsigned-byte 8) a b))
+			      (vl::bref a b :width 1)))))
+      (is (vl::subtype-p (vl::typecheck p)
+			 '(unsigned-byte 1))))))
+
+
 (test test-width-bits
   "Test we can extract bits from a value."
   ;; single-bit equivalents
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
-						  (bref a 1 :end 1))))
-		    '(unsigned-byte 1)))
+						     (bref a 1 :end 1))))
+		     '(unsigned-byte 1)))
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
-						  (bref a 1 :width 1))))
-		    '(unsigned-byte 1)))
+						     (bref a 1 :width 1))))
+		     '(unsigned-byte 1)))
 
   ;; multiple bits
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
-						  (bref a 1 :width 2))))
-		    '(unsigned-byte 2)))
+						     (bref a 1 :width 2))))
+		     '(unsigned-byte 2)))
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
-						  (bref a 1 :end 0))))
-		    '(unsigned-byte 2)))
+						     (bref a 1 :end 0))))
+		     '(unsigned-byte 2)))
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
 						     (declare (width 8 a))
 						     (bref a 7 :end 0))))
-		    '(unsigned-byte 8)))
+		     '(unsigned-byte 8)))
+  (signals (not-static)
+    (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a #2r10110)
+							(b 2))
+						   (declare (width 8 a b))
+						   (bref a b :end 0))))))
 
   ;; syntax
   (signals (vl::syntax-error)
     (vl::typecheck (vl::expand/vl '(let ((a #2r10110))
-				  (bref a 4 :end 2 :width 4)))))
+				    (bref a 4 :end 2 :width 4)))))
 
   ;; non-matching explicit widths and bad ends
   (signals (value-mismatch)
