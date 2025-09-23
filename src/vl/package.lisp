@@ -151,7 +151,7 @@
    #:get-module-interface
    #:get-modules-for-synthesis
    #:defmodule/vl
-   #:importmodule/vl
+   #:defmoduleinterface/vl
    #:forget/vl
    #:defmacro/vl
    #:macrolet/vl
