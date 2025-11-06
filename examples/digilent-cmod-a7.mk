@@ -23,11 +23,10 @@
 FAMILY  = artix7
 PART    = xc7a35tcpg236-1
 BOARD   = cmoda7_35t
-PROJECT = $(TOPMODULE)
 
 # Docker container tag
 # Leave this blank to run the toolchain native; provide a tag to run in a container
-OPENXC7_CONTAINER_TAG = #openxc7-docker
+#OPENXC7_CONTAINER_TAG = openxc7-docker
 
 
 # ---------- Tools ----------
