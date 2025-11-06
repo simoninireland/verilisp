@@ -10,8 +10,32 @@
   (one the board) to make sure that they control the LEDs. These could
   be changed very simply to drive off-board LEDs.
 
-  The ~Makefile~ includes targets to build the program and upload it. It
-  uses the ~icestorm.mk~ rules that drive the ~icestorm~ toolchain,
-  consisting of the ~yosys~ synthesis tool, ~nextpnr~ placement and
-  routing tool, and 5the ~icepack~ and ~iceprog~ tools used to create and
-  upload the resulting bitstream to the FPGA.
+** Running on the Lattice IceStick
+
+   The Makefile contains a line of the form:
+
+   #+begin_src makefile
+include $(VERILISP_ROOT)/examples/icestick.mk
+   #+end_src
+
+   Make sure this line is uncommented, and any other similar lines in
+   its neighbourhood are commented. Then run ~make~ followed by ~make
+   upload~ (with the device plugged in to a USB port, obviously).
+
+** Running on the Digilent CMOD A7
+
+   Comment the IceStick include line and uncomment the one for the
+   Digilent device. For the latter, start a shell using:
+
+   #+begin_src sh
+nix develop github:openxc7/toolchain-nix
+make
+make upload
+   #+end_src
+
+   Or you can run the commands directly in the shell:
+
+   #+begin_src sh
+nix develop github:openxc7/toolchain-nix --command make
+nix develop github:openxc7/toolchain-nix --command make upload
+   #+end_src
