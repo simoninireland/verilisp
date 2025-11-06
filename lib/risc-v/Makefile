@@ -18,7 +18,8 @@
 TAG = risc-v
 DOCKER = docker
 
-all:
+
+build:
 	$(DOCKER) buildx build -t $(TAG) .
 
 clean:

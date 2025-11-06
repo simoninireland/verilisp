@@ -16,7 +16,6 @@
 # along with this software. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 VERILISP_ROOT = ../..
-include $(VERILISP_ROOT)/examples/icestick.mk
 
 
 # ---------- Target code ----------
@@ -27,20 +26,21 @@ TARGET = blink.bin
 
 # Sources
 SOURCES = blink.lisp
-CONFIG = blink.pcf
+#CONFIG = blink.pcf
+CONFIG = blink.xdf
 OBJECT = blink.v
 
 
 # ---------- Tools ----------
 
-# Tools
-RM = rm -fr
+#include $(VERILISP_ROOT)/examples/icestick.mk
+include $(VERILISP_ROOT)/examples/digilent-cmod-a7.mk
 
 
 # ---------- Top-level targets ----------
 
 # Build the target bitstream
-$(TARGET): $(OBJECT) $(CONFIG)
+$(TARGET): $(OBJECT) # $(CONFIG)
 
 $(OBJECT): $(SOURCES)
 

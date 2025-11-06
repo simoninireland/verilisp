@@ -18,14 +18,14 @@
 ;; along with cl-vhdsl. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (defmodule/vl blink (clk leds
-		     &key (bits 5) (delay 22))
+		     &key (bits 2) (delay 22))
   (declare (type bit clk)
-	   (width 5 leds))
+	   (width bits leds))
 
   (let ((counter 0)
 	(out 0))
     (declare (width (+ bits delay) counter)
-	     (width 5 out))
+	     (width bits out))
 
     (@ (posedge clk)
        (setf counter (+ counter 1))

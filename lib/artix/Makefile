@@ -1,4 +1,4 @@
-# Makefile for the Lattice tools container
+# Makefile for the Artix-7 tools container
 #
 # Copyright (C) 2024--2025, Simon Dobson
 #
@@ -15,12 +15,26 @@
 # You should have received a copy of the GNU General Public License
 # along with this software. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-TAG = icestorm
+OPENXC7_URL = https://github.com/openXC7/toolchain-nix.git
+OPENXC7_REPO = $(basename $(notdir $(OPENXC7_URL)))
+
+TAG = openxc7-docker
+NIX = nix
+GIT = git
 DOCKER = docker
+SED = sed
+CHDIR = cd
+RMDIR = rm -fr
 
 
 build:
-	$(DOCKER) buildx build -t $(TAG) .
+	$(GIT) clone $(OPENXC7_URL)
+	$(CHDIR) $(OPENXC7_REPO)
+	$(NIX) build -L ".#dockerImage.x86_64-linux"
+	$(DOCKER) image load --input result | \
+	$(SED) -nr 's/^Loaded image: [^:]+:(.*)$/\1/p' | \
+	$(DOCKER) image tag $(TAG):3547cbmp8mbrjlchlbs41w51vfn9p8iv $(TAG):latest
 
 clean:
 	$(DOCKER) image rm $(TAG)
+	$(RMDIR) $(OPENXC7_REPO)

@@ -26,7 +26,7 @@ RUN apk update
 RUN apk upgrade
 
 # Install the tooling
-RUN apk add binutils-riscv-none-elf  gcc-riscv-none-elf
+RUN apk add binutils-riscv-none-elf gcc-riscv-none-elf
 
 # Create a working directory
 RUN mkdir /work
