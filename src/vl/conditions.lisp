@@ -32,7 +32,7 @@
    (underlying-condition
     :documentation "Any underlying condition that was converted to this.
 
-This allows VL-BASE-CONDITION to be used to mask other, typically
+This allows VL-CONDITION to be used to mask other, typically
 implementation-specific, conditions encountered during processing."
     :initform nil
     :initarg :underlying-condition
