@@ -43,14 +43,20 @@
 				     :tx tx :tx-byte tx-byte
 				     :transmit transmit :transmitting-p transmitting-p)))
 
-      (@ (posedge clk)
-	 (cond (received-p
-		(setq tx-byte rx-byte)
-		;;(setq tx-byte #16r62)
-		(setq transmit 1))
+      (let ((base #16r61)
+	    (c 1))
+	(declare (width 8 c))
+	(@ (posedge clk)
+	   (cond (received-p
+		  ;;(setq tx-byte rx-byte)
+		  ;;(setq tx-byte #16r61)
+		  (setq tx-byte (+ base c))
+		  (setq c 0)
+		  (setq transmit 1))
 
-	       (receive-error-p
-		(setq tx-byte #16r21)
-		(setq transmit 1))
-	       (t
-		(setq transmit 0)))))))
+		 (receive-error-p
+		  (setq tx-byte #16r21)
+		  (setq transmit 1))
+
+		 (t
+		  (setq transmit 0))))))))

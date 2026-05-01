@@ -18,7 +18,6 @@
 # along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 VERILISP_ROOT = ../..
-include $(VERILISP_ROOT)/examples/icestick.mk
 
 
 # ---------- Target code ----------
@@ -29,13 +28,14 @@ TARGET = echo.bin
 # Sources
 SOURCES = uart.lisp echo.lisp
 CONFIG = echo.pcf
+#CONFIG = echo.xdf
 OBJECT = echo.v
 
 
 # ---------- Tools ----------
 
-# Tools
-RM = rm -fr
+include $(VERILISP_ROOT)/examples/icestick.mk
+#include $(VERILISP_ROOT)/examples/digilent-cmod-a7.mk
 
 
 # ---------- Top-level targets ----------

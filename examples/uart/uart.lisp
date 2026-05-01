@@ -78,7 +78,8 @@
 	rx-status-receiving-p rx-status-received-p rx-status-error-p
 	tx-data (tx-out 1)
 	tx-status-idle-p)
-    (declare (as constant one-baud-clk)) ;; should be inferred
+    (declare (as constant one-baud-clk)
+	     (width 8 rx-data)) ;; should be inferred
 
     ;; wire externally visible flags to internal status wires
     (setq received-p rx-status-received-p)
