@@ -69,7 +69,7 @@
   (declare (type (unsigned-byte 32) addr read-data write-data)
 	   (type bit clk reset rd/wr)
 	   (type (unsigned-byte 4) write-mask)
-	   (type (unsigned-byte 5) status))
+	   (type (unsigned-byte 2) status))
 
   ;; state
   (let ((pc    0)
@@ -371,7 +371,7 @@
 			      leds
 			      rxd txd)
   (declare (type bit system-clk system-reset rxd txd)
-	   (type (unsigned-byte 5) leds)
+	   (type (unsigned-byte 2) leds)
 	   (ignorable rxd txd))
 
   (let (clk reset

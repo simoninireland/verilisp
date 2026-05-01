@@ -16,8 +16,6 @@
 # along with this software. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 VERILISP_ROOT = ../../..
-include $(VERILISP_ROOT)/examples/icestick.mk
-include $(VERILISP_ROOT)/examples/risc-v/risc-v.mk
 
 
 # ---------- Target code ----------
@@ -28,7 +26,7 @@ TOPMODULE = soc
 
 # Sources
 SOURCES = clockworks.lisp rv32i.lisp
-CONFIG = rv32i.pcf
+CONFIG = rv32i.xdf
 OBJECT = rv32i.v
 
 # Assembly code
@@ -37,8 +35,9 @@ ASM_SOURCES = firmware.s
 
 # ---------- Tools ----------
 
-# Tools
-RM = rm -fr
+#include $(VERILISP_ROOT)/examples/icestick.mk
+include $(VERILISP_ROOT)/examples/digilent-cmod-a7.mk
+include $(VERILISP_ROOT)/examples/risc-v/risc-v.mk
 
 
 # ---------- Top-level targets ----------
@@ -48,11 +47,6 @@ $(TARGET): $(OBJECT) $(CONFIG)
 
 
 $(OBJECT): $(ASM_HEXES) $(SOURCES)
-
-
-# Clean-up the build directory
-clean:
-	$(RM) $(FPGA_GENERATED) $(ASM_GENERATED) $(OBJECT)
 
 
 # Print a help message
