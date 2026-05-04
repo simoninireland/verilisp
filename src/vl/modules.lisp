@@ -1,6 +1,6 @@
 ;; Top-level modules
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;; Copyright (C) 2024--2026 Simon Dobson
 ;;
 ;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
@@ -466,8 +466,9 @@ Signal VALUE-MISMATCH as an error if not."
 
 
 (defmethod synthesise-sexp ((fun (eql 'module)) args)
+  (declare (optimize debug))
   (when (not (in-top-level-context-p))
-    (error "Nested modules aren't allowed"))
+    (error 'not-synthesisable :hint "Nested modules don't make sense"))
 
   (destructuring-bind (modname decls &rest body)
       args
