@@ -1,6 +1,6 @@
 ;; The compiler passes
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;; Copyright (C) 2024--2026 Simon Dobson
 ;;
 ;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
@@ -598,7 +598,7 @@ Use EXPAND-MACROS-IN-ENVIRONMENT to select a specific environment.")
 
 Methods on this function can transform FORM into an equivalent form
 that is 'better' in some way. Transformation happens after
-type-checking, so the methods can mae use of dependencies, type
+type-checking, so the methods can make use of dependencies, type
 information, and so on: however, the transformed form must be
 fully elaborated Verilisp, since it will not be passed through
 the earlier passes. The necessary information can typically be added
@@ -638,8 +638,8 @@ environments.
 The Verilog synthesised should be send to *STANDARD-OUTPUT*: this
 may be redirected by higher-level functions.")
   (:method ((form list))
-    (let ((fun (car form))
-	  (args (cdr form)))
+    (destructuring-bind (fun &rest args)
+	form
       (with-current-form form
 	(synthesise-sexp fun args)
 	t))))
