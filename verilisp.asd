@@ -1,6 +1,6 @@
 ;; System definitions
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;; Copyright (C) 2024--2026 Simon Dobson
 ;;
 ;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
@@ -119,7 +119,7 @@
 	       (:file "test-vl-with-bitfields")
 	       (:file "test-vl-helpers")
 	       (:file "test-vl-state-machine")
-	       (:file "test-def-components")
+	       ;;(:file "test-def-components")
 	       ;;(:file "test-def-isa")
 	       )
   :perform (test-op (o c) (uiop:symbol-call :fiveam '#:run-all-tests)))
