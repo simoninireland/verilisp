@@ -1,6 +1,6 @@
 ;; Language conditions
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;; Copyright (C) 2024--2026 Simon Dobson
 ;;
 ;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
@@ -71,6 +71,10 @@ This only changes the printed length: the entire fragment is retained.")
   (if-let ((hint (hint c)))
     (format str " (~a)" hint))
 
+  ;; add underlying condition if present
+  (if-let ((e (underlying-condition c)))
+    (format str " (Underlying condition: ~s)" e))
+
   ;; add context if known
   (if-let ((code (fragment c)))
     (format str " Context: ~a" (shorten *maximum-code-fragment-length*
@@ -101,8 +105,7 @@ to set up recovery actions."))
 (define-condition not-synthesisable (vl-error)
   ()
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Could not synthesise code (~s)"
-					       (underlying-condition c))
+	     (format-condition-context "Could not synthesise code"
 				       c str)))
   (:documentation "Condition signalled when code can't be synthesised.
 
