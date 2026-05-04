@@ -1,6 +1,6 @@
 ;; Variable declarations and bindings
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;; Copyright (C) 2024--2026 Simon Dobson
 ;;
 ;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
@@ -487,7 +487,7 @@ Special values are things like array constructors and mdule instanciations."
 
 
 (defun normal-value-p (form)
-  "Test whether FORM denotes a ormal value.
+  "Test whether FORM denotes a normal value.
 
 Normal values are those that are not special in the sense of
 SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
@@ -592,6 +592,30 @@ Constants turn into local parameters."
     (synthesise v)))
 
 
+(defun decl-rhs-form-p (&optional (form (current-form)))
+  "Test that the current form is a valid initial value for assignment.
+
+Valid RHSs are literals, variables, or operations formed of operators,
+of conditionals with single-form arms. More complicated forms like
+assignments are *not* valid at the synthesis level: they are however
+valid Lisp, and so need to be transformed away before synthesis."
+  (labels ((simple-expression-p (form)
+	     (or (literal-form-p form)
+		 (variable-form-p form)
+		 (element-form-p form)
+		 (and (or (operator-form-p form)
+			  (conditional-form-p form))
+		      (every (lambda (arg)
+			       (with-current-form arg
+				 (simple-expression-p arg)))
+			     (cdr form))))))
+
+    (or (null form)
+	(eql (form-head form) 'make-array)
+	(type-operator-form-p form)
+	(simple-expression-p form))))
+
+
 (defun synthesise-decl (decl)
   "Synthesise DECL."
   (declare (optimize debug))
@@ -604,15 +628,22 @@ Constants turn into local parameters."
 	  (synthesise-module-instanciation n)
 
 	  ;; otherwise, creating a variable
-	  (case (get-representation n)
-	    ('constant
-	     (synthesise-constant n))
-	    ('register
-	     (synthesise-register n))
-	    ('wire
-	     (synthesise-wire n))
-	    (t
-	     (synthesise-register n)))))))
+	  (progn
+	    ;; check the RHS is valid
+	    (with-current-form v
+	      (unless (decl-rhs-form-p)
+		(error 'not-synthesisable :hint "Initial value must be a simple expression")))
+
+	    ;; synthesise the different kinds of declaration in Verilog
+	    (case (get-representation n)
+	      ('constant
+	       (synthesise-constant n))
+	      ('register
+	       (synthesise-register n))
+	      ('wire
+	       (synthesise-wire n))
+	      (t
+	       (synthesise-register n))))))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'let)) args)

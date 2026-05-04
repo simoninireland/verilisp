@@ -51,7 +51,10 @@
     (is (vl::synthesise `(,op 1 2)))
 
     ;; Lisp-y multi-operand
-    (is (vl::synthesise `(,op 1 2 3))))
+    (is (vl::synthesise `(,op 1 2 3)))
+
+    ;; nested operator application
+    (is (vl::synthesise `(,op 1 (,op 2 3)))))
 
   ;; unary minus
   (is (vl::synthesise `(- 1))))
@@ -62,12 +65,12 @@
 (test test-width-shifts
   "Test we can extract the widths of shifts."
   (is (vl::subtype-p (vl::typecheck '(<< 1 2))
-		    '(unsigned-byte 4)))
+		     '(unsigned-byte 4)))
   (is (vl::subtype-p (vl::typecheck '(<< 15 15))
-		    '(unsigned-byte 19)))
+		     '(unsigned-byte 19)))
 
   (is (vl::subtype-p (vl::typecheck '(>> 16 4))
-		    '(unsigned-byte 5)))
+		     '(unsigned-byte 5)))
 
   ;; wrong number of arguments
   (dolist (op '(<< >>))

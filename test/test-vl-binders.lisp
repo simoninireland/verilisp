@@ -1,6 +1,6 @@
 ;; Tests of binders
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;; Copyright (C) 2024--2026 Simon Dobson
 ;;
 ;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
@@ -183,7 +183,37 @@
 
     (let ((p (vl::expand/vl (copy-tree x))))
       (vl::typecheck p)
-      (vl::synthesise p))))
+      (is (vl::synthesise p)))))
+
+
+(test test-synthesise-binders-not-simple
+  "Test we can't synthesise some binders with complicated RHSs."
+  ;; simple RHS (although an expression)
+  (vl::with-new-frame
+    (vl::declare-variable 'b '((type (unsigned-byte 8))
+			       (initial-value 12)))
+
+    (let ((p (vl::expand/vl '(let ((a (+ 10 (- 9 b)))) a))))
+      (vl::typecheck p)
+      (is (vl::synthesise p))))
+
+  ;; nested if expression RHS
+  (let ((p (vl::expand/vl '(let ((a (+ 10 (if (> 1 2) 1 2)))) a))))
+    (vl::typecheck p)
+    (is (vl::synthesise p)))
+
+  ;; RHS that accesses an array
+  (let ((p (vl::expand/vl '(let ((a (make-array (10) :element-type (unsigned-byte 8))))
+			    (let ((b (aref a 5)))
+			      b)))))
+    (vl::typecheck p)
+    (is (vl::synthesise p)))
+
+  ;; nested if that's got a complicated body
+  (let ((p (vl::expand/vl '(let (a (b (+ 10 (if (< 1 2) 1 (setf a 27))))) a))))
+    (vl::typecheck p)
+    (signals not-synthesisable
+      (is (vl::synthesise p)))))
 
 
 (test test-let-width
@@ -191,7 +221,7 @@
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 0))
 						     (declare (width 12 a))
 						     a)))
-		    '(unsigned-byte 12))))
+		     '(unsigned-byte 12))))
 
 
 (test test-let-float-order

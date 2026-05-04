@@ -1,6 +1,6 @@
 ;; Tests of macro expansion pass
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;; Copyright (C) 2024--2026 Simon Dobson
 ;;
 ;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
@@ -195,6 +195,7 @@
 
 (test test-do-no-variables
   "Test we can expand a DO that doesn't declare any loop variables."
+  (declare (optimize debug))
   (let ((p (vl::expand/vl '(module test-do (clk)
 			    (declare (type bit clk))
 			    (@ (posedge clk)

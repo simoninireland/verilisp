@@ -1,6 +1,6 @@
 ;; Tests of state machine construction
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;; Copyright (C) 2024--2026 Simon Dobson
 ;;
 ;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
@@ -249,9 +249,9 @@
 				     (go return-state)))))))
 
       (vl::typecheck p)
-      (let* ((q (vl::synthesise-state-machine (cdr (elt p 2))))
-	     (states (cddr (elt (elt q 3) 3))))
-	(is (<= (length states) 3))))))
+      (let ((q (vl::synthesise-state-machine (cdr (elt p 2)))))
+	(is (contains-form-p '(setq a (+ a 1)) p))
+	(is (contains-form-p '(setq a (+ b 1)) p))))))
 
 
 (test test-tagbody-nested-in-then-conditional
@@ -273,9 +273,8 @@
 				     (go return-state)))))))
 
       (vl::typecheck p)
-      (let* ((q (vl::synthesise-state-machine (cdr (elt p 2))))
-	     (states (cddr (elt (elt q 3) 3))))
-	(is (<= (length states) 6))))))
+      (let ((q (vl::synthesise-state-machine (cdr (elt p 2)))))
+	(is (contains-form-p '(setq a (+ a 12)) p))))))
 
 
 (test test-tagbody-nested-in-else-conditional
@@ -298,6 +297,6 @@
 				     (go return-state)))))))
 
       (vl::typecheck p)
-      (let* ((q (vl::synthesise-state-machine (cdr (elt p 2))))
-	     (states (cddr (elt (elt q 3) 3))))
-	(is (<= (length states) 6))))))
+      (let ((q (vl::synthesise-state-machine (cdr (elt p 2)))))
+	(is (contains-form-p '(setq a (+ a 12)) p))
+	(is (contains-form-p '(setq a (+ b 1)) p))))))

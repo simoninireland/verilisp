@@ -1,6 +1,6 @@
 ;; Synthesisable operators
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;; Copyright (C) 2024--2026 Simon Dobson
 ;;
 ;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
@@ -21,7 +21,7 @@
 (declaim (optimize debug))
 
 
-;; ---------- Helper ----------
+;; ---------- Helpers ----------
 
 (defun ensure-number-of-arguments (fun args n)
   "Ensure that ARGS has exactly N arguments.
@@ -74,7 +74,7 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
       (let ((ty (compute-type (car args))))
 	`(signed-byte (1+ (bitwidth ',ty))))
 
-      ;; general substraction
+      ;; general subtraction
       ;; we force subtractions to be signed
       (let ((ty (compute-type-addition args)))
 	`(signed-byte (bitwidth ',ty)))))
@@ -184,7 +184,7 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 (defmacro define-fixed-width-binary-bitwise-operator (symbol &optional verilog-operator)
   "Declare the necessary functions for SYMBOL.
 
-Use VERILOG-OPERATOR if provided for synthesis."
+Use VERILOG-OPERATOR if provided for synthesis; otherwise use SYMBOL."
   (unless verilog-operator
     (setq verilog-operator symbol))
 
@@ -217,7 +217,7 @@ Use VERILOG-OPERATOR if provided for synthesis."
 (defmacro define-fixed-width-unary-bitwise-operator (symbol &optional verilog-operator)
   "Declare the necessary functions for SYMBOL.
 
-Use VERILOG-OPERATOR if provided for synthesis."
+Use VERILOG-OPERATOR if provided for synthesis; otherwise use SYMBOL."
   (unless verilog-operator
     (setq verilog-operator symbol))
 
@@ -232,13 +232,13 @@ Use VERILOG-OPERATOR if provided for synthesis."
 	 (ensure-fixed-width (compute-type l))))
 
 
-     (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
-       (destructuring-bind (l)
-	   args
-	 (as-literal "(")
-	 (as-literal ,(format nil "~a " verilog-operator))
-	 (synthesise l)
-	 (as-literal ")")))))
+      (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
+	(destructuring-bind (l)
+	    args
+	  (as-literal "(")
+	  (as-literal ,(format nil "~a " verilog-operator))
+	  (synthesise l)
+	  (as-literal ")")))))
 
 (define-fixed-width-unary-bitwise-operator lognot "~")
 
@@ -248,7 +248,7 @@ Use VERILOG-OPERATOR if provided for synthesis."
 (defmacro define-fixed-width-nary-logical-operator (symbol &optional verilog-operator)
   "Declare the necessary functions for SYMBOL.
 
-Use VERILOG-OPERATOR if provided for synthesis."
+Use VERILOG-OPERATOR if provided for synthesis; otherwise use SYMBOL."
   (unless verilog-operator
     (setq verilog-operator symbol))
 
