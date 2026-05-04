@@ -1,6 +1,6 @@
 ;; The compiler context
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;; Copyright (C) 2024--2026 Simon Dobson
 ;;
 ;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
@@ -222,11 +222,33 @@ form."
      ,@body))
 
 
+(defmacro with-current-form-queue (formq &body body)
+  "Run BODY with FORMQ as the form queue."
+   `(let ((*current-form-queue* ,formq))
+     ,@body))
+
+
 ;; form accessors
 
 (defun current-form ()
   "Return the current form."
   (car *current-form-queue*))
+
+
+(defun form-head (form)
+  "Return the head of the current form.
+
+This is safe for atomic and list forms."
+  (if (atom form)
+	form
+	(car form)))
+
+
+(defun current-form-head ()
+  "Return the head of the current form.
+
+This function is safe for atom forms or list forms."
+  (form-head (current-form)))
 
 
 (defun containing-form (&optional form)
@@ -259,58 +281,100 @@ that is that form."
 
 
 ;; form classifiers
-;; We pass in a queue (list) of forms because we ma need more context than
+;; We pass in a queue (list) of forms because we may need more context than
 ;; just the form we're interested in.
 
-(defun operator-form-p (&optional (formq *current-form-queue*))
-  "Test whether the head of FORMQ is an operator."
-  (member (caar formq) '(+ - *
-			 << >>
-			 = /= < <= > >=
-			 aref bref)))
+(defun integer-form-p (&optional (form (current-form)))
+  "Test whether the current form is an integer literal."
+  (integerp form))
 
 
-(defun assignment-form-p (&optional (formq *current-form-queue*))
-  "Test wheterthe head of FORMQ is an assignment."
-  (member (caar formq) '(setq setf)))
+(defun literal-form-p (&optional (form (current-form)))
+  "Test whether the current formis a literal.
+
+At present only integer literals are available in Verilisp."
+  (integer-form-p form))
 
 
-(defun conditional-form-p (&optional (formq *current-form-queue*))
-  "Test wheter the head of FORMQ is a conditional form."
-  (member (caar formq) '(if case)))
+(defun variable-form-p (&optional (form (current-form)))
+  "Test whether the current form is a variable reference.
+
+Variables are symbol identifiers that are in scope."
+  (let ((h (form-head form)))
+    (and (symbolp h)
+	 (variable-declared-p h))))
 
 
-(defun let-form-p (&optional (formq *current-form-queue*))
-  "Test whether the head of FORMQ is a LET block."
-  (eql (caar formq) 'let))
+(defun element-form-p (&optional (form (current-form)))
+  "Test whether the current form is an element of a larger value.
+
+Currently covers array elements and bit extractions."
+  (member (form-head form) '(aref bref)))
 
 
-(defun block-form-p (&optional (formq *current-form-queue*))
-  "Test whether the head of FORMQ is a block-introducing form."
-  (eql (caar formq) '@))
+(defun operator-form-p (&optional (form (current-form)))
+  "Test whether the current form is an operator."
+  (member (form-head form) '(+ - *
+			     << >>
+			     = /= < <= > >=)))
 
 
-(defun tagbody-form-p (&optional (formq *current-form-queue*))
-  "Test whether the head of FORMQ is a TAGBODY."
-  (eql (caar formq) 'tagbody))
+(defun assignment-form-p (&optional (form (current-form)))
+  "Test whether the current form is an assignment."
+  (member (form-head form) '(setq setf)))
 
 
-(defun decl-form-p (&optional (formq *current-form-queue*))
-  "Test whether the head of FORMQ is a declaration of a LET block.
-
-A decl consists of a symbol representing a declared variable, and
-occurs immediately within a LET form."
-  (and (symbolp (caar formq))
-       (variable-declared-p (caar formq))
-       (let-form-p (cdr formq))))
+(defun conditional-form-p (&optional (form (current-form)))
+  "Test whether the current form is a conditional form."
+  (member (form-head form) '(if case)))
 
 
-(defun module-form-p (&optional (formq *current-form-queue*))
-  "Test whether the head of FORMQ is a module form."
-  (eql (caar formq) 'module))
+(defun type-operator-form-p (&optional (form (current-form)))
+  "Test whether the current form is a type operator."
+  (member (form-head form) '(coerce the)))
+
+
+(defun let-form-p (&optional (form (current-form)))
+  "Test whether the current form is a LET block."
+  (member (form-head form) '(let let*)))
+
+
+(defun block-form-p (&optional (form (current-form)))
+  "Test whether the current form is a block-introducing form."
+  (eql (form-head form) '@))
+
+
+(defun tagbody-form-p (&optional (form (current-form)))
+  "Test whether the current form is a TAGBODY."
+  (eql (form-head form) 'tagbody))
+
+
+(defun module-form-p (&optional (form (current-form)))
+  "Test whether the current form is a module form."
+  (eql (form-head form) 'module))
 
 
 ;; context classifiers
+
+(defun in-context-p (cl)
+  "Test whether there is some form in the form queue matchiong CL.
+
+CL should be a function of no variables, operating over the current
+form queue. Typically tis will be a form classifier, or a function
+built from them.
+
+Return the first matching form, or NIL."
+  (block found-context
+    (let ((context (cdr *current-form-queue*)))
+      (maplist (lambda (formq)
+		 (with-current-form-queue formq
+		   (when (funcall cl)
+		     (return-from found-context (current-form)))))
+	       context)
+
+      ;; if we get here, we've not found a matching form
+      nil)))
+
 
 (defun in-top-level-context-p ()
   "Test whether the current context is top-level."
@@ -324,7 +388,7 @@ occurs immediately within a LET form."
 
 (defun in-block-context-p ()
   "Test whether the current context is within an @-block."
-  (find-if-list #'block-form-p (cdr *current-form-queue*)))
+  (in-context-p #'block-form-p))
 
 
 (defun in-combinatorial-block-context-p ()
@@ -332,37 +396,35 @@ occurs immediately within a LET form."
 
 Combinatorial blocks have sensitivities that depend on the values
 of signals, not on edges (which are synchronous blocks)."
-  (if-let ((bl (in-block-context-p)))
-    (destructuring-bind (sensitivities &rest body)
-	(cdr (car bl))
-      (not (edge-trigger-p sensitivities)))))
+  (in-context-p (lambda ()
+		  (and (block-form-p)
+		       (destructuring-bind (sensitivities &rest body)
+			   (cdr (current-form))
+			 (not (edge-trigger-p sensitivities)))))))
 
 
 (defun in-synchronous-block-context-p ()
   "Test whether the current context is a synchronous block.
 
 Synchronous blocks have sensitivities that depend on signal edges."
-  (if-let ((bl (in-block-context-p)))
-    (destructuring-bind (sensitivities &rest body)
-	(cdr (car bl))
-      (edge-trigger-p sensitivities))))
+  (in-context-p (lambda ()
+		  (and (block-form-p)
+		       (destructuring-bind (sensitivities &rest body)
+			   (cdr (current-form))
+			 (edge-trigger-p sensitivities))))))
 
 
-(defun in-setf-context-p ()
+(defun in-assignment-context-p ()
   "Test if we're in a SETF or SETQ context."
-  (find-if-list #'assignment-form-p *current-form-queue*))
+  (in-context-p #'assignment-form-p))
 
 
 (defun in-expression-context-p ()
-  "Test if we're in an expression context."
-  (and (or (operator-form-p)
-	   (conditional-form-p))
-       (find-if-list (lambda (formq)
-		       (or (assignment-form-p formq)
-			   (decl-form-p formq)))
-		     (cdr *current-form-queue*))))
+  "Test if we're in an expression context, either directly or in an assignment."
+  (or (operator-form-p (containing-form))
+      (assignment-form-p (containing-form))))
 
 
 (defun in-state-machine-context-p ()
   "Test whether the current context is within a TAGBODY form."
-  (find-if-list #'tagbody-form-p (cdr *current-form-queue*)))
+  (in-context-p #'tagbody-form-p))
