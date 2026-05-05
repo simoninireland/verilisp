@@ -1,27 +1,27 @@
-;; Constructing words from bitfields
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Constructing words from bitfields
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
 
-;; ---------- make-bitfields ----------
+;;; ---------- make-bitfields ----------
 
 (defmethod compute-type-sexp ((fun (eql 'make-bitfields)) args)
   (destructuring-bind (&rest pats)
@@ -60,8 +60,7 @@ The BASE used can be 2, 8, 10, or 16."
 	(synthesise-fixed-width-constant f w))
 
       ;; value is an expression, synthesise it
-      (progn
-	(synthesise f))))
+      (synthesise f)))
 
 
 (defmethod synthesise-sexp ((fun (eql 'make-bitfields)) args)
@@ -70,7 +69,7 @@ The BASE used can be 2, 8, 10, or 16."
   (as-literal "}"))
 
 
-;; ---------- extend-bits ----------
+;;; ---------- extend-bits ----------
 
 (defmethod compute-type-sexp ((fun (eql 'extend-bits)) args)
   (destructuring-bind (bs times)
