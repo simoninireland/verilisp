@@ -1,27 +1,27 @@
-;; Tests of state machine construction
-;;
-;; Copyright (C) 2024--2026 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Tests of state machine construction
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/test)
 (in-suite verilisp/vl)
 
 
-;; ---------- State machine construction ----------
+;;; ---------- State machine construction ----------
 
 (test test-tagbody-simple
   "Test we can create a simple TAGBODY."
@@ -69,7 +69,7 @@
 				      (setq a 0))))))
 
 
-;; ---------- Typechecking ----------
+;;; ---------- Typechecking ----------
 
 (test test-tagbody-type
   "Test we can typecheck a TAGBODY."
@@ -95,7 +95,7 @@
     (is (vl:typecheck p))))
 
 
-;; ---------- Transformation ----------
+;;; ---------- Transformation ----------
 
 (test test-tagbody-simple-infinite
   "Test we can generate the simplest infinite loop."
@@ -107,7 +107,7 @@
 			       (go initial))))))
 
     (vl::typecheck p)
-    (is (vl::transform p))))
+    (is (vl::elaborate-state-machines p))))
 
 
 (test test-tagbody-simple-looping
@@ -128,7 +128,7 @@
 			       (go count))))))
 
     (vl::typecheck p)
-    (let ((q (vl::transform p)))
+    (let ((q (vl::elaborate-state-machines p)))
       (is (contains-form-p '(setq counter (+ counter 1)) q))
       (is (contains-form-p '(setq out (+ out 1)) q)))))
 
@@ -147,7 +147,7 @@
 			       (go looping))))))
 
     (vl::typecheck p)
-    (let ((q (vl::transform p)))
+    (let ((q (vl::elaborate-state-machines p)))
       (is (contains-form-p '(setq counter (+ counter 1)) q))
       (is (contains-form-p '(setq out (+ out 1)) q)))))
 
@@ -164,7 +164,7 @@
 
 				(setq out (+ out 1))))))))
     (vl::typecheck p)
-    (let ((q (vl::transform p)))
+    (let ((q (vl::elaborate-state-machines p)))
       (is (contains-form-p '(setq counter (+ counter 1)) q) )
       (is (contains-form-p '(setq out (+ out 1)) q)))))
 
@@ -188,7 +188,7 @@
 			       (go rx-idle))))))
 
     (vl::typecheck p)
-    (let ((q (vl::transform p)))
+    (let ((q (vl::elaborate-state-machines p)))
 
       ;; first state
       (is (contains-form-p '(setq a 0) q))

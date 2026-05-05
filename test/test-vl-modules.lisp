@@ -300,7 +300,7 @@
   (vl::clear-global-environment)
 
   (defmodule/vl clock (clk_in clk_out
-		       &key (p 1) (q 2))
+			      &key (p 1) (q 2))
     (declare (type bit clk_in clk_out)
 	     (direction in clk_in)
 	     (direction out clk_out))

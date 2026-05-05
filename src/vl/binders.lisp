@@ -466,7 +466,7 @@ other bindings."
 	 ,@newbody))))
 
 
-(defmethod expand-macros-sexp ((fun (eql 'let*)) args)
+(defmethod expand-macros-sexp ((fun (eql 'let)) args)
   (expand-let-macros `let args))
 
 
@@ -474,41 +474,29 @@ other bindings."
   (expand-let-macros `let* args))
 
 
-;;; ---------- Transformation ----------
+;;; ---------- Elaborating state machines ----------
 
-;; TODO: Fix transformation behaviour for LET*
+;;; LET and LET* elaborate state machines the same way, but need to
+;;; retain their function tag (or do they?)
 
-(defun transform-decls (decls)
-  "Apply transforms to the values in DECLS."
-  (mapcar (lambda (decl)
-	    (if (listp decl)
-		(destructuring-bind (n v)
-		    decl
-		  `(,n ,(transform v)))
-
-		decl))
-	  decls))
-
-
-(defmethod transform-sexp ((fun (eql 'let)) args)
+(defun elaborate-let-state-machines (fun args)
   (declare (optimize debug))
 
   (destructuring-bind (decls &rest body)
       args
 
-    ;; (with-local-frame decls
-    ;;   (let ((newdecls (transform-decls decls))
-    ;;	    (newbody (mapcar #'transform body)))
-    ;;	;; add the local frame back to the new decls
-    ;;	(add-local-frame-to-decls newdecls (current-frame))
-    ;;	(break)
-    ;;	`(let ,newdecls
-    ;;	   ,@newbody)))
-
     (let ((newbody (with-local-frame decls
-		     (mapcar #'transform body))))
-      `(let ,decls
-	 ,@newbody))))
+		     (mapcar #'elaborate-state-machines body))))
+      `(,fun ,decls
+	     ,@newbody))))
+
+
+(defmethod elaborate-state-machines-sexp ((fun (eql 'let)) args)
+  (elaborate-let-state-machines 'let args))
+
+
+(defmethod elaborate-state-machines-sexp ((fun (eql 'let*)) args)
+  (elaborate-let-state-machines 'let* args))
 
 
 ;;; ---------- Floating ----------
@@ -578,17 +566,22 @@ by LET and MODULE forms."
 	 body
 	 '()))
 
-;;; LET and LET* blocks simplify their PROGNs in the same way
+;;; LET and LET* blocks simplify their PROGNs in the same way but
+;;; need to retain their function tags
 
-(defmethod simplify-progn-sexp ((fun (eql 'let)) args)
+(defun simplify-let-progn (fun args)
   (destructuring-bind (decls &rest body)
       args
     (let ((newbody (mapcar #'simplify-progn body)))
-      `(let ,decls ,@(simplify-implied-progn newbody)))))
+      `(,fun ,decls ,@(simplify-implied-progn newbody)))))
+
+
+(defmethod simplify-progn-sexp ((fun (eql 'let)) args)
+  (simplify-let-progn `let args))
 
 
 (defmethod simplify-progn-sexp ((fun (eql 'let*)) args)
-  (simplify-progn `(let ,@args)))
+  (simplify-let-progn `let* args))
 
 
 ;;; ---------- Synthesis ----------
@@ -731,7 +724,7 @@ Valid RHSs are literals, variables, or operations formed of operators,
 of conditionals with single-form arms. More complicated forms like
 assignments are *not* valid at the synthesis level: they are however
 valid Lisp, and so need to be transformed away before synthesis."
-  (labels ((simple-expression-p (form)
+  (labels ((simple-expression-form-p (form)
 	     (or (literal-form-p form)
 		 (variable-form-p form)
 		 (element-form-p form)
@@ -739,13 +732,13 @@ valid Lisp, and so need to be transformed away before synthesis."
 			  (conditional-form-p form))
 		      (every (lambda (arg)
 			       (with-current-form arg
-				 (simple-expression-p arg)))
+				 (simple-expression-form-p arg)))
 			     (cdr form))))))
 
     (or (null form)
 	(eql (form-head form) 'make-array)
 	(type-operator-form-p form)
-	(simple-expression-p form))))
+	(simple-expression-form-p form))))
 
 
 (defun synthesise-decl (decl)

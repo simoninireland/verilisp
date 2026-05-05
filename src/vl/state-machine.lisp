@@ -556,7 +556,7 @@ Return LABEL if the the state is not merged."
 			 ,@clauses)))))))
 
 
-(defmethod transform-sexp ((fun (eql 'tagbody)) args)
+(defmethod elaborate-state-machines-sexp ((fun (eql 'tagbody)) args)
   (declare (optimize debug))
 
   (destructuring-bind (newbody newenv)
@@ -596,7 +596,7 @@ Return LABEL if the the state is not merged."
 		      ;; no locally-declared variables in body
 		      synth)))
 
-	  (transform p))))))
+	  (elaborate-state-machines p))))))
 
 
 ;; ---------- GO ----------
@@ -628,7 +628,7 @@ Return LABEL if the the state is not merged."
   '())
 
 
-(defmethod transform-sexp ((fun (eql 'go)) args)
+(defmethod elaborate-state-machines-sexp ((fun (eql 'go)) args)
   (let* ((merged-states (get-initial-value 'tagbody-merged-states))
 	 (state-label (get-label-from-merged-states (car args) merged-states))
 	 (state-variable (get-initial-value 'tagbody-state-variable)))

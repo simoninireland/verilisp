@@ -1,29 +1,29 @@
-;; Loader macros and helpers
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Loader macros and helpers
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
 
-;; ---------- Module registry ----------
+;;; ---------- Module registry ----------
 
-;; Modules are all held in the global environment.
+;;; Modules are all held in the global environment.
 
 (defun declare-module (modname intf code)
   "Declare a module MODNAME with the given INTF and CODE.
@@ -103,7 +103,7 @@ corresponding module body to be synthesised."
 	      (get-environment-names env)))))
 
 
-;; ---------- Module declaration ----------
+;;; ---------- Module declaration ----------
 
 (defun expand/vl (form)
   "Compiler pass to expand FORM into core Verilisp.
@@ -151,9 +151,9 @@ module ready for synthesis.
 This function is not usually called directly, but is called as part
 of a larger compilation process."
   (declare (optimize debug))
-
+q
   ;; simplify
-  (let* ((transformed (transform form))
+  (let* ((transformed (elaborate-state-machines form))
 	 (floated (car (float-let-blocks transformed)))
 	 (simplified (simplify-progn floated)))
 
@@ -176,13 +176,16 @@ Declaring a module again will cause a DUPLICATE-MODULE warning, and the
 old module will be overwritten.
 
 Return the name of the newly-defined module."
+  (declare (optimize debug))
+
   (with-gensyms (module expanded intf elaborated)
     (let ((code `(module ,modname ,decls
 			 ,@body)))
       `(let* ((,module ',code)
 	      (,expanded (expand/vl ,module))
 	      (,intf (typecheck/vl ,expanded))
-	      (,elaborated (elaborate/vl ,expanded)))
+	      (,elaborated (elaborate/vl ,expanded))
+	      )
 
 	 ;; declare the module
 	 (declare-module ',modname ,intf ,elaborated)
@@ -225,7 +228,7 @@ into the final bitstream from within the FPGA toolchain."
 	 ',modname))))
 
 
-;; ---------- Forgetting ----------
+;;; ---------- Forgetting ----------
 
 (defun forget/vl (name)
   "Forget the macro or module NAME from the global environment."
@@ -233,7 +236,7 @@ into the final bitstream from within the FPGA toolchain."
     (forget-variable name)))
 
 
-;; ---------- Module synthesis ----------
+;;; ---------- Module synthesis ----------
 
 (defun synthesise/vl (m str)
   "Synthesise module M to STR.

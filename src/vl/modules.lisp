@@ -1,27 +1,27 @@
-;; Top-level modules
-;;
-;; Copyright (C) 2024--2026 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Top-level modules
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
 
-;; ---------- Module interfaces ----------
+;;; ---------- Module interfaces ----------
 
 (deftype module (required optional parameters frame)
   "The type of module interfaces.
@@ -131,7 +131,7 @@ why the MODULE type also includes the environment created for these names."
 		    keys)))))
 
 
-;; ---------- Module late initialisation ----------
+;;; ---------- Module late initialisation ----------
 
 (defvar *module-late-initialisation* nil
   "List of functions that synthesise late intiialisation in modules.
@@ -167,7 +167,7 @@ The late intiialisations are cleared once they have been run."
   (clear-module-late-initialisation))
 
 
-;; ---------- Modules ----------
+;;; ---------- Modules ----------
 
 (deftype direction ()
   "The type of dataflow directions.
@@ -372,6 +372,11 @@ Signal VALUE-MISMATCH as an error if not."
 	      (set-variable-property n 'direction dir))))))))
 
 
+;;; The top-level module grabs the floated LET blocks and coalesces them
+;;; into a single block. Thie is *always* a LET* regardless of the
+;;; underlying blocks that have been combined, which is safe as long
+;;; as we've uniquified all the variable names.
+
 (defmethod float-let-blocks-sexp ((fun (eql 'module)) args)
   (declare (optimize debug))
 
@@ -404,7 +409,8 @@ Signal VALUE-MISMATCH as an error if not."
 			       np
 			     (set-variable-properties n (copy-list props)))))
 
-		       `(let ,newdecls
+		       ;; always a LET*, not a LET
+		       `(let* ,newdecls
 			  ,newbody))
 
 		     ;; no declarations, just use the new body
@@ -421,13 +427,13 @@ Signal VALUE-MISMATCH as an error if not."
       `(module ,modname ,decls ,@(simplify-implied-progn newbody)))))
 
 
-(defmethod transform-sexp ((fun (eql 'module)) args)
+(defmethod elaborate-state-machines-sexp ((fun (eql 'module)) args)
   (destructuring-bind (modname decls &rest body)
       args
 
     `(module ,modname ,decls
 	     ,@(with-local-frame decls
-		 (mapcar #'transform body)))))
+		 (mapcar #'elaborate-state-machines body)))))
 
 
 (defun synthesise-param (n)
@@ -512,7 +518,7 @@ Signal VALUE-MISMATCH as an error if not."
 	(as-blank-line)))))
 
 
-;; ---------- Module instanciation ----------
+;;; ---------- Module instanciation ----------
 
 (defun module-argument-name-to-keyword (n)
   "Return the keyword form of N, as used in a MAKE-INSTANCE call."

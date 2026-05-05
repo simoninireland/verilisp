@@ -591,40 +591,29 @@ Use EXPAND-MACROS-IN-ENVIRONMENT to select a specific environment.")
 	(expand-descend fun args))))
 
 
-;; ---------- Transformation ----------
+;; ---------- Elaborating state machines ----------
 
-(defgeneric transform (form)
-  (:documentation "Transform FORM.
-
-Methods on this function can transform FORM into an equivalent form
-that is 'better' in some way. Transformation happens after
-type-checking, so the methods can make use of dependencies, type
-information, and so on: however, the transformed form must be
-fully elaborated Verilisp, since it will not be passed through
-the earlier passes. The necessary information can typically be added
-using DECLARE forms.
-
-Return the transformed form.")
+(defgeneric elaborate-state-machines (form)
+  (:documentation "Expand TAGBODY-based state machines into CASE- and IF-based machines.")
   (:method (form)
     form)
   (:method ((form list))
     (destructuring-bind (fun &rest args)
 	form
       (with-current-form form
-	(transform-sexp fun args)))))
+	(elaborate-state-machines-sexp fun args)))))
 
 
-(defgeneric transform-sexp (fun args)
+(defgeneric elaborate-state-machines-sexp (fun args)
   (:documentation "Transform FUN applied to ARGS.
 
-Methods on this function should transform the form as required. This
-pass happens late, after type-checking, meaning that the environment
-holds a lot of information about variable types, representations, dependencies,
-and so forth.
+The only methods on this function work on TAGBODY and GO forms, or
+change the ways in whcih the recursion schema works for particular forms
+like LET, LET*, and MODULE.
 
 The default recurses into ARGS.")
   (:method (fun args)
-    `(,fun ,@(mapcar #'transform args))))
+    `(,fun ,@(mapcar #'elaborate-state-machines args))))
 
 
 ;; ---------- Synthesis ----------

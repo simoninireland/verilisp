@@ -140,7 +140,7 @@
    #:variable-written-p
    #:rewrite-variables
    #:generalised-place-p
-   #:transform
+   #:expand-state-machines
    #:float-let-blocks
    #:simplify-progn
    #:synthesise
