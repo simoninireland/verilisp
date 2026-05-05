@@ -20,15 +20,13 @@
 (defpackage verilisp/test
   (:use :cl :alexandria :fiveam :verilisp/core :verilisp/utils)
   (:local-nicknames
-   (:vl :verilisp/core)
-   (:def :verilisp/def))
+   (:vl :verilisp/core))
   (:import-from :fiveam #:is #:test))
 
 (in-package :verilisp/test)
 
 (def-suite verilisp/utils) ;; utilities
 (def-suite verilisp/vl)    ;; synthesisable fragment of Lisp
-(def-suite verilisp/def)   ;; architectural component definitions
 
 
 ;; ---------- Helper functions ----------
