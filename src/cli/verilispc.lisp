@@ -1,26 +1,30 @@
-;; Command line Verilisp-to-Verilog transpiler
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a Common Lisp DSL for hardware design
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Command line Verilisp-to-Verilog transpiler
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a Common Lisp DSL for hardware design
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/cli)
 
+;;; This command-line wrapper mainly justs ets up the "real" code
+;;; for use in a shell script. The logic for com,puilation is all
+;;; held within the verilisp package.
 
-;; ---------- Error handling ----------
+
+;;; ---------- Error handling ----------
 
 (defvar *errors* 0
   "Number of errors caught.")
@@ -100,7 +104,7 @@ accepts \"none\" and \"all\" as abbreviations."
     (setq *fatal-warnings* nil)))
 
 
-;; ---------- Module source file handling ----------
+;;; ---------- Module source file handling ----------
 
 
 (defvar *module-source-file-names* nil
@@ -130,7 +134,7 @@ Reyirn NIL if the module isn't known."
 	(add-module-source-file-name modname fn)))))
 
 
-;; ---------- Command-line options handling ----------
+;;; ---------- Command-line options handling ----------
 
 (defvar *verbosity* 0
   "Verbosity (reporting) level (higher is more verbose).")
@@ -265,7 +269,7 @@ a list of files to be processed."
     free-args))
 
 
-;; ---------- File handling ----------
+;;; ---------- File handling ----------
 
 (defun filename-for-module (modname)
   "Return the filename used to store module MODNAME.
@@ -299,7 +303,7 @@ The header will need to be preceded by an appropriate comment string."
   (format nil "Source: ~a~%" fn))
 
 
-;; ---------- Errors and progress reporting ----------
+;;; ---------- Errors and progress reporting ----------
 
 (defun info (format &rest args)
   "Generate an info message when we're in verbose mode."
@@ -307,6 +311,65 @@ The header will need to be preceded by an appropriate comment string."
     (let ((line (format nil "~a" format)))
       (apply #'format `(,*error-output* ,line ,@args)))))
 
+
+;;; Error handlers
+
+(defun handle-vl-error (condition)
+  (format *error-output* "ERROR: ~a~%" condition)
+  (incf *errors*)
+
+  ;; call debugger if requested
+  (if *debug-on-error*
+      (invoke-debugger condition)
+
+      ;; continue compilation if possible
+      (if-let ((recovery (find-restart 'recover)))
+	(invoke-restart recovery)
+
+	;; otherwise skip the file
+	(invoke-restart 'ignore-file-with-errors))))
+
+
+(defun handle-error (condition)
+  (format *error-output* "SYSTEM ERROR: ~a~%" condition)
+  (incf *errors*)
+
+  ;; call debugger if requested
+  (if *debug-on-error*
+      (invoke-debugger condition)
+
+      ;; skip the rest of the file (don't try to recover)
+      (invoke-restart 'ignore-file-with-errors)))
+
+
+(defun handle-vl-warning (condition)
+  (cond ((fatal-warning-condition-p condition)
+	 (format *error-output* "ERROR: ~a~%" condition)
+	 (incf *errors*))
+
+	((reported-warning-condition-p condition)
+	 (format *error-output* "WARNING: ~a~%" condition)
+	 (incf *warnings*)))
+
+  ;; call debugger if requested, otherwise just continue
+  (if (and *debug-on-error*
+	   (fatal-warning-condition-p condition))
+      (invoke-debugger condition)
+
+      (muffle-warning condition)))
+
+
+(defun continue-or-fail ()
+  (when (and *fail-on-load*
+	     (> *errors* 0))
+    (when (> *warnings* 0)
+      (format *error-output* "~s warnings~%" *warnings*))
+    (when (> *errors* 0)
+      (format *error-output* "~s errors~%" *errors*))
+    (uiop:quit 1)))
+
+
+;;; Helper macro
 
 (defmacro with-error-handling (&body body)
   "Run BODY in an environment that handles warnings and errors appropriately.
@@ -317,64 +380,20 @@ run, errors will usually cause an exit unless failure-on-load has been
 explicitly disabled."
   `(progn
      (handler-bind
-	 ((vl-error (lambda (condition)
-		   (format *error-output* "ERROR: ~a~%" condition)
-		   (incf *errors*)
-
-		   ;; call debugger if requested
-		   (if *debug-on-error*
-		       (invoke-debugger condition)
-
-		       ;; continue compilation if possible
-		       (if-let ((recovery (find-restart 'recover)))
-			 (invoke-restart recovery)
-
-			 ;; otherwise skip the file
-			 (invoke-restart 'ignore-file-with-errors)))))
-
-	  (error (lambda (condition)
-		   (format *error-output* "SYSTEM ERROR: ~a~%" condition)
-		   (incf *errors*)
-
-		   ;; call debugger if requested
-		   (if *debug-on-error*
-		       (invoke-debugger condition)
-
-		       ;; skip the rest of the file (don't try to recover)
-		       (invoke-restart 'ignore-file-with-errors))))
-
-	  (vl-warning (lambda (condition)
-		     (cond ((fatal-warning-condition-p condition)
-			    (format *error-output* "ERROR: ~a~%" condition)
-			    (incf *errors*))
-
-			   ((reported-warning-condition-p condition)
-			    (format *error-output* "WARNING: ~a~%" condition)
-			    (incf *warnings*)))
-
-		     ;; call debugger if requested, otherwise just continue
-		     (if (and *debug-on-error*
-			      (fatal-warning-condition-p condition))
-			 (invoke-debugger condition)
-
-			 (muffle-warning condition)))))
+	 ((vl-error #'handle-vl-error)
+	  (error #'handle-error)
+	  (vl-warning #'handle-vl-warning))
 
        ,@body)
 
      ;; decide whether to bail out
-     (when (and *fail-on-load*
-		(> *errors* 0))
-       (when (> *warnings* 0)
-	 (format *error-output* "~s warnings~%" *warnings*))
-       (when (> *errors* 0)
-	 (format *error-output* "~s errors~%" *errors*))
-       (uiop:quit 1))))
+     (continue-or-fail)))
 
 
 (defmacro with-ignore-file-with-errors (&body body)
   "Run BODY in an environment offering an IGNORE-FILE-WITH-ERRORS restart.
 
-This rstart is used by the handlers establish by WITH-ERROR-HANDLING
+This restart is used by the handlers establish by WITH-ERROR-HANDLING
 to skip files with errors."
   `(restart-case
        (progn
@@ -387,7 +406,7 @@ to skip files with errors."
        nil)))
 
 
-;; ---------- Main function ----------
+;;; ---------- Entry point ----------
 
 ;; Package used to hold loaded code
 (defpackage verilisp/cli/compiling
