@@ -273,7 +273,7 @@ This affects the shallowest declaration of N."
   "Declare a variable N with properties PROPS in the shallowest frame of ENV.
 
 If AT-START is non-nil, add the variable to the start of the environment;
-otherwise (by default) add it to the emd.
+otherwise (by default) add it to the end.
 
 Return the updated environment.
 
