@@ -1,6 +1,6 @@
 ;; Environments
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;; Copyright (C) 2024--2026 Simon Dobson
 ;;
 ;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
@@ -190,7 +190,6 @@ An UNKNOWN-VARIABLE error is signalled if N is undefined."
 	(get-frame-declaring n penv))))
 
 
-
 (defun forget-frame-variable (n env)
   "Forget the declaration of NAME in the shallowest frame of ENV.
 
@@ -307,7 +306,6 @@ Signals a DUPLICATE-VARIABLE error if the variable already exists in this frame.
 
      ;; not declared
     (error 'unknown-variable :variable n)))
-
 
 
 (defun add-frame-to-environment (f env &optional at-start)
