@@ -96,6 +96,26 @@ This should only be used during system loading."
      ,@body))
 
 
+(defmacro with-detached-frame (lenv &body body)
+  "Run BODY in the parent of the current frame.
+
+The shallowest frame is detached and bound to LENV. Essentially this
+removes all the entries in the local frame for the duration of BODY
+while making it available for access explicitly if desired. The
+shoowest frame is re-attached at the end of BODY."
+  (with-gensyms (penv)
+    `(let* ((,penv (parent-frame *current-frame*))
+	    (,lenv (detach-frame *current-frame*))
+	    (*current-frame* ,penv))
+
+       (unwind-protect
+	    (progn
+	      ,@body)
+
+	 ;; re-attach the detached frame
+	 (attach-frame ,lenv *current-frame*)))))
+
+
 (defun declare-variable (n props)
   "Declare a new variable N with properties PROPS in the global environment."
   (declare-environment-variable n props (current-frame)))
@@ -118,9 +138,14 @@ This should only be used during system loading."
   (get-environment-names (current-frame)))
 
 
+(defun variables-declared-in-frame (f)
+  "Return the variables declared in frame F."
+  (get-frame-names f))
+
+
 (defun variables-declared-in-current-frame ()
   "Return the variables declared in only the shallowest frame of the environment."
-  (get-frame-names (current-frame)))
+  (variables-declared-in-frame (current-frame)))
 
 
 (defun variable-declared-in-current-frame-p (n)

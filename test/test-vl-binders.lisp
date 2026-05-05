@@ -1,21 +1,21 @@
-;; Tests of binders
-;;
-;; Copyright (C) 2024--2026 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Tests of binders
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/test)
 (in-suite verilisp/vl)
@@ -210,7 +210,7 @@
     (is (vl::synthesise p)))
 
   ;; nested if that's got a complicated body
-  (let ((p (vl::expand/vl '(let (a (b (+ 10 (if (< 1 2) 1 (setf a 27))))) a))))
+  (let ((p (vl::expand/vl '(let* (a (b (+ 10 (if (< 1 2) 1 (setf a 27))))) a))))
     (vl::typecheck p)
     (signals not-synthesisable
       (is (vl::synthesise p)))))
@@ -312,7 +312,46 @@
 	  (is (eql (vl::variable-property 'd 'as) 'wire)))))))
 
 
-;; ---------- Variable accesses ----------
+(test test-let-out-of-order
+  "Test we catch the use of variables defined later in the list."
+  (vl::with-new-frame
+    (let ((p (expand/vl '(let ((a 1)
+			       (b (+ c 1))
+			       (c 3))))))
+      (signals unknown-variable
+	(vl::typecheck p)))))
+
+
+(test test-let-not-defined-yet
+  "Test we catch the use of variables defined earlier in the list (for LET)."
+  (vl::with-new-frame
+    (let ((p (expand/vl '(let ((a 1)
+			       (b (+ a 1))
+			       (c 3))))))
+      (signals unknown-variable
+	(vl::typecheck p)))))
+
+
+(test test-let*-pre-reference
+  "Test we allow the use of variables defined earlier in the list (for LET*)."
+  (vl::with-new-frame
+    (let ((p (expand/vl '(let* ((a 1)
+				(b (+ a 12))
+				(c 3))))))
+      (is (vl::typecheck p)))))
+
+
+(test test-let*-post-reference
+  "Test we disallow the use of variables defined later in the list (for LET*)."
+  (vl::with-new-frame
+    (let ((p (expand/vl '(let* ((a 1)
+				(b (+ c 12))
+				(c 3))))))
+      (signals unknown-variable
+	(is (vl::typecheck p))))))
+
+
+;;; ---------- Variable accesses ----------
 
 (test test-let-accesses
   "Test we can extract and update variable accesses in LET."
@@ -336,7 +375,7 @@
 	(is (vl::variable-property 'c 'read))))))
 
 
-;; ---------- Variable declarations ----------
+;;; ---------- Variable declarations ----------
 
 (test test-declare-non-local
   "Test we can't add declarations to variables from shallower frames."

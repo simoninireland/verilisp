@@ -348,6 +348,14 @@ largest representable type that can be formed."
 
 ;; ---------- Type constraints ----------
 
+(defun add-frame-type-constraint (n ty env)
+  "Constrain variable N to have type TY in ENV.
+
+This constraint will be used when inferring the finla type of N."
+  (let ((constraints (get-frame-property n 'type-constraints env)))
+    (set-frame-property n 'type-constraints (cons ty constraints) env)))
+
+
 (defun add-type-constraint (n ty)
   "Constrain N to have type TY.
 

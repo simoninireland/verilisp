@@ -3,7 +3,7 @@
 Binders
 =======
 
-Verilisp's main binding form is ``let``.
+Verilisp's main binding form are ``let`` and ``let*``.
 
 
 Example
@@ -17,7 +17,15 @@ The code fragment
       (setq a 34))
 
 defines a ``let`` block that bring a variable ``a`` into scope in its
-body.
+body. As usual, ``let`` can't refer to previous bindings: for that,
+use `let*``.
+
+.. code-block:: lisp
+
+   (let ((a 12)
+	 (b (+ a 26)))
+      (setq a (+ b 12))
+
 
 .. note::
 
