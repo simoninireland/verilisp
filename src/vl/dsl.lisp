@@ -45,10 +45,9 @@ in one operation, with the program being passed along as modified."))
 
 If :PREPEND is non-NIL then the pass is added to the front of the
 queue; otherwise it is added to the back."
-  (setf (pass-queue-queue queue)
-	(if prepend
-	    (cons pass-name (pass-queue-queue queue))
-	    (append (pass-queue-queue queue) (list pass-name)))))
+  (if prepend
+      (setf (pass-queue-queue queue) (cons pass-name (pass-queue-queue queue)))
+      (appendf (pass-queue-queue queue) (list pass-name))))
 
 
 (defun clear-pass-queue (queue)

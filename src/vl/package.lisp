@@ -146,6 +146,10 @@
    #:synthesise
    #:lispify
 
+   ;; DSL builder
+   #:defpass/vl
+   #:defpassmethod/vl
+
    ;; loader
    #:clear-global-environment
    #:get-module
