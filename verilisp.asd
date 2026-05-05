@@ -47,6 +47,7 @@
 			     (:file "helpers")
 			     (:file "conditions")
 			     (:file "pretty-printer")
+			     (:file "dsl")
 			     (:file "passes")
 			     (:file "typeops")
 			     (:file "identifiers")
@@ -72,17 +73,6 @@
 			     (:file "eval")
 			     (:file "loader")
 			     (:file "embedding")))
-
-	       ;; higher-level definitions
-	       (:module "def"
-		:components ((:file "package")
-			     (:file "constants")
-			     ;;(:file "mop")
-			     ;;(:file "component")
-			     ;;(:file "mixins")
-			     ;;(:file "synthesis")
-			     ;;(:file "isa")
-			     (:file "conditions")))
 
 	       ;; public package
 	       (:file "package"))
@@ -118,10 +108,7 @@
 	       (:file "test-vl-cond")
 	       (:file "test-vl-with-bitfields")
 	       (:file "test-vl-helpers")
-	       (:file "test-vl-state-machine")
-	       ;;(:file "test-def-components")
-	       ;;(:file "test-def-isa")
-	       )
+	       (:file "test-vl-state-machine"))
   :perform (test-op (o c) (uiop:symbol-call :fiveam '#:run-all-tests)))
 
 

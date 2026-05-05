@@ -1,375 +1,258 @@
-;; Simple macro set for building Lisp-embedded DSLs
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Helper macros for the Verilisp DSL
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 
-
-;; ---------- DSL data structure ----------
-
-(define-condition dsl-error ()
-  ((message
-    :documentation "Explanation for the error."
-    :initarg :message
-    :reader message))
-  (:report (lambda (c str)
-	     (format str "DSL error: ~a" (message c))))
-  (:documentation "Condition signalled for problems in the DSL."))
+;;; This macro set makes it easier to code-up and read Verilisp's
+;;; internal definitions and passes. It abstracts over the style
+;;; of coding-up the generic functions needed to define compiler
+;;; nanopasses, and lets us set up queues of passes to be run in
+;;; sequence.
 
 
-(defclass form ()
-  ((tag
-    :documentation "The head of the form."
-    :initarg :tag
-    :reader tag)
-   (compound-form
-    :documentation "Whether the form is an atom of list."
-    :initarg :compound-p
-    :initform t
-    :reader compound-p)
-   (lambda-list
-    :documentation "The lambda-list describing the arguments to the form."
-    :initarg :lambda-list
-    :initarg :args
-    :reader lambda-list)
-   (docstring
-    :documentation "Docstring for the form."
-    :initarg :docstring
-    :initarg :documentation
-    :reader docstring))
-  (:documentation "The description of a form within a DSL."))
+;;; ---------- Pass queues ----------
 
-
-(defclass dsl ()
-  ((forms
-    :documentation "Alist of form tags and their descriptions."
+(defclass pass-queue ()
+  ((queue
+    :documentation "The passes."
     :initform nil
-    :accessor forms)
-   (docstring
-    :documentation "Dostring for the DSL."
-    :initarg :docstring
-    :initarg :documentaton
-    :initform "A DSL."
-    :reader docstring))
-  (:documentation "A domain-specific language embedded into Lisp."))
+    :accessor pass-queue-queue))
+  (:documentation "A queue of compiler nanopasses.
+
+The queue can be updated as passes are added, with new passes being
+appended (default) or prepended (if required). The queue can be run
+in one operation, with the program being passed along as modified."))
 
 
-(defun form-p (formtag dsl)
-  "Test whether FORMTAG is valid within DSL."
-  (not (null (assoc formtag (forms dsl)))))
+(defun add-pass-to-queue (pass-name queue &key prepend)
+  "Add PASS-NAME to QUEUE.
+
+If :PREPEND is non-NIL then the pass is added to the front of the
+queue; otherwise it is added to the back."
+  (setf (pass-queue-queue queue)
+	(if prepend
+	    (cons pass-name (pass-queue-queue queue))
+	    (append (pass-queue-queue queue) (list pass-name)))))
 
 
-(defun ensure-form (formtag dsl)
-  "Test whether FORMTAG is valid within DSL.
-
-An UNRECOGNISED-DSL-FORM error is signalled if the form
-is invalid."
-  (unless (form-p formtag dsl)
-    (error 'dsl-error :message (format nil "Unknown form ~a" formtag))))
+(defun clear-pass-queue (queue)
+  "Clear all passes from QUEUE."
+  (setf (pass-queue-queue queue) nil))
 
 
-(defun add-form (f dsl)
-  "Add F to DSL."
-  (let ((formtag (tag f)))
-    (when (form-p formtag dsl)
-      (error 'dsl-error :message (format nil "Duplicate form ~a" formtag)))
+(defun run-pass-queue (queue form)
+  "Run the passes of QUEUE in order against FORM.
 
-    (appendf (forms dsl) (list (list formtag f)))))
+The return value of each pass is used as the input to the next."
+  (let ((f form))
+    (dolist (pass (pass-queue-queue queue))
+      (setq f (funcall pass f)))
 
-
-(defun get-form (formtag dsl)
-  "Retrieve form with tag FORMTAG from DSL."
-  (if-let ((a (assoc formtag (forms dsl))))
-    (cadr a)
-
-    (error 'dsl-error :message (format nil "Unknown form ~a" formtag))))
+    ;; return the result of the last pass
+    f))
 
 
-;; ---------- Helpers Current DSL ----------
+;;; ---------- Pass function generation ----------
 
-(defvar *current-dsl* nil
-  "The DSL currently being defined.
-
-New forms are added to this DSL by default. This can be
-overridden by providing a specific :DSL clause.")
+(defun pass-top-level-function-name (pass-name)
+  "Return the top-level function name for PASS."
+  (intern (upcase (symbol-name pass-name))))
 
 
-(defun in-dsl (dsl)
-  "Make DSL current for future definitions."
-  (setq *current-dsl* dsl))
+(defun pass-form-level-function-name (pass-name)
+  "Return the form-level function name for PASS.
+
+The default is the pass name followed by a suffix."
+  (intern (upcase (concat (symbol-name (pass-top-level-function-name pass-name)) "/form"))))
 
 
-(defun current-dsl ()
-  "Return the current DSL into which definitions are being placed."
-  *current-dsl*)
+;;; ---------- Macros ----------
+
+;;; The standard pass queues
+
+(defparameter *pre-typing-passes* (make-instance 'pass-queue)
+  "The passes that are run before typing.
+
+Pre-typing passes obviously don't have access to type information:
+they have to operate purely on syntax. Macro expansion is an example
+of a pre-typing pass.")
 
 
-;; ---------- DSL forms ----------
+(defparameter *typing-passes* (make-instance 'pass-queue)
+  "The passes that perform type-checking.
 
-(defun clause-p (l)
-  "Test whether L is a clause.
-
-Clauses are lists that begin with a keyword."
-  (and (listp l)
-       (not (null l))
-       (keywordp (car l))))
+These passes populate the environment structure.")
 
 
-(defmacro deform/dsl (form &rest clauses)
-  "Define FORM as a valid form in the DSL.
+(defparameter *post-typing-passes* (make-instance 'pass-queue)
+  "The passes that are run after typeing.
 
-FORM should either be a list consisting of the form tag and a
-lambda-list of arguments, or a symbol identifying the type of an atom.
-
-CLAUSES are a list of lists headed by a symbol defining extra features fot the form. Valid clauses are :DSL for defining the DSL into which to add the form (defaulting to CURRENT-DSL, as set by IN-DSL), and
-:DOCUMENTATION providing a docstring. The arguments to clauses are
-evaluated."
-  (let ((dsl (current-dsl))
-	(docstring "A form")
-	formtag compound-p args)
-
-    ;; see whether we're defining an atom or a "normal" form
-    (if (atom form)
-	(progn
-	  ;; an atomic type
-	  (setq formtag form)
-	  (setq compound-p nil))
-
-	(progn
-	  ;; a list form possibly with arguments
-	  (setq formtag (car form))
-	  (setq compound-p t)
-	  (setq args (cdr form))))
-
-    ;; parse the clauses
-    (dolist (clause clauses)
-      (unless (clause-p clause)
-	(error 'dsl-error :message (format nil "Non-clause ~a encountered" clause)))
-
-      (case (car clause)
-	(:documentation
-	 ;; docstring for the form
-	 (setq docstring (eval (cadr clause))))
-
-	(:dsl
-	 ;; set the DSL receiving the form
-	 (setq dsl (eval (cadr clause))))
-
-	(t
-	 (error 'dsl-error :message (format nil "Unknown clause ~a" clause)))))
-
-    ;; check we have a DSL to add form to
-    (when (null dsl)
-      (error 'dsl-error :message "No DSL specified for form"))
-
-    ;; check that the lambda list is valid
-    (handler-case
-	(parse-ordinary-lambda-list args :allow-specializers nil)
-
-      (program-error ()
-	(make-condition 'dsl-error :message (format nil "Malformed lambda-list ~a" args))))
-
-    ;; add form
-    (let ((f (make-instance 'form :tag formtag
-				  :compound-p compound-p
-				  :lambda-list args
-				  :documentation docstring)))
-      (add-form f dsl)
-
-      ;; return the form
-      `',form)))
+Post-typing passes have access to the complete environment formed
+by the type-checking passes.")
 
 
-;; ---------- Generic functions over DSL forms ----------
+(defparameter *synthesis-passes* (make-instance 'pass-queue)
+  "The synthesis passes.
 
-(defun form-generic-name (name)
-  "Return the name used for the generic function NAME."
-  name)
-
-
-(defun form-method-name (name)
-  "Return the name used for the methods on generic function NAME."
-  (intern (concat (symbol-name name) "/form")))
+These passes are run after everything else to convert the Verilisp
+code into Verilog.")
 
 
-(defmacro defgeneric/dsl (name &rest clauses)
-  "Declare NAME as a generic function over "
-  (with-gensyms (f fun a)
-    `(progn
-       ;; the per-form generic function
-       (defgeneric ,(form-method-name name) (,fun ,a))
+;;; Mapping from tags to queues
 
-       ;; the overall generic function
-       (defgeneric ,(form-generic-name name) (,f)
-	 (:method ((,f list))
-	   (destructuring-bind (,fun &rest ,a)
-	       ,f
-	     (,(form-method-name name) ,fun ,a)))))))
+(defparameter *pass-queue-tags* `((:pre-typing  ,*pre-typing-passes*)
+				  (:typing      ,*typing-passes*)
+				  (:post-typing ,*post-typing-passes*)
+				  (:synthesis   ,*synthesis-passes*))
+  "Alist from tags used in DEFPASS/VL to pass queues.")
 
 
-(defmacro defmethod/dsl (name form &body body)
-  "Define a method for NAME over FORM.
+;;; Define a new pass
 
-FORM may be a list representing a form tag, or a list
-representing a specialisation, which consists of a list
-with a variable name and a type correspondong to the atomic
-form.
+(defmacro defpass/vl (&rest args)
+  "Define a compiler nanopass.
 
-CLAUSES are a list of lists headed by a symbol defining extra features
-fot the form. Valid clauses are :DSL for defining the DSL into which
-to add the form (defaulting to CURRENT-DSL, as set by IN-DSL), and
-:DOCUMENTATION providing a docstring. The arguments to clauses are
-evaluated.
+The arguments consist of an optional pass queue tag, an optional
+placement of the pass in that pass queue, an optional recursion
+scheme, a (possibly empty) list of arguments that appear after the
+form being processed, and an optional docstring.
 
-ARGS will be bound in BODY."
+Placements can be :APPEND or :PREPEND. Recursion schemata can be
+:RECURSE or :FAIL.
+
+The default behaviour is to define the new pass and append it to the
+post-typing pass queue, recursing into the arguments of any forms
+encountered."
   (declare (optimize debug))
-
-  (let ((dsl (current-dsl))
-	docstring
-	formtag args must-be-compound-p)
-
-    ;; parse any clauses on the head of the body
-    (labels ((parse-clause (clauses)
-	       (let ((clause (car clauses)))
-		 (if (clause-p clause)
+  (let ((queue-tag (if-let ((tq (assoc (car args) *pass-queue-tags*)))
 		     (progn
-		       (case (car clause)
-			 (:dsl
-			  (setq dsl (eval (cadr clause))))
+		       (setf args (cdr args))
+		       (car tq))
 
-			 (:documentation
-			  (setq docstring (eval (cadr clause))))
+		     ;; default uses the post-typing queue
+		     :post-typing))
+	(prepend-to-queue-p (cond ((eql (car args) :prepend)
+				   (setf args (cdr args))
+				   t)
+				  ((eql (car args) :append)
+				   (setf args (cdr args))
+				   nil)
+				  (t
+				   ;; default is to append
+				   nil)))
+	(recursion-scheme (cond ((member (car args) '(:recurse :fail))
+				 (setf args (cdr args))
+				 (car args))
+				(t
+				 ;; default is to recurse
+				 :recurse)))
+	(pass-name (car args))
+	(extra-args (cadr args))
+	(docstring (progn
+		     (setf args (cddr args))
+		     (if (not (null args))
+			 (if (stringp (car args))
+			     (progn
+			       (setf args (cdr args))
+			       (car args))))))
+	(body (if (not (null args))
+		  (car args))))
 
-			 (t
-			  (error 'dsl-error :message (format nil "Unknown clause ~a" clause))))
+    `(progn
+       ;; store the pass name in the correct queue
+       (add-pass-to-queue ',pass-name (cadr (assoc ,queue-tag *pass-queue-tags*)) :prepend ,prepend-to-queue-p)
 
-		       (parse-clause (cdr clauses)))
+       ;; define the generic functions
+       (defgeneric ,(pass-top-level-function-name pass-name) (form ,@extra-args)
+	 (:documentation ,(if docstring
+			      docstring
+			      "Compiler nanopass."))
+	 ,(if body
+	      ;; explicit body
+	      `(:method (form ,@extra-args)
+		 ,@body)
 
-		     ;; clauses ended, now in the body
-		     clauses))))
+	      ;; default body signals an error on atom forms
+	      `(:method (form ,@extra-args)
+		 (declare (ignore form))
+		 (error 'unknown-form)))
 
-      ;; remaining "clauses" are the body of the method
-      (setq body (parse-clause body)))
+	 ;; call form-level function for non-atom forms
+	 (:method ((form list) ,@extra-args)
+	   (destructuring-bind (tag &rest args)
+	       form
+	     (with-current-form form
+	       (,(pass-form-level-function-name pass-name) tag args ,@extra-args)))))
 
-    ;; ensure we have a DSL to work on
-    (when (null dsl)
-      (error 'dsl-error :message "No DSL specified for method"))
+       (defgeneric ,(pass-form-level-function-name pass-name) (tag args ,@extra-args)
+	 (:documentation ,(concat "Form-level handler for " (symbol-name pass-name)))
 
-    ;; check FORM is a list
-    (unless (listp form)
-      (error 'dsl-error :message "Form specifier must be a list, not ~a" form))
+	 ,(cond ((eql recursion-scheme :fail)
+		 ;; default body signals an error
+		 `(:method (tag args ,@extra-args)
+		    (declare (ignore tag args ,@extra-args))
+		    (error 'unknown-form)))
 
-    ;; extract the form tag, which varies depending on whether
-    ;; the form is atomic or compound
-    (if (listp (car form))
-	(progn
-	  ;; atomic form
-	  (setq formtag (cadar form))
-	  (setq args nil)
-	  (setq must-be-compound-p nil))
+		((eql recursion-scheme :recurse)
+		 ;; default body recurses into arguments
+		 (let ((rf (if extra-args
+			       `(rcurry #',(pass-form-level-function-name pass-name) ,@extra-args)
+			       `#',(pass-form-level-function-name pass-name))))
+		   `(:method (tag args ,@extra-args)
+		      (cons tag (mapcar ,rf args)))))
 
-	(progn
-	  ;; compound form
-	  (setq formtag (car form))
-	  (setq args (cdr form))
-	  (setq must-be-compound-p t)))
-
-    ;; set default docstring
-    (unless docstring
-      (setq docstring (format nil "Method for ~a" formtag)))
-
-    ;; build the method on the appropriate generic function
-    (let ((f (get-form formtag (current-dsl))))
-      (if (compound-p f)
-	  (progn
-	    ;; compound form, generate method on form function
-	    (unless must-be-compound-p
-	      (error 'dsl-error :message "Wrong form specifier for ~a" formtag))
-
-	    (with-gensyms (fun a)
-	      `(defmethod ,(form-method-name name) ((,fun (eql ',formtag)) ,a)
-		 ,docstring
-		 (destructuring-bind (,@args)
-		     ,a
-		   ,@body))))
-
-	  (progn
-	    ;; atomic form, generate method on main function
-	    (when must-be-compound-p
-	      (error 'dsl-error :message "Wrong form specifier for ~a" formtag))
-
-	    (with-gensyms (f)
-	      `(defmethod ,(form-generic-name name) ,form
-		 ,docstring
-		 ,@body)))))))
-
-
-;; ---------- Example ----------
-
-(defparameter arithmetic (make-instance 'dsl))
-
-(in-dsl arithmetic)
-
-(deform/dsl integer
-  (:documentation "Integer literals."))
-
-(deform/dsl (+ &rest args))
-
-(deform/dsl (- &rest args)
-  (:documentation "Unary negation and n-ary subtraction."))
-
-(deform/dsl (* &rest args))
-
-(defgeneric/dsl typecheck
-  (:documentation "Typecheck a form in the arithmetic DSL."))
+		(t
+		 (error 'dsl-error :hint (format nil "Recursion scheme must be one of :RECURSE or :FAIL not ~s)" recursion-scheme))))))))
 
 
-(defgeneric/dsl evaluate
-    (:documentation "Evaluate a form in the arithmetic DSL."))
+(defmacro defpassmethod/vl (pass-name form &body body)
+  "Define a pass method.
+
+Pass method switch on the FORM. If FORM is a list containing only
+an atom or a single specialiser, the method is added to the top-level
+function. If FORM is a more complicated argument list, the method is added
+to the form-level function."
+  (declare (optimize debug))
+  (if (= (length form) 1)
+      ;; method is for an atom
+      `(defmethod ,(pass-top-level-function-name pass-name) ,form
+	 ,@body)
+
+      ;; method is for a structured form
+      (destructuring-bind (tag &rest args)
+	  form
+
+	`(defmethod ,(pass-form-level-function-name pass-name) ((tag (eql ',tag)) args)
+	   (destructuring-bind ,args
+	       args
+	     ,@body)))))
 
 
-(defmethod/dsl typecheck ((n integer))
-  'integer)
+;;; ---------- Example ----------
+
+;; (defpass/vl float-let :post-typing ()
+;;   "Float LET and LET* blocks to the top of a module.")
 
 
-(defmethod/dsl evaluate ((n integer))
-  n)
+;; (defpassmethod/vl float-let ((n integer))
+;;   n)
 
 
-(defmethod/dsl typecheck (+ &rest args)
-  (every (lambda (ty)
-	   (subtypep ty 'integer))
-	 (mapcar #'typecheck args))
-
-  'integer)
-
-
-(defmethod/dsl evaluate (+ &rest args)
-  (foldr #'+ (mapcar #'evaluate args)))
-
-
-(in-dsl nil)
-
-(defmethod/dsl typecheck (- &rest args)
-  (:dsl arithmetic)
-
-  (every (lambda (ty)
-	   (subtypep ty 'integer))
-	 (mapcar #'typecheck args))
-
-  'integer)
+;; (defpassmethod/vl float-let (* &rest args)
+;;   `(* ,@ (mapcar #'float-let args)))

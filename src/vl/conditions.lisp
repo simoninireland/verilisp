@@ -1,27 +1,27 @@
-;; Language conditions
-;;
-;; Copyright (C) 2024--2026 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Language conditions
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
 
-;; ---------- Language base condition ----------
+;;; ---------- Language base condition ----------
 
 (define-condition vl-condition ()
   ((hint
@@ -67,15 +67,15 @@ This only changes the printed length: the entire fragment is retained.")
 (defmethod format-condition-context (detail (c vl-condition) str)
   (format str "~a" detail)
 
-  ;; add hint if present
+  ;;;; add hint if present
   (if-let ((hint (hint c)))
     (format str " (~a)" hint))
 
-  ;; add underlying condition if present
+  ;;;; add underlying condition if present
   (if-let ((e (underlying-condition c)))
     (format str " (Underlying condition: ~s)" e))
 
-  ;; add context if known
+  ;;;; add context if known
   (if-let ((code (fragment c)))
     (format str " Context: ~a" (shorten *maximum-code-fragment-length*
 					(format nil "~a" code)
@@ -100,7 +100,22 @@ might still cause a cascade of further errors. use WITH-RECOVER-ON-ERROR
 to set up recovery actions."))
 
 
-;; ---------- Synthesis ----------
+;;; ---------- DSL definition ----------
+
+(define-condition dsl-error (error)
+  ((hint
+    :documentation "A hint as to how to fix the condition."
+    :initarg :hint
+    :initform nil
+    :reader hint))
+  (:report (lambda (c str)
+	     (format str "DSL error: ~s" (hint c))))
+  (:documentation "Error signalled by errors within the DSL-defining macros.
+
+The hint explains the problem."))
+
+
+;;; ---------- Synthesis ----------
 
 (define-condition not-synthesisable (vl-error)
   ()
@@ -129,7 +144,7 @@ This is usually caused by unsatisfiable type constraints arising from
 variable assignments."))
 
 
-;; ---------- Checking ----------
+;;; ---------- Checking ----------
 
 (define-condition unknown-variable (vl-error)
   ((var
@@ -574,10 +589,10 @@ LET-REGISTERS, and LET-CONSTANTS macros and providing a representation
 explicitly that conflicts with the one implied by the macro."))
 
 
-;; ---------- Internal errors ----------
+;;; ---------- Internal errors ----------
 
-;; These are errors arising from the incorrect functioning of the
-;; Verilisp DSL itself, rather than from user code.
+;;;; These are errors arising from the incorrect functioning of the
+;;;; Verilisp DSL itself, rather than from user code.
 
 (define-condition no-local-frame (vl-error)
   ()

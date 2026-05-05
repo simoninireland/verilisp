@@ -28,6 +28,7 @@
 		#:regex-replace-all)
   (:import-from :str
 		#:concat
+		#:upcase
 		#:s-first
 		#:containsp
 		#:shorten
@@ -169,6 +170,7 @@
    #:recover
 
    ;; errors
+   #:dsl-error
    #:not-synthesisable
    #:not-representable
    #:unknown-variable
