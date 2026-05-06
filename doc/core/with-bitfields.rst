@@ -9,7 +9,7 @@ is so common that Verilisp provides two "bitfields" macro to perform
 the decomposition. These two macros perform :ref:`matching
 <core-with-bitfields-matching>` on a pattern against a binary number,
 usually binding variables against bits within the number according to
-the pattern
+the pattern.
 
 .. note::
 
@@ -56,6 +56,14 @@ multi-form "then" arm, doing nothing if matching fails.
 	   opcode
 	 (setq g (+ a 2))
 	 (setq valid 1)))
+
+
+.. note::
+
+   You can think of ``with-bitfields`` as being similar to the
+   standard ``destructuring-bind`` construct in Lisp -- the latter
+   extracts elements of a list, while the former extracts bitfields
+   from a number.
 
 
 Assigning to bitfields
