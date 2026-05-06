@@ -332,13 +332,19 @@ recuursion schema is FAIL-BY-DEFAULT."
 (defmacro defpassmethod/vl (pass-name form &body body)
   "Define a pass method.
 
-Pass methods switch on the FORM. If FORM is a list containing only
-an atom or a single specialiser, the method is added to the top-level
-function. If FORM is a more complicated argument list, the method is added
-to the form-level function."
+The body of the method can contain leading option clauses. The
+options are:
+
+- (:DOCUMENTATION \"docstring\"): install DOCSTRING
+- (:SCHEMA schema): use SCHEMA as the schema for this method
+- (:SAME-AS fun): use the same behaviour as for function form FUN
+
+If there is no :SCHEMA option then the rest of BODY is treated as the
+body of the method."
   (declare (optimize debug))
   (let ((docstring (format nil "Method for ~s in pass ~s." form pass-name))
-	schema)
+	schema
+	same-as)
 
     ;; consume leading option forms to extract "real" body
     (labels ((consume-options (b)
@@ -358,6 +364,10 @@ to the form-level function."
 			    (setq schema (cadr opt))
 			    (consume-options (cdr b)))
 
+			   (:same-as
+			    (setq same-as (cadr opt))
+			    (consume-options (cdr b)))
+
 			   (t
 			    b))
 
@@ -370,29 +380,40 @@ to the form-level function."
 	       body)
 	  (error 'dsl-error :hint "Method can have a schema or a body, but not both")))
 
+    ;; if we have a same-as we mustn't have a body or a schema
+    (if (and same-as
+	     (or body
+		 schema))
+	(error 'dsl-error :hint "Method can't be the same as another and have a body of schema of its own"))
+
     ;; synthesise the method
     (let ((top-level-f (pass-top-level-function-name pass-name))
 	  (form-level-f (pass-form-level-function-name pass-name)))
 
       (with-gensyms (fun args)
 
-	(if (top-level-function-method-p form)
-	    ;; method is for an atom
-	    `(defmethod ,top-level-f ,form
-	       ,docstring
-	       ,@body)
-
-	    ;; method is for a structured form
+	(if same-as
+	    ;; method is the same as another
 	    (destructuring-bind (mfun &rest margs)
 		form
-
 	      `(defmethod ,form-level-f ((,fun (eql ',mfun)) ,args)
 		 ,docstring
-		 (destructuring-bind ,margs
-		     ,args
-		   ,@(if schema
-			 (list (funcall schema fun args pass-name))
-			 body)))))))))
+		 (,form-level-f ',same-as ,args)))
 
+	    (if (top-level-function-method-p form)
+		;; method is for an atom
+		`(defmethod ,top-level-f ,form
+		   ,docstring
+		   ,@body)
 
-;;; ---------- Code-function-defining macros ----------
+		;; method is for a structured form
+		(destructuring-bind (mfun &rest margs)
+		    form
+
+		  `(defmethod ,form-level-f ((,fun (eql ',mfun)) ,args)
+		     ,docstring
+		     (destructuring-bind ,margs
+			 ,args
+		       ,@(if schema
+			     (list (funcall schema fun args pass-name))
+			     body))))))))))

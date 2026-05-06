@@ -147,3 +147,19 @@
       (:schema into-arguments))
 
     (is (equal (one '(+ 1 2)) '(+ 2 3)))))
+
+
+(test test-dsl-methods-same-as
+  "Test we can set one method to be the same as another."
+  (with-no-passes
+    (vl::defpass/vl one ()
+      (:method ((n integer))
+	(+ n 1)))
+
+    (vl::defpassmethod/vl one (+ a b)
+      (+ (one a) (one b)))
+
+    (vl::defpassmethod/vl one (* a b)
+      (:same-as +))
+
+    (is (= (one '(+ 1 (* 2 3))) 9))))
