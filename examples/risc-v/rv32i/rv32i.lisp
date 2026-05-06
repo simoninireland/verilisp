@@ -1,26 +1,28 @@
-;; 32-bit integer-only RISC-V core
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a Common Lisp DSL for hardware design
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; 32-bit integer-only RISC-V core
+;;;;
+;;;; Copyright (C) 2024--2025 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a Common Lisp DSL for hardware design
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (use-package :alexandria)
 
+;;; This is a full RV32I core with arithmetic and memory access.
 
-;; ---------- Components and macros ----------
+
+;;; ---------- Components and macros ----------
 
 (defmacro/vl flip32 (v)
   (let ((es (mapcar (lambda (i)
@@ -141,34 +143,34 @@
 	(declare (type (unsigned-byte 32) rs1 rs2))
 
 	;; ALU
-	(let ((aluIn1 rs1)
-	      (aluIn2 (if (or ALUreg-p branch-p)
-			  rs2
-			  Iimm))
-	      aluOut
-	      (alu-plus (+ aluIn1 aluIn2))
-	      (alu-minus (+ (make-bitfields 1 (lognot aluIn2))
-			    (make-bitfields 0 aluIn1)
-			    1))
+	(let* ((aluIn1 rs1)
+	       (aluIn2 (if (or ALUreg-p branch-p)
+			   rs2
+			   Iimm))
+	       aluOut
+	       (alu-plus (+ aluIn1 aluIn2))
+	       (alu-minus (+ (make-bitfields 1 (lognot aluIn2))
+			     (make-bitfields 0 aluIn1)
+			     1))
 
-	      ;; shifters
-	      (shifter-in (if (= funct3 1)
-			      (flip32 aluIn1)
-			      aluIn1))
-	      (shifter (>> (the '(signed-byte 33) (make-bitfields (logand (bref instr 30)
-									  (bref aluIn1 31))
-								  shifter-in))
-			   (bref aluIn2 4 :end 0)))
-	      (left-shift (flip32 shifter))
+	       ;; shifters
+	       (shifter-in (if (= funct3 1)
+			       (flip32 aluIn1)
+			       aluIn1))
+	       (shifter (>> (the '(signed-byte 33) (make-bitfields (logand (bref instr 30)
+									   (bref aluIn1 31))
+								   shifter-in))
+			    (bref aluIn2 4 :end 0)))
+	       (left-shift (flip32 shifter))
 
-	      ;; comparator
-	      (LT (if (logxor (bref aluIn1 31)
-			      (bref aluIn2 31))
-		      (bref aluIn1 31)
-		      (bref alu-minus 32)))
-	      (LTU (bref alu-minus 32))
-	      (EQ (0= (coerce alu-minus '(unsigned-byte 32))))
-	      take-branch-p)
+	       ;; comparator
+	       (LT (if (logxor (bref aluIn1 31)
+			       (bref aluIn2 31))
+		       (bref aluIn1 31)
+		       (bref alu-minus 32)))
+	       (LTU (bref alu-minus 32))
+	       (EQ (0= (coerce alu-minus '(unsigned-byte 32))))
+	       take-branch-p)
 	  (declare (type (unsigned-byte 32) alu-plus aluOut)
 		   (type (unsigned-byte 33) alu-minus))
 
@@ -214,50 +216,50 @@
 		(setq take-branch-p 0))))
 
 	  ;; memory operations
-	  (let ((byte-access-p      (= (bref funct3 1 :width 2) 0))
-		(half-word-access-p (= (bref funct3 1 :width 2) 1))
+	  (let* ((byte-access-p      (= (bref funct3 1 :width 2) 0))
+		 (half-word-access-p (= (bref funct3 1 :width 2) 1))
 
-		(load-half-word     (if (bref load-store-addr 1)
-					(bref read-data 31 :width 16)
-					(bref read-data 15 :width 16)))
-		(load-byte          (if (bref load-store-addr 0)
-					(bref load-half-word 15 :width 8)
-					(bref load-half-word  7 :width 8)))
+		 (load-half-word     (if (bref load-store-addr 1)
+					 (bref read-data 31 :width 16)
+					 (bref read-data 15 :width 16)))
+		 (load-byte          (if (bref load-store-addr 0)
+					 (bref load-half-word 15 :width 8)
+					 (bref load-half-word  7 :width 8)))
 
-		(load-sign-extend-p (not (bref funct3 2)))
-		(load-data (cond (byte-access-p
-				  (if load-sign-extend-p
-				      (coerce (the (signed-byte 8) load-byte) (signed-byte 32))
-				      (coerce load-byte (unsigned-byte 32))))
+		 (load-sign-extend-p (not (bref funct3 2)))
+		 (load-data (cond (byte-access-p
+				   (if load-sign-extend-p
+				       (coerce (the (signed-byte 8) load-byte) (signed-byte 32))
+				       (coerce load-byte (unsigned-byte 32))))
 
-				 (half-word-access-p
-				  (if load-sign-extend-p
-				      (coerce (the (signed-byte 16) load-half-word) (signed-byte 32))
-				      (coerce load-half-word (unsigned-byte 32))))
+				  (half-word-access-p
+				   (if load-sign-extend-p
+				       (coerce (the (signed-byte 16) load-half-word) (signed-byte 32))
+				       (coerce load-half-word (unsigned-byte 32))))
 
-				 (t
-				  read-data)))
+				  (t
+				   read-data)))
 
-		(store-write-mask (cond (byte-access-p
-					 (if (bref load-store-addr 1)
-					     (if (bref load-store-addr 0)
-						 #2r1000
-						 #2r0100)
-					     (if (bref load-store-addr 0)
-						 #2r0010
-						 #2r0001)))
+		 (store-write-mask (cond (byte-access-p
+					  (if (bref load-store-addr 1)
+					      (if (bref load-store-addr 0)
+						  #2r1000
+						  #2r0100)
+					      (if (bref load-store-addr 0)
+						  #2r0010
+						  #2r0001)))
 
-					(half-word-access-p
-					 (if (bref load-store-addr 1)
-					     #2r1100
-					     #2r0011))
+					 (half-word-access-p
+					  (if (bref load-store-addr 1)
+					      #2r1100
+					      #2r0011))
 
-					(t
-					 #2r1111)))
+					 (t
+					  #2r1111)))
 
-		(load-store-addr (+ rs1 (if store-p
-					    Simm
-					    Iimm))))
+		 (load-store-addr (+ rs1 (if store-p
+					     Simm
+					     Iimm))))
 	    (declare (type (unsigned-byte 32) load-store-addr))
 
 	    ;; store assignments
@@ -365,7 +367,7 @@
 		  (go stop)))))))))
 
 
-;; ---------- SoC ----------
+;;; ---------- SoC ----------
 
 (defmodule/vl soc (system-clk system-reset
 			      leds
