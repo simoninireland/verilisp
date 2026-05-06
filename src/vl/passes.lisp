@@ -1,27 +1,33 @@
-;; The compiler passes
-;;
-;; Copyright (C) 2024--2026 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; The compiler nanopasses and other functions
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
+;;; Compiler nanopasses transform the program code, with each pass performing
+;;; a single, well-defined transformation.
+;;;
+;;; Compiler functions compute some value over the code, and are typically
+;;; predicates (but can be other things).
 
-;; ---------- Free variables ----------
+
+;;; ---------- Free variables ----------
 
 (defgeneric read-variables (form)
   (:documentation "Return all variables in FORM that are read from.
@@ -66,7 +72,7 @@ should not return variables that are only read and not updated.
 Return the set of variables as a list."))
 
 
-;; ---------- Dependencies ----------
+;;; ---------- Dependencies ----------
 
 (defgeneric compute-dependencies (form)
   (:documentation "Annotate the environment with the dependencies of FORM.
@@ -175,7 +181,7 @@ dependencies as they can't be updated."
 	   '())))
 
 
-;; ---------- Variable re-writing ----------
+;;; ---------- Variable re-writing ----------
 
 (defgeneric rewrite-variables (form rewrite)
   (:documentation "Re-write free occurrances of variables in FORM.
@@ -213,7 +219,7 @@ method to change this behaviour.")
 	    `(,fun ,@args))))
 
 
-;; ---------- Applying and removing frames ----------
+;;; ---------- Applying and removing frames ----------
 
 (defgeneric add-frames (form)
   (:documentation "Add frames to FORM .
@@ -331,7 +337,7 @@ environment is restored on leaving BODY."
 	   ,@body)))))
 
 
-;; ---------- Type checking and inference ----------
+;;; ---------- Type checking and inference ----------
 
 (defgeneric apply-type-constraints (form)
   (:documentation "Evaluate type constraints to constraining variables in FORM.
@@ -405,7 +411,7 @@ constraints needed to infer the types of variables."
     ty))
 
 
-;; ---------- Generalised places ----------
+;;; ---------- Generalised places ----------
 
 (defgeneric generalised-place-p (form)
   (:documentation "Test whether FORM is a generalised place.
@@ -431,7 +437,35 @@ Usually this will only involve examining SELECTOR.")
     nil))
 
 
-;; ---------- Representation inference ----------
+;;; ---------- Simple expressions ----------
+
+;;; A simple expression is one that Verilog will understand as being
+;;; an expression it can synthesise. These are considerably less
+;;; general than Lisp's idea of expressions, so it will be necessary
+;;; to transform more complex (but legal) Lisp to take the complicated
+;;; bits out of the expressions.
+
+(defgeneric simple-expression-form-p (form)
+  (:documentation "Test whether FORM is a simle expression.")
+  (:method ((n integer))
+    t)
+  (:method ((s symbol))
+    (variable-declared-p s))
+  (:method ((form list))
+    (destructuring-bind (fun &rest args)
+	form
+      (simple-expression-form-p-sexp fun args))))
+
+
+(defgeneric simple-expression-form-p-sexp (fun args)
+  (:documentation "Test whether FORM applied to ARGS is a simple expression.
+
+The default returns NIL.")
+  (:method (fun args)
+    nil))
+
+
+;;; ---------- Representation inference ----------
 
 (defgeneric infer-representation (form)
   (:documentation "Infer the representations of variables in FORM.
@@ -460,7 +494,7 @@ only happen in binders.")
 
 
 
-;; ---------- Let block coalescence ----------
+;;; ---------- Let block coalescence ----------
 
 (defgeneric float-let-blocks (form)
   (:documentation "Float nested LET blocks in FORM to the outermost level.
@@ -513,7 +547,7 @@ Return a list consisting of the new form and any declarations floated.")
 	`((,fun ,@fargs) ,fenv))))
 
 
-;; ---------- PROGN coalescence ----------
+;;; ---------- PROGN coalescence ----------
 
 (defgeneric simplify-progn (form)
   (:documentation "Collapse unnecessary PROGN forms in FORM.
@@ -535,7 +569,7 @@ Return the simplified form.")
     `(,fun ,@(mapcar #'simplify-progn args))))
 
 
-;; ---------- Macro expansion ----------
+;;; ---------- Macro expansion ----------
 
 (defun expand-macros-in-environment (form &optional (f *global-environment*))
   "Recursively expand all macros in FORM in an environment.
@@ -591,7 +625,7 @@ Use EXPAND-MACROS-IN-ENVIRONMENT to select a specific environment.")
 	(expand-descend fun args))))
 
 
-;; ---------- Elaborating state machines ----------
+;;; ---------- Elaborating state machines ----------
 
 (defgeneric elaborate-state-machines (form)
   (:documentation "Expand TAGBODY-based state machines into CASE- and IF-based machines.")
@@ -616,7 +650,7 @@ The default recurses into ARGS.")
     `(,fun ,@(mapcar #'elaborate-state-machines args))))
 
 
-;; ---------- Synthesis ----------
+;;; ---------- Synthesis ----------
 
 (defgeneric synthesise (form)
   (:documentation "Synthesise the Verilog for FORM.
@@ -640,7 +674,7 @@ may be redirected by higher-level functions.")
     (error 'unknown-form :form `(,fun ,args))))
 
 
-;; ---------- Lispification ----------
+;;; ---------- Lispification ----------
 
 (defgeneric lispify (form)
   (:documentation "Convert FORM to a Lisp expression.")

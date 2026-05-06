@@ -67,6 +67,17 @@
       (synthesise form)))
 
 
+(defmethod simple-expression-form-p-sexp ((fun (eql 'if)) args)
+  (declare (optimize debug))
+  (destructuring-bind (condition then &rest else)
+      args
+
+    (and (simple-expression-form-p condition)
+	 (simple-expression-form-p then)
+	 (or (null else)
+	     (every #'simple-expression-form-p else)))))
+
+
 (defmethod synthesise-sexp ((fun (eql 'if)) args)
   (declare (optimize debug))
 
@@ -228,6 +239,15 @@ Each test element must be testable against TY."
   (as-newline)
   (as-block clauses :process #'synthesise-case-arm)
   (as-literal "endcase"))
+
+
+(defmethod simple-expression-form-p-sexp ((fun (eql 'case)) args)
+  (destructuring-bind (condition &rest clauses)
+      args
+    (and (simple-expression-form-p condition)
+	 (every (lambda (clause)
+		  (and (= (length (cdr clause) 1))
+		       (simple-expression-form-p (cadr clause))))))))
 
 
 (defmethod synthesise-sexp ((fun (eql 'case)) args)

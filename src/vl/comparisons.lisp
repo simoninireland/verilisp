@@ -1,21 +1,21 @@
-;; Synthesisable comparison operators
-;;
-;; Copyright (C) 2024 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Synthesisable comparison operators
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 
@@ -27,7 +27,7 @@ in many applications."
   (ensure-subtype ty 'bit))
 
 
-;; ---------- Assertedness ----------
+;;; ---------- Assertedness ----------
 
 (defmethod compute-type-sexp ((fun (eql 'asserted-p)) args)
   '(unsigned-byte 1))
@@ -39,6 +39,10 @@ in many applications."
     (ensure-fixed-width (compute-type v))))
 
 
+(defmethod simple-expression-form-p-sexp ((fun (eql 'asserted-p)) args)
+  (simple-expression-form-p v))
+
+
 (defmethod synthesise-sexp ((fun (eql 'asserted-p)) args)
   (destructuring-bind (v)
       args
@@ -47,7 +51,7 @@ in many applications."
     (as-literal " != 0)")))
 
 
-;; ---------- Maths ----------
+;;; ---------- Maths ----------
 
 (defmacro define-fixed-width-binary-maths-comparator (symbol &optional verilog-operator)
   "Declare the necessary functions for SYMBOL.
@@ -66,6 +70,10 @@ Use VERILOG-OPERATOR if provided for synthesis."
 	   args
 	 (ensure-fixed-width (compute-type l))
 	 (ensure-fixed-width (compute-type r))))
+
+
+     (defmethod simple-expression-form-p-sexp ((fun (eql ',symbol)) args)
+       (every #'simple-expression-form-p args))
 
 
      (defmethod synthesise-sexp ((fun (eql ',symbol)) args)

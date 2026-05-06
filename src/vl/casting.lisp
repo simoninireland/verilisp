@@ -1,27 +1,27 @@
-;; Type casting and coercion
+;;;; Type casting and coercion
 ;;
-;; Copyright (C) 2024--2026 Simon Dobson
+;;;; Copyright (C) 2024--2026 Simon Dobson
 ;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
 ;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
 ;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
 
-;; ---------- Type casts ----------
+;;; ---------- Type casts ----------
 
 (defmethod compute-type-sexp ((fun (eql 'the)) args)
   (destructuring-bind (ty val)
@@ -63,6 +63,10 @@
     (read-variables val)))
 
 
+(defmethod simple-expression-form-p-sexp ((fun (eql 'the)) args)
+  t)
+
+
 (defmethod synthesise-sexp ((fun (eql 'the)) args)
   (destructuring-bind (ty val)
       args
@@ -79,7 +83,7 @@
     ))
 
 
-;; ---------- Type coercions ----------
+;;; ---------- Type coercions ----------
 
 (defmethod compute-type-sexp ((fun (eql 'coerce)) args)
   (destructuring-bind (val ty)
@@ -112,13 +116,17 @@
     (read-variables val)))
 
 
-;; We can make use of some type constraints here. Either:
-;;
-;; - the start bit is a variable and the result has width 1; or
-;; - a width (or end) is specified and is constant, and so is
-;;   the start bit
-;;
-;; These constraints let us expand nested constructs somewhat
+(defmethod simple-expression-form-p-sexp ((fun (eql 'coerce)) args)
+  t)
+
+
+;;; We can make use of some type constraints here. Either:
+;;;
+;;; - the start bit is a variable and the result has width 1; or
+;;; - a width (or end) is specified and is constant, and so is
+;;;   the start bit
+;;;
+;;; These constraints let us expand nested constructs somewhat
 
 (defmethod synthesise-sexp ((fun (eql 'coerce)) args)
   (declare (optimize debug))

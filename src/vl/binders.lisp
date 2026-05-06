@@ -339,7 +339,7 @@ other bindings."
 			 (if read
 			     ;; variable is read and not updated
 			     (if-let ((v (get-initial-value n)))
-			       (cond ((array-value-p v)
+			       (cond ((make-array-form-p v)
 				      ;; arrays are always registers
 				      'register)
 
@@ -591,34 +591,6 @@ by LET and MODULE forms."
   (subtype-p ty 'array))
 
 
-(defun array-value-p (form)
-  "Test whether FORM is an array constructor."
-  (and (listp form)
-       (eql (car form) 'make-array)))
-
-
-(defun module-value-p (form)
-  "Test whether FORM is a module constructor."
-  (and (listp form)
-       (eql (car form) 'make-instance)))
-
-
-(defun special-value-p (form)
-  "Test wether FORM denotes a special value.
-
-Special values are things like array constructors and mdule instanciations."
-  (or (array-value-p form)
-      (module-value-p form)))
-
-
-(defun normal-value-p (form)
-  "Test whether FORM denotes a normal value.
-
-Normal values are those that are not special in the sense of
-SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
-  (not (special-value-p form)))
-
-
 (defun synthesise-register (n)
   "Synthesise a register N within a LET block."
   (declare (optimize debug))
@@ -645,7 +617,7 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 	(as-literal " - 1 : 0 ] "))
       (synthesise n)
       (if v
-	  (if (array-value-p v)
+	  (if (make-array-form-p v)
 	      ;; synthesise the array bounds and initialisation
 	      (synthesise-array-init n v)
 
@@ -679,7 +651,7 @@ SPECIAL-VALUE-P. Specifically, normal values have a bit-width."
 	(synthesise width)
 	(as-literal " - 1 : 0 ] "))
       (synthesise n)
-      (if (array-value-p v)
+      (if (make-array-form-p v)
 	  ;; synthesise the array constructor
 	  (synthesise-array-init n v)
 
@@ -720,25 +692,11 @@ Constants turn into local parameters."
 (defun decl-rhs-form-p (&optional (form (current-form)))
   "Test that the current form is a valid initial value for assignment.
 
-Valid RHSs are literals, variables, or operations formed of operators,
-of conditionals with single-form arms. More complicated forms like
-assignments are *not* valid at the synthesis level: they are however
-valid Lisp, and so need to be transformed away before synthesis."
-  (labels ((simple-expression-form-p (form)
-	     (or (literal-form-p form)
-		 (variable-form-p form)
-		 (element-form-p form)
-		 (and (or (operator-form-p form)
-			  (conditional-form-p form))
-		      (every (lambda (arg)
-			       (with-current-form arg
-				 (simple-expression-form-p arg)))
-			     (cdr form))))))
-
-    (or (null form)
-	(eql (form-head form) 'make-array)
-	(type-operator-form-p form)
-	(simple-expression-form-p form))))
+Valid RHSs are either null, array or object constructors, or simple expressions."
+  (or (null form)
+      (make-array-form-p form)
+      (make-instance-form-p form)
+      (simple-expression-form-p form)))
 
 
 (defun synthesise-decl (decl)
@@ -748,27 +706,25 @@ valid Lisp, and so need to be transformed away before synthesis."
   (with-current-form decl
     (let* ((n (name-in-decl decl))
 	   (v (get-initial-value n)))
-      (if (module-value-p v)
-	  ;; instanciating a module
-	  (synthesise-module-instanciation n)
 
-	  ;; otherwise, creating a variable
-	  (progn
-	    ;; check the RHS is valid
-	    (with-current-form v
-	      (unless (decl-rhs-form-p)
-		(error 'not-synthesisable :hint "Initial value must be a simple expression")))
+      (progn
+	;; check the RHS is valid
+	(with-current-form v
+	  (unless (decl-rhs-form-p)
+	    (error 'not-synthesisable :hint "Initial value must be a simple expression")))
 
-	    ;; synthesise the different kinds of declaration in Verilog
-	    (case (get-representation n)
-	      ('constant
-	       (synthesise-constant n))
-	      ('register
-	       (synthesise-register n))
-	      ('wire
-	       (synthesise-wire n))
-	      (t
-	       (synthesise-register n))))))))
+	;; synthesise the different kinds of declaration in Verilog
+	(case (get-representation n)
+	  ('module
+	   (synthesise-module-instanciation n))
+	  ('constant
+	   (synthesise-constant n))
+	  ('register
+	   (synthesise-register n))
+	  ('wire
+	   (synthesise-wire n))
+	  (t
+	   (synthesise-register n)))))))
 
 
 ;;; LET and LET* synthesise the same way (although they're type-checked differently)

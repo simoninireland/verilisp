@@ -206,7 +206,7 @@ This is used for setting defaults."
   (forget-environment-variable n (get-frame-declaring n (current-frame))))
 
 
-;;---------- Common properties ----------
+;;; ---------- Common properties ----------
 
 (defun get-type (n)
   "Return the type of N."
@@ -253,7 +253,7 @@ form."
      ,@body))
 
 
-;; form accessors
+;;; Form queue accessors
 
 (defun current-form ()
   "Return the current form."
@@ -305,9 +305,7 @@ that is that form."
       (caddr *current-form-queue*)))
 
 
-;; form classifiers
-;; We pass in a queue (list) of forms because we may need more context than
-;; just the form we're interested in.
+;;; Form classifiers
 
 (defun integer-form-p (&optional (form (current-form)))
   "Test whether the current form is an integer literal."
@@ -360,6 +358,16 @@ Currently covers array elements and bit extractions."
   (member (form-head form) '(coerce the)))
 
 
+(defun make-array-form-p (&optional (form (current-form)))
+  "Test whether the current form is an array constructor."
+  (eql (form-head form) 'make-array))
+
+
+(defun make-instance-form-p (&optional (form (current-form)))
+  "Test whether the current form is a module or object constructor."
+  (eql (form-head form) 'make-instance))
+
+
 (defun let-form-p (&optional (form (current-form)))
   "Test whether the current form is a LET block."
   (member (form-head form) '(let let*)))
@@ -380,7 +388,7 @@ Currently covers array elements and bit extractions."
   (eql (form-head form) 'module))
 
 
-;; context classifiers
+;;; context classifiers
 
 (defun in-context-p (cl)
   "Test whether there is some form in the form queue matchiong CL.

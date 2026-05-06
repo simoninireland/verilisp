@@ -1,27 +1,27 @@
-;; Arrays of variables
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a Common Lisp DSL for hardware design
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Arrays of variables
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a Common Lisp DSL for hardware design
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
 
-;; ---------- Array type ----------
+;;; ---------- Array type ----------
 
 (defmethod subtype-type ((ty1tag (eql 'array)) ty1args
 			 (ty2tag (eql 'array)) ty2args)
@@ -92,7 +92,7 @@
 	(representable-type-p (lub ty)))))
 
 
-;; ---------- Array initialisation data ----------
+;;; ---------- Array initialisation data ----------
 
 (defun valid-array-shape-p (shape)
   "Test that SHAPE is a valid array shape.
@@ -124,7 +124,7 @@ whose values are statically determinable."
 			   :hint "Ensure initial contents have the right shape")))
 
 
-;; ---------- Array construction ----------
+;;; ---------- Array construction ----------
 
 (defmacro unquote (place)
   "Remove any leading quote from the data in PLACE.
@@ -300,7 +300,7 @@ Otheriwse it is read as a literal list."
 	   (synthesise-array-init-from-value n initial-element shape)))))
 
 
-;; ---------- Array access ----------
+;;; ---------- Array access ----------
 
 (defun valid-array-index-p (ty indices)
   "Ensure INDICES are a potentially valid index into TY.
@@ -411,6 +411,10 @@ probably should, for those that are statically determined."
   (destructuring-bind (place &rest indices)
       selectorargs
     (generalised-place-p place)))
+
+
+(defmethod simple-expression-form-p-sexp ((fun (eql 'aref)) args)
+  (every #'simple-expression-form-p args))
 
 
 (defmethod synthesise-sexp ((fun (eql 'aref)) args)

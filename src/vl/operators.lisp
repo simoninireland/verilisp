@@ -1,27 +1,27 @@
-;; Synthesisable operators
-;;
-;; Copyright (C) 2024--2026 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Synthesisable operators
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
 
-;; ---------- Helpers ----------
+;;; ---------- Helpers ----------
 
 (defun ensure-number-of-arguments (fun args n)
   "Ensure that ARGS has exactly N arguments.
@@ -31,7 +31,7 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
       (error 'not-synthesisable :hint (format nil "Operator needs exactly ~a arguments" n))))
 
 
-;; ---------- Maths ----------
+;;; ---------- Maths ----------
 
 (defun compute-type-addition (args)
   "Compute the type of an addition or subtraction of ARGS."
@@ -57,6 +57,10 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
   (apply-type-constraints-addition args))
 
 
+(defmethod simple-expression-form-p-sexp ((fun (eql '+)) args)
+  (every #'simple-expression-form-p args))
+
+
 (defmethod synthesise-sexp ((fun (eql '+)) args)
   (as-infix '+ args))
 
@@ -66,6 +70,10 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 			(lispify arg))
 		      args)))
     `(+ ,@vals)))
+
+
+(defpassmethod/vl lispify (+ &rest args)
+  (:schema recurse-into-arguments))
 
 
 (defmethod compute-type-sexp ((fun (eql '-)) args)
@@ -84,15 +92,19 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
   (apply-type-constraints-addition args))
 
 
+(defmethod simple-expression-form-p-sexp ((fun (eql '-)) args)
+  (every #'simple-expression-form-p args))
+
+
 (defmethod synthesise-sexp ((fun (eql '-)) args)
   (if (= (length args) 1)
-      ;; unary minus
+      ;;;; unary minus
       (progn
 	(as-literal "(- ")
 	(synthesise (car args))
 	(as-literal ")"))
 
-      ;; application
+      ;;;; application
       (as-infix '- args)))
 
 
@@ -107,18 +119,18 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
     `(- ,@vals)))
 
 
-;; ---------- Shifts ----------
+;;; ---------- Shifts ----------
 
-;; Verilog provides left and right shift operators; Common Lisp uses ash
-;; and switches depending on the sign of the shift (negative for right).
-;; That behaviour seems impossible to synthesise without using an extra
-;; register, so we provide two different operators instead. (This will
-;; change if I can figure out a way to synthesise ash.)
-;;
-;; The right shift (>>) operator behaves like ash in that it does
-;; sign extension automat6ically based on the type of the value. This
-;; means that Verilog's >>> (arithmetic shoft right) is generated implicitly
-;; by type, rather than being provided explicitly.
+;;; Verilog provides left and right shift operators; Common Lisp uses ash
+;;; and switches depending on the sign of the shift (negative for right).
+;;; That behaviour seems impossible to synthesise without using an extra
+;;; register, so we provide two different operators instead. (This will
+;;; change if I can figure out a way to synthesise ash.)
+;;;
+;;; The right shift (>>) operator behaves like ash in that it does
+;;; sign extension automat6ically based on the type of the value. This
+;;; means that Verilog's >>> (arithmetic shoft right) is generated implicitly
+;;; by type, rather than being provided explicitly.
 
 (defmethod compute-type-sexp ((fun (eql '<<)) args)
   (declare (optimize debug))
@@ -133,6 +145,10 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
       ;; the width is the width of the value plus the
       ;; maximum number that can be in the offset
       `(and ,tyval (unsigned-byte (bitwidth ',tyoffset))))))
+
+
+(defmethod simple-expression-form-p-sexp ((fun (eql '<<)) args)
+  (every #'simple-expression-form-p args))
 
 
 (defmethod synthesise-sexp ((fun (eql '<<)) args)
@@ -159,6 +175,10 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
       tyval)))
 
 
+(defmethod simple-expression-form-p-sexp ((fun (eql '>>)) args)
+  (every #'simple-expression-form-p args))
+
+
 (defmethod synthesise-sexp ((fun (eql '>>)) args)
   (destructuring-bind (val offset)
       args
@@ -179,7 +199,7 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
     `(ash ,(car vals) (- ,(cadr vals)))))
 
 
-;; ---------- Bitwise operators ----------
+;;; ---------- Bitwise operators ----------
 
 (defmacro define-fixed-width-binary-bitwise-operator (symbol &optional verilog-operator)
   "Declare the necessary functions for SYMBOL.
@@ -198,6 +218,10 @@ Use VERILOG-OPERATOR if provided for synthesis; otherwise use SYMBOL."
 	   args
 	 (ensure-fixed-width (compute-type l))
 	 (ensure-fixed-width (compute-type r))))
+
+
+     (defmethod simple-expression-form-p-sexp ((fun (eql ',symbol)) args)
+       (every #'simple-expression-form-p args))
 
 
      (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
@@ -232,6 +256,10 @@ Use VERILOG-OPERATOR if provided for synthesis; otherwise use SYMBOL."
 	 (ensure-fixed-width (compute-type l))))
 
 
+     (defmethod simple-expression-form-p-sexp ((fun (eql ',symbol)) args)
+       (every #'simple-expression-form-p args))
+
+
       (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
 	(destructuring-bind (l)
 	    args
@@ -243,7 +271,7 @@ Use VERILOG-OPERATOR if provided for synthesis; otherwise use SYMBOL."
 (define-fixed-width-unary-bitwise-operator lognot "~")
 
 
-;; ---------- Logical ----------
+;;; ---------- Logical ----------
 
 (defmacro define-fixed-width-nary-logical-operator (symbol &optional verilog-operator)
   "Declare the necessary functions for SYMBOL.
@@ -260,6 +288,10 @@ Use VERILOG-OPERATOR if provided for synthesis; otherwise use SYMBOL."
      (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
        (dolist (a args)
 	 (ensure-boolean (compute-type a))))
+
+
+     (defmethod simple-expression-form-p-sexp ((fun (eql ',symbol)) args)
+       (every #'simple-expression-form-p args))
 
 
      (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
@@ -285,6 +317,10 @@ Use VERILOG-OPERATOR if provided for synthesis."
        (destructuring-bind (v)
 	   args
 	 (ensure-boolean (compute-type v))))
+
+
+     (defmethod simple-expression-form-p-sexp ((fun (eql ',symbol)) args)
+       (every #'simple-expression-form-p args))
 
 
      (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
