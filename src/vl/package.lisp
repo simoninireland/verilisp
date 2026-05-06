@@ -147,6 +147,13 @@
    #:lispify
 
    ;; DSL builder
+   #:define-pass-queue/vl
+   #:pre-typing
+   #:typing
+   #:post-typing
+   #:synthesis
+   #:define-recursion-schema/vl
+   #:recurse-into-arguments
    #:defpass/vl
    #:defpassmethod/vl
 

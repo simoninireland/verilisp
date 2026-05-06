@@ -67,168 +67,234 @@ The return value of each pass is used as the input to the next."
     f))
 
 
-;;; ---------- Pass function generation ----------
+;;; Defining pass queues
+
+(defparameter *pass-queue-tags* nil
+  "Alist from tags used in DEFPASS/VL to pass queues.")
+
+
+(defun pass-queue-p (tag)
+  "Test whether TAG is the name of a defined pass queue."
+  (assoc tag *pass-queue-tags*))
+
+
+(defun ensure-pass-queue (tag)
+  "Ensure TAG is the name of a defined pass queue."
+  (unless (pass-queue-p tag)
+      (error 'dsl-error :hint (format nil "No pass queue ~s defined" tag))))
+
+
+(defun get-pass-queue (tag)
+  "Return the pass queue named TAG."
+  (if-let ((a (assoc tag *pass-queue-tags*)))
+    (cadr a)
+    (error 'dsl-error :hint (format nil "No pass queue ~s defined" tag))))
+
+
+(defmacro define-pass-queue/vl (tag)
+  "Define and install a new pass queue with TAG.
+
+TAG is used when defining passes to select the appropriate queue."
+  `(let ((queue (make-instance 'pass-queue)))
+     (appendf *pass-queue-tags* (list (list ',tag queue)))))
+
+
+;;; The standard pass queues
+;;; The pass queues correspond to "macro-passes", composed of
+;;; nanopasses. They are run in the following order, which allows
+;;; implementations to attach new nanopasses in the appropriate place.
+;;; The standard nanopasses are added at system initialisation.
+
+(define-pass-queue/vl pre-typing)
+(define-pass-queue/vl typing)
+(define-pass-queue/vl post-typing)
+(define-pass-queue/vl synthesis)
+
+
+;;; ---------- Pass-defining macros ----------
+
+;;; Pass function name generation
 
 (defun pass-top-level-function-name (pass-name)
   "Return the top-level function name for PASS."
   (intern (upcase (symbol-name pass-name))))
 
 
+(defun top-level-function-method-p (args)
+  "Test whether ARGS are for a top-level generic function."
+  (= (length args) 1))
+
+
 (defun pass-form-level-function-name (pass-name)
   "Return the form-level function name for PASS.
 
 The default is the pass name followed by a suffix."
-  (intern (upcase (concat (symbol-name (pass-top-level-function-name pass-name)) "/form"))))
+  (intern (upcase (concat (symbol-name (pass-top-level-function-name pass-name))
+			  "/form"))))
 
 
-;;; ---------- Macros ----------
-
-;;; The standard pass queues
-
-(defparameter *pre-typing-passes* (make-instance 'pass-queue)
-  "The passes that are run before typing.
-
-Pre-typing passes obviously don't have access to type information:
-they have to operate purely on syntax. Macro expansion is an example
-of a pre-typing pass.")
+(defun form-level-function-method-p (args)
+  "Test whether ARGS are for a form-level generic function."
+  (> (length args) 1))
 
 
-(defparameter *typing-passes* (make-instance 'pass-queue)
-  "The passes that perform type-checking.
+;;; Defining recursion schemata
+;;; These are used to flesh-out the bodies of form-level functions.
+;;; They actually don't have to be recursive at all: they'll be used
+;;; to build the structurally recursive pass functions.
+;;;
+;;; The name of the schema is used in the :SCHEMA option to
+;;; DEFPASS/VL and DEFPASS<ETHOD/VL to choose the schema when
+;;; no body is provided.
 
-These passes populate the environment structure.")
-
-
-(defparameter *post-typing-passes* (make-instance 'pass-queue)
-  "The passes that are run after typeing.
-
-Post-typing passes have access to the complete environment formed
-by the type-checking passes.")
-
-
-(defparameter *synthesis-passes* (make-instance 'pass-queue)
-  "The synthesis passes.
-
-These passes are run after everything else to convert the Verilisp
-code into Verilog.")
+(defparameter *recursion-schemata* nil
+  "Alist from schemata tags to code returning the form of the recursion.")
 
 
-;;; Mapping from tags to queues
+(defmacro define-recursion-schema/vl (schema-name schema-args &body body)
+  "Define a new recursion schema."
+  ;; check the schema prototype is correct
+  (unless (= (length schema-args) 3)
+    (error 'dsl-error :hint (format nil "Recursion schemata take three arguments (not ~s)" schema-args)))
 
-(defparameter *pass-queue-tags* `((:pre-typing  ,*pre-typing-passes*)
-				  (:typing      ,*typing-passes*)
-				  (:post-typing ,*post-typing-passes*)
-				  (:synthesis   ,*synthesis-passes*))
-  "Alist from tags used in DEFPASS/VL to pass queues.")
-
-
-;;; Define a new pass
-
-(defmacro defpass/vl (&rest args)
-  "Define a compiler nanopass.
-
-The arguments consist of an optional pass queue tag, an optional
-placement of the pass in that pass queue, an optional recursion
-scheme, a (possibly empty) list of arguments that appear after the
-form being processed, and an optional docstring.
-
-Placements can be :APPEND or :PREPEND. Recursion schemata can be
-:RECURSE or :FAIL.
-
-The default behaviour is to define the new pass and append it to the
-post-typing pass queue, recursing into the arguments of any forms
-encountered."
-  (declare (optimize debug))
-  (let ((queue-tag (if-let ((tq (assoc (car args) *pass-queue-tags*)))
-		     (progn
-		       (setf args (cdr args))
-		       (car tq))
-
-		     ;; default uses the post-typing queue
-		     :post-typing))
-	(prepend-to-queue-p (cond ((eql (car args) :prepend)
-				   (setf args (cdr args))
-				   t)
-				  ((eql (car args) :append)
-				   (setf args (cdr args))
-				   nil)
-				  (t
-				   ;; default is to append
-				   nil)))
-	(recursion-scheme (cond ((member (car args) '(:recurse :fail))
-				 (setf args (cdr args))
-				 (car args))
-				(t
-				 ;; default is to recurse
-				 :recurse)))
-	(pass-name (car args))
-	(extra-args (cadr args))
-	(docstring (progn
-		     (setf args (cddr args))
-		     (if (not (null args))
-			 (if (stringp (car args))
-			     (progn
-			       (setf args (cdr args))
-			       (car args))))))
-	(body (if (not (null args))
-		  (car args))))
+  (let ((docstring "A recursion schema"))
+    (when (stringp (car body))
+      (setq docstring (car body))
+      (setq body (cdr body)))
 
     `(progn
-       ;; store the pass name in the correct queue
-       (add-pass-to-queue ',pass-name (cadr (assoc ,queue-tag *pass-queue-tags*)) :prepend ,prepend-to-queue-p)
+       ;; wrap the schema up in a function
+       (defun ,schema-name ,schema-args
+	 ,docstring
+	 ,@body)
 
-       ;; define the generic functions
-       (defgeneric ,(pass-top-level-function-name pass-name) (form ,@extra-args)
-	 (:documentation ,(if docstring
-			      docstring
-			      "Compiler nanopass."))
-	 ,(if body
-	      ;; explicit body
-	      `(:method (form ,@extra-args)
-		 ,@body)
+       ;; install the function as a valid schema
+       (appendf *recursion-schemata* (list #',schema-name)))))
 
-	      ;; default body signals an error on atom forms
-	      `(:method (form ,@extra-args)
-		 (declare (ignore form))
-		 (error 'unknown-form)))
 
-	 ;; call form-level function for non-atom forms
-	 (:method ((form list) ,@extra-args)
-	   (destructuring-bind (tag &rest args)
-	       form
-	     (with-current-form form
-	       (,(pass-form-level-function-name pass-name) tag args ,@extra-args)))))
+;;; Standard schemata
 
-       (defgeneric ,(pass-form-level-function-name pass-name) (tag args ,@extra-args)
-	 (:documentation ,(concat "Form-level handler for " (symbol-name pass-name)))
+(define-recursion-schema/vl fail (tag args pass-name)
+  "Any call to this schema fails with an UNKNOWN_FORM error."
+  (error 'unknown-form :hint (format nil "Define an entry for ~s handling ~s"
+				     pass-name tag)))
 
-	 ,(cond ((eql recursion-scheme :fail)
-		 ;; default body signals an error
-		 `(:method (tag args ,@extra-args)
-		    (declare (ignore tag args ,@extra-args))
-		    (error 'unknown-form)))
 
-		((eql recursion-scheme :recurse)
-		 ;; default body recurses into arguments
-		 (let ((rf (if extra-args
-			       `(rcurry #',(pass-form-level-function-name pass-name) ,@extra-args)
-			       `#',(pass-form-level-function-name pass-name))))
-		   `(:method (tag args ,@extra-args)
-		      (cons tag (mapcar ,rf args)))))
+(define-recursion-schema/vl recurse-into-arguments (fun args pass-name)
+  "A recursion schema that recurses into ARGS.
 
-		(t
-		 (error 'dsl-error :hint (format nil "Recursion scheme must be one of :RECURSE or :FAIL not ~s)" recursion-scheme))))))))
+The form returned is a list of the form (FUN . VALS) where VALS
+are the results of the recursive calls."
+  (with-gensyms (vals)
+    `(let ((,vals (mapcar #'pass-name args)))
+       (cons ,fun ,vals))))
+
+
+;; Define a pass
+
+;; TODO: Need to introduce gensyms to the generic functions to avoid capture
+
+(defmacro defpass/vl (pass-name extra-args &rest opts)
+  "Define a compiler nanopass called PASS-NAME.
+
+EXTRA-ARGS are ignored at the moment, and should be NIL.
+
+The macros follows the same form as DEFGENERIC: a name and lambda list
+followed by a (possibly empty) alist of options for the construction
+of ther pass. The options are:
+
+- (:DOCUMENTATION \"docstring\"): install DOCSTRING
+- (:QUEUE queue-name): install the pass onto QUEUE-NAME
+- (:QUEUE-POSITION pos): install pass at POS, which can be :APPEND or :PREPEND
+- (:SCHEMA schema): use SCHEMA as the default recursion scheme for forms
+- (:METHOD (lambda-list) body): install a method with the given form
+"
+  (declare (optimize debug))
+
+  (let ((docstring "A compiler nanopass.")
+	(queue-tag 'post-typing)
+	(queue-position :append)
+	(schema :recurse)
+	(atom-methods nil)
+	(form-methods nil))
+
+    ;; fill in the options over the defaults
+    (dolist (opt opts)
+      (destructuring-bind (name &rest value)
+	  opt
+	(case name
+	  (:documentation
+	   (setq docstring (car value)))
+
+	  (:queue
+	   (progn
+	     (ensure-pass-queue (car value))
+	     (setq queue-tag (car value))))
+
+	  (:queue-position
+	   (progn
+	     (unless (member (car value) '(:append :prepend))
+	       (error 'dsl-error :hint (format nil "Queue position must be :APPEND or :PREPEND (not _s)" (car value))))
+	     (setq queue-position (car value))))
+
+	  ;; not handling :schema yet
+
+	  (:method
+	      (destructuring-bind (args &rest body)
+		  value
+		(if (top-level-function-method-p args)
+		    ;; atom method, installed onto top-level generic function
+		    (appendf atom-methods (list value))
+
+		    ;; form method, installed onto form-level generic function
+		    (appendf form-methods (list value))))))))
+
+    (let ((top-level-f (pass-top-level-function-name pass-name))
+	  (form-level-f (pass-form-level-function-name pass-name)))
+
+      `(progn
+	 ;; store the pass name in the correct queue
+	 (add-pass-to-queue ',top-level-f
+			    (cadr (assoc ',queue-tag *pass-queue-tags*))
+			    :prepend ,(eql queue-position :prepend))
+
+	 ;; define the top-level generic
+	 (defgeneric ,top-level-f (form ,@extra-args)
+	   (:documentation ,docstring)
+	   ,@(mapcar (lambda (m)
+		       `(:method ,@m))
+		     atom-methods)
+
+	   ;; call form-level function for non-atom forms
+	   (:method ((form list) ,@extra-args)
+	     (destructuring-bind (tag &rest args)
+		 form
+	       (with-current-form form
+		 (,form-level-f tag args ,@extra-args)))))
+
+	 ;; define the form-level function
+	 (defgeneric ,form-level-f (tag args ,@extra-args)
+	   (:documentation ,(concat "Form-level handler for " (symbol-name pass-name)))
+	   ,@(mapcar (lambda (m)
+		       (let ((tag (caar m))
+			     (args (cdar m))
+			     (body (cdr m)))
+			 `(:method ((tag (eql ',tag)) args)
+			    (destructuring-bind ,args
+				args
+			      ,@body))))
+		     form-methods))))))
 
 
 (defmacro defpassmethod/vl (pass-name form &body body)
   "Define a pass method.
 
-Pass method switch on the FORM. If FORM is a list containing only
+Pass methods switch on the FORM. If FORM is a list containing only
 an atom or a single specialiser, the method is added to the top-level
 function. If FORM is a more complicated argument list, the method is added
 to the form-level function."
   (declare (optimize debug))
-  (if (= (length form) 1)
+  (if (top-level-function-method-p form)
       ;; method is for an atom
       `(defmethod ,(pass-top-level-function-name pass-name) ,form
 	 ,@body)
@@ -243,15 +309,34 @@ to the form-level function."
 	     ,@body)))))
 
 
+;;; ---------- Function-defining macros ----------
+
+
+
 ;;; ---------- Example ----------
 
-;; (defpass/vl float-let :post-typing ()
-;;   "Float LET and LET* blocks to the top of a module.")
-
+;; (defpass/vl float-let ()
+;;   (:documentation "Float LET and LET* blocks to the top of a module.")
+;;   (:default nil))
+;;   (:queue :post-typing)
+;;   (:method ((n integer))
+;;     n))
 
 ;; (defpassmethod/vl float-let ((n integer))
 ;;   n)
 
-
 ;; (defpassmethod/vl float-let (* &rest args)
-;;   `(* ,@ (mapcar #'float-let args)))
+;;   (:scheme recurse)))
+
+;; (defcodefunction/vl typecheck (form)
+;;   (:documentation "Type-check FORM.")
+;;   (:queue typing)
+;;   (:default (error 'unknown-form :hint "Provide a way to type-check the form."))
+;;   )
+
+
+;; (defcodemethod/vl typecheck (+ &rest operands)
+;;   (let ((tys (mapcar #'typecheck operands)))
+;;     (unless (every (rcurry #'subtype-p 'number) tys)
+;;       (error 'type-error :expected-type 'number))
+;;     (lub tys)))

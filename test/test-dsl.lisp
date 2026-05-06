@@ -23,10 +23,10 @@
 (defmacro with-no-passes (&body body)
   "Clear all the pass queues before running BODY."
   `(progn
-     (dolist (queue (list vl::*pre-typing-passes*
-			  vl::*typing-passes*
-			  vl::*post-typing-passes*
-			  vl::*synthesis-passes*))
+     (dolist (queue (list (vl::get-pass-queue 'pre-typing)
+			  (vl::get-pass-queue 'typing)
+			  (vl::get-pass-queue 'post-typing)
+			  (vl::get-pass-queue 'synthesis)))
        (vl::clear-pass-queue queue))
 
      ,@body))
@@ -39,46 +39,56 @@
   ;; single passes with different arguments
   (with-no-passes
     (vl::defpass/vl one ())
-    (is (member 'one (vl::pass-queue-queue  vl::*post-typing-passes*))))
+    (is (member 'one (vl::pass-queue-queue (vl::get-pass-queue 'post-typing)))))
 
   (with-no-passes
     (vl::defpass/vl one ()
-      "Explicit queue, docstring, no body.")
-    (is (member 'one (vl::pass-queue-queue  vl::*post-typing-passes*))))
+      (:documentation "Explicit queue, docstring, no body."))
+    (is (member 'one (vl::pass-queue-queue (vl::get-pass-queue 'post-typing)))))
 
   (with-no-passes
-    (vl::defpass/vl :typing one ())
-    (is (null (vl::pass-queue-queue  vl::*post-typing-passes*)))
-    (is (member 'one (vl::pass-queue-queue  vl::*typing-passes*))))
+    (vl::defpass/vl one ()
+      (:queue typing))
+    (is (null (vl::pass-queue-queue (vl::get-pass-queue 'post-typing))))
+    (is (member 'one (vl::pass-queue-queue (vl::get-pass-queue 'typing)))))
 
   ;; several passes with orderings
   (with-no-passes
     (vl::defpass/vl one ())
     (vl::defpass/vl two ())
 
-    (is (equal (vl::pass-queue-queue  vl::*post-typing-passes*) '(one two))))
+    (is (equal (vl::pass-queue-queue (vl::get-pass-queue 'post-typing)) '(one two))))
 
   (with-no-passes
     (vl::defpass/vl one ())
-    (vl::defpass/vl :prepend two ())
+    (vl::defpass/vl two ()
+      (:queue-position :prepend))
 
-    (is (equal (vl::pass-queue-queue  vl::*post-typing-passes*) '(two one))))
+    (is (equal (vl::pass-queue-queue (vl::get-pass-queue 'post-typing)) '(two one))))
 
   (with-no-passes
     (vl::defpass/vl one ())
-    (vl::defpass/vl :prepend two ())
-    (vl::defpass/vl :append three ())
+    (vl::defpass/vl two ()
+      (:queue-position :prepend))
+    (vl::defpass/vl three ()
+      (:queue-position :append))
 
-    (is (equal (vl::pass-queue-queue  vl::*post-typing-passes*) '(two one three))))
+    (is (equal (vl::pass-queue-queue (vl::get-pass-queue 'post-typing)) '(two one three))))
 
   (with-no-passes
-    (vl::defpass/vl :pre-typing one ())
-    (vl::defpass/vl :pre-typing :prepend two ())
-    (vl::defpass/vl :pre-typing :append three ())
-    (vl::defpass/vl :append four ())
+    (vl::defpass/vl one ()
+      (:queue pre-typing))
+    (vl::defpass/vl two ()
+      (:queue pre-typing)
+      (:queue-position :prepend))
+    (vl::defpass/vl three ()
+      (:queue pre-typing)
+      (:queue-position :append))
+    (vl::defpass/vl four ()
+      (:queue-position :append))
 
-    (is (equal (vl::pass-queue-queue  vl::*pre-typing-passes*) '(two one three)))
-    (is (member 'four (vl::pass-queue-queue  vl::*post-typing-passes*)))))
+    (is (equal (vl::pass-queue-queue (vl::get-pass-queue 'pre-typing)) '(two one three)))
+    (is (member 'four (vl::pass-queue-queue (vl::get-pass-queue 'post-typing))))))
 
 
 (test test-dsl-pass-methods
@@ -92,4 +102,17 @@
 
     (vl::defpassmethod/vl one (+ a b)
       (+ (one a) (one b)))
+    (is (= (one '(+ 3 4)) 9))))
+
+
+(test test-dsl-pass-methods-from-pass
+  "Test we can add methods to the right generic functions from the pass definition."
+  (with-no-passes
+    (vl::defpass/vl one ()
+      (:method ((n integer))
+	(+ n 1))
+      (:method (+ a b)
+	(+ (one a) (one b))))
+
+    (is (= (one 5) 6))
     (is (= (one '(+ 3 4)) 9))))
