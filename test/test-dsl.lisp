@@ -52,7 +52,7 @@
     (is (null (vl::pass-queue-queue (vl::get-pass-queue 'post-typing))))
     (is (member 'one (vl::pass-queue-queue (vl::get-pass-queue 'typing)))))
 
-  ;; several passes with orderings
+  ;; several passes with queues and orderings
   (with-no-passes
     (vl::defpass/vl one ())
     (vl::defpass/vl two ())
@@ -116,3 +116,34 @@
 
     (is (= (one 5) 6))
     (is (= (one '(+ 3 4)) 9))))
+
+
+(test test-dsl-schemata
+  "Test we can add a default schema to a pass."
+  (with-no-passes
+    (vl::defpass/vl no-default ())
+
+    (signals unknown-form
+      (no-default '(+ 1 2))))
+
+  (with-no-passes
+    (vl::defpass/vl into-args ()
+      (:schema vl:into-arguments)
+      (:method (n)
+	(+ n 1)))
+
+    (is (equal (into-args '(+ 1 2)) '(+ 2 3)))))
+
+
+(test test-dsl-methods-schemata
+  "Test we can create methods with different schemata."
+  (with-no-passes
+    (vl::defpass/vl one ())
+
+    (vl::defpassmethod/vl one ((n integer))
+      (+ n 1))
+
+    (vl::defpassmethod/vl one (+ a b)
+      (:schema into-arguments))
+
+    (is (equal (one '(+ 1 2)) '(+ 2 3)))))

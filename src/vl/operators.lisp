@@ -72,10 +72,6 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
     `(+ ,@vals)))
 
 
-(defpassmethod/vl lispify (+ &rest args)
-  (:schema recurse-into-arguments))
-
-
 (defmethod compute-type-sexp ((fun (eql '-)) args)
   (if (= (length args) 1)
       ;; unary negation

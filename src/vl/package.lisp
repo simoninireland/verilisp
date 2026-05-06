@@ -147,13 +147,21 @@
    #:lispify
 
    ;; DSL builder
+   ;; nanopasses and queues
    #:define-pass-queue/vl
    #:pre-typing
    #:typing
    #:post-typing
    #:synthesis
+
+   ;; recursion schemata
    #:define-recursion-schema/vl
-   #:recurse-into-arguments
+   #:fail-unknown-form
+   #:into-arguments
+   #:into-function-and-arguments
+   #:into-arguments-all-non-nil
+
+   ;; pass and function definition macros
    #:defpass/vl
    #:defpassmethod/vl
 
