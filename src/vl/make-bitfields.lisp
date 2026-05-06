@@ -63,6 +63,10 @@ The BASE used can be 2, 8, 10, or 16."
       (synthesise f)))
 
 
+(defmethod simple-expression-form-p-sexp ((fun (eql 'make-bitfields)) args)
+  (every #'simple-expression-form-p args))
+
+
 (defmethod synthesise-sexp ((fun (eql 'make-bitfields)) args)
   (as-literal "{")
   (as-inline-forms args :sep ", " :process #'synthesise-make-bitfields-field)
@@ -91,6 +95,10 @@ The BASE used can be 2, 8, 10, or 16."
   (destructuring-bind (bs times)
       args
     (foldr #'union (mapcar #'read-variables (list bs times)) '())))
+
+
+(defmethod simple-expression-form-p-sexp ((fun (eql 'extend-bits)) args)
+  (every #'simple-expression-form-p args))
 
 
 (defmethod synthesise-sexp ((fun (eql 'extend-bits)) args)
