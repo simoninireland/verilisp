@@ -201,7 +201,16 @@ code to be inserted into the form-level function, as a macro would."
   "A recursion schema that recurses into ARGS.
 
 The form returned is a list of the form (FUN . VARGS) where VARGS
-are the results of the recursive calls."
+are the results of the recursive calls. If the results are irrelevant
+use the OVER-ARGUMENTS schema."
+  `(mapc #',pass-name ,args))
+
+
+(define-recursion-schema/vl over-arguments (fun args pass-name)
+  "A recursion schema that maps the pass over the arguments.
+
+The results of the map-over are discarded: to get the result,
+use the INTO-ARGUMENTS schema."
   (with-gensyms (vals)
     `(let ((,vals (mapcar #',pass-name ,args)))
        (cons ,fun ,vals))))
@@ -219,10 +228,15 @@ VARGS are the results of the recursive calls."
 
 
 (define-recursion-schema/vl into-arguments-all-non-nil (fun args pass-name)
-  "A schema that recurses into all arguments and checks they're all non-NIL.
+  "A recursion schema that recurses into all arguments and checks they're all non-NIL.
 
 This is usually used for predicates over code."
   `(every #',pass-name ,args))
+
+
+(define-recursion-schema/vl into-arguments-union (fun args pass-name)
+  "A recursion schema that recurses into all arguments and unions the results."
+  `(foldr #'union (mapcar #',pass-name ,args) '()))
 
 
 ;;; Define a pass
@@ -373,12 +387,12 @@ body of the method."
 
 			 b)))))
 
-      (setq body (consume-options body))
+      (setq body (consume-options body)))
 
-      ;; if we have a schema we mustn't have a body
-      (if (and schema
-	       body)
-	  (error 'dsl-error :hint "Method can have a schema or a body, but not both")))
+    ;; if we have a schema we mustn't have a body
+    (if (and schema
+	     body)
+	(error 'dsl-error :hint "Method can have a schema or a body, but not both"))
 
     ;; if we have a same-as we mustn't have a body or a schema
     (if (and same-as

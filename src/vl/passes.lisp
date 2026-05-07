@@ -306,7 +306,7 @@ been added to the end destructively."
   (if-let ((m (assoc 'local-frame decls)))
     (cadr m)
 
-    (error "No local frame?")))
+    (error 'no-local-frame :hint "This is a compiler error.")))
 
 
 (defmacro with-local-frame (decls &body body)
@@ -319,7 +319,7 @@ environment is restored on leaving BODY."
 
   ;; ensure we get passed a variable name, not an expression
   (unless (symbolp decls)
-    (error "Non-symbol ~a passed to WITH-LOCAL-FRAME" decls))
+    (error 'dsl-error :hint (format nil "Non-symbol ~a passed to WITH-LOCAL-FRAME" decls)))
 
   ;; extract frame and decls, and run BODY in a suitable environment
   (with-gensyms (real-decls local-frame)

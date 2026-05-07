@@ -158,8 +158,10 @@
    #:define-recursion-schema/vl
    #:fail-unknown-form
    #:into-arguments
+   #:over-arguments
    #:into-function-and-arguments
    #:into-arguments-all-non-nil
+   #:into-arguments-union
 
    ;; pass and function definition macros
    #:defpass/vl
