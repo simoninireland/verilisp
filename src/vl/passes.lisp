@@ -27,6 +27,19 @@
 ;;; predicates (but can be other things).
 
 
+;;; ---------- Pass queues ----------
+
+;;; The pass queues correspond to "macro-passes", composed of
+;;; nanopasses. They are run in the following order, which allows
+;;; implementations to attach new nanopasses in the appropriate place.
+;;; The standard nanopasses are added at system initialisation.
+
+(define-pass-queue expanding)
+(define-pass-queue typing)
+(define-pass-queue transforming)
+(define-pass-queue synthesising)
+
+
 ;;; ---------- Free variables ----------
 
 (defgeneric read-variables (form)

@@ -17,7 +17,7 @@
 ;;;; You should have received a copy of the GNU General Public License
 ;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-(in-package :verilisp/core)
+(in-package :verilisp/dsl)
 
 ;;; This macro set makes it easier to code-up and read Verilisp's
 ;;; internal definitions and passes. It abstracts over the style
@@ -70,7 +70,7 @@ The return value of each pass is used as the input to the next."
 ;;; Defining pass queues
 
 (defparameter *pass-queue-tags* nil
-  "Alist from tags used in DEFPASS/VL to pass queues.")
+  "Alist from tags used in DEFPASS to pass queues.")
 
 
 (defun pass-queue-p (tag)
@@ -91,7 +91,7 @@ The return value of each pass is used as the input to the next."
     (error 'dsl-error :hint (format nil "No pass queue ~s defined" tag))))
 
 
-(defmacro define-pass-queue/vl (tag)
+(defmacro define-pass-queue (tag)
   "Define and install a new pass queue with TAG.
 
 TAG is used when defining passes to select the appropriate queue."
@@ -99,59 +99,21 @@ TAG is used when defining passes to select the appropriate queue."
      (appendf *pass-queue-tags* (list (list ',tag queue)))))
 
 
-;;; The standard pass queues
-;;; The pass queues correspond to "macro-passes", composed of
-;;; nanopasses. They are run in the following order, which allows
-;;; implementations to attach new nanopasses in the appropriate place.
-;;; The standard nanopasses are added at system initialisation.
+;;; ---------- Recursion schemata ----------
 
-(define-pass-queue/vl pre-typing)
-(define-pass-queue/vl typing)
-(define-pass-queue/vl post-typing)
-(define-pass-queue/vl synthesis)
-
-
-;;; ---------- Pass-defining macros ----------
-
-;;; Pass function name generation
-
-(defun pass-top-level-function-name (pass-name)
-  "Return the top-level function name for PASS."
-  (intern (upcase (symbol-name pass-name))))
-
-
-(defun top-level-function-method-p (args)
-  "Test whether ARGS are for a top-level generic function."
-  (= (length args) 1))
-
-
-(defun pass-form-level-function-name (pass-name)
-  "Return the form-level function name for PASS.
-
-The default is the pass name followed by a suffix."
-  (intern (upcase (concat (symbol-name (pass-top-level-function-name pass-name))
-			  "/form"))))
-
-
-(defun form-level-function-method-p (args)
-  "Test whether ARGS are for a form-level generic function."
-  (> (length args) 1))
-
-
-;;; Defining recursion schemata
 ;;; These are used to flesh-out the bodies of form-level functions.
 ;;; They actually don't have to be recursive at all: they'll be used
 ;;; to build the structurally recursive pass functions.
 ;;;
 ;;; The name of the schema is used in the :SCHEMA option to
-;;; DEFPASS/VL and DEFPASS<ETHOD/VL to choose the schema when
+;;; DEFPASS and DEFPASSMETHOD to choose the schema when
 ;;; no body is provided.
 
 (defparameter *recursion-schemata* nil
   "A list of recursion scheme function names.")
 
 
-(defmacro define-recursion-schema/vl (schema-name schema-args &body body)
+(defmacro define-recursion-schema (schema-name schema-args &body body)
   "Define a new recursion schema.
 
 The schema should take three arguments which will contain the name of
@@ -190,33 +152,33 @@ code to be inserted into the form-level function, as a macro would."
 
 ;;; Standard schemata
 
-(define-recursion-schema/vl fail-unknown-form (fun args pass-name)
+(define-recursion-schema fail-unknown-form (fun args pass-name)
   "Any call to this schema fails with an UNKNOWN-FORM error."
   `(error 'unknown-form :form (cons ,fun ,args)
 			:hint (format nil "Define an entry for ~s handling ~s"
 				      ',pass-name ,fun)))
 
 
-(define-recursion-schema/vl into-arguments (fun args pass-name)
+(define-recursion-schema into-arguments (fun args pass-name)
   "A recursion schema that recurses into ARGS.
 
 The form returned is a list of the form (FUN . VARGS) where VARGS
 are the results of the recursive calls. If the results are irrelevant
 use the OVER-ARGUMENTS schema."
-  `(mapc #',pass-name ,args))
-
-
-(define-recursion-schema/vl over-arguments (fun args pass-name)
-  "A recursion schema that maps the pass over the arguments.
-
-The results of the map-over are discarded: to get the result,
-use the INTO-ARGUMENTS schema."
   (with-gensyms (vals)
     `(let ((,vals (mapcar #',pass-name ,args)))
        (cons ,fun ,vals))))
 
 
-(define-recursion-schema/vl into-function-and-arguments (fun args pass-name)
+(define-recursion-schema over-arguments (fun args pass-name)
+  "A recursion schema that maps the pass over the arguments.
+
+The results of the map-over are discarded: to get the result,
+use the INTO-ARGUMENTS schema."
+  `(mapc #',pass-name ,args))
+
+
+(define-recursion-schema into-function-and-arguments (fun args pass-name)
   "A recursion schema that recurses into both FUN and ARGS.
 
 The form returned is a list of the form (VFUN . VARGS) where VFUN and
@@ -227,21 +189,48 @@ VARGS are the results of the recursive calls."
        (cons ,vfun ,vals))))
 
 
-(define-recursion-schema/vl into-arguments-all-non-nil (fun args pass-name)
+(define-recursion-schema into-arguments-all-non-nil (fun args pass-name)
   "A recursion schema that recurses into all arguments and checks they're all non-NIL.
 
 This is usually used for predicates over code."
   `(every #',pass-name ,args))
 
 
-(define-recursion-schema/vl into-arguments-union (fun args pass-name)
+(define-recursion-schema into-arguments-union (fun args pass-name)
   "A recursion schema that recurses into all arguments and unions the results."
   `(foldr #'union (mapcar #',pass-name ,args) '()))
 
 
+;;; ---------- Pass-defining macros ----------
+
+;;; Pass function name generation
+
+(defun pass-top-level-function-name (pass-name)
+  "Return the top-level function name for PASS."
+  (intern (upcase (symbol-name pass-name))))
+
+
+(defun top-level-function-method-p (args)
+  "Test whether ARGS are for a top-level generic function."
+  (= (length args) 1))
+
+
+(defun pass-form-level-function-name (pass-name)
+  "Return the form-level function name for PASS.
+
+The default is the pass name followed by a suffix."
+  (intern (upcase (concat (symbol-name (pass-top-level-function-name pass-name))
+			  "/form"))))
+
+
+(defun form-level-function-method-p (args)
+  "Test whether ARGS are for a form-level generic function."
+  (> (length args) 1))
+
+
 ;;; Define a pass
 
-(defmacro defpass/vl (pass-name extra-args &rest opts)
+(defmacro defpass (pass-name extra-args &rest opts)
   "Define a compiler nanopass called PASS-NAME.
 
 EXTRA-ARGS are ignored at the moment, and should be NIL.
@@ -256,16 +245,16 @@ of ther pass. The options are:
 - (:SCHEMA schema): use SCHEMA as the default recursion scheme for forms
 - (:METHOD (lambda-list) body): install a method with the given form
 
-The default queue is POST-TYPING, appended to by default. The default
-recuursion schema is FAIL-BY-DEFAULT."
+By default the pass is not added to a queue. The default recuursion
+schema is FAIL-UNKNOWN-FORM."
   (declare (optimize debug))
 
   (let ((docstring "A compiler nanopass.")
-	(queue-tag 'post-typing)
+	queue-tag
 	(queue-position :append)
 	(schema 'fail-unknown-form)
-	(atom-methods nil)
-	(form-methods nil))
+	atom-methods
+	form-methods)
 
     ;; fill in the options over the defaults
     (dolist (opt opts)
@@ -304,10 +293,11 @@ recuursion schema is FAIL-BY-DEFAULT."
       (with-gensyms (form fun args)
 
 	`(progn
-	   ;; store the pass name in the correct queue
-	   (add-pass-to-queue ',top-level-f
-			      (cadr (assoc ',queue-tag *pass-queue-tags*))
-			      :prepend ,(eql queue-position :prepend))
+	   ,@(when queue-tag
+	       ;; store the pass name in the correct queue if one is given!
+	       (list `(add-pass-to-queue ',top-level-f
+					 (cadr (assoc ',queue-tag *pass-queue-tags*))
+					 :prepend ,(eql queue-position :prepend))))
 
 	   ;; define the top-level generic
 	   (defgeneric ,top-level-f (,form ,@extra-args)
@@ -343,7 +333,7 @@ recuursion schema is FAIL-BY-DEFAULT."
 		       form-methods)))))))
 
 
-(defmacro defpassmethod/vl (pass-name form &body body)
+(defmacro defpassmethod (pass-name form &body body)
   "Define a pass method.
 
 The body of the method can contain leading option clauses. The

@@ -1,27 +1,27 @@
-;; Package for Verilisp core
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Package for Verilisp core
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :common-lisp-user)
 
 (defpackage verilisp/core
-  (:documentation "The verilisp core language")
-  (:use :cl :alexandria :verilisp/utils)
+  (:documentation "The Verilisp core language")
+  (:use :cl :alexandria :verilisp/utils :verilisp/dsl)
   (:import-from :cl-ppcre
 		#:create-scanner
 		#:scan
@@ -117,7 +117,13 @@
    #:until
    #:forever
 
-   ;; passes and code functions
+   ;; pass queues
+   #:expanding
+   #:typing
+   #:transforming
+   #:synthesising
+
+   ;; passes
    #:add-frames
    #:add-local-frame-to-decls
    #:get-local-frame
@@ -145,27 +151,6 @@
    #:simplify-progn
    #:synthesise
    #:lispify
-
-   ;; DSL builder
-   ;; nanopasses and queues
-   #:define-pass-queue/vl
-   #:pre-typing
-   #:typing
-   #:post-typing
-   #:synthesis
-
-   ;; recursion schemata
-   #:define-recursion-schema/vl
-   #:fail-unknown-form
-   #:into-arguments
-   #:over-arguments
-   #:into-function-and-arguments
-   #:into-arguments-all-non-nil
-   #:into-arguments-union
-
-   ;; pass and function definition macros
-   #:defpass/vl
-   #:defpassmethod/vl
 
    ;; loader
    #:clear-global-environment
@@ -222,5 +207,4 @@
    #:unrecognised-declaration
    #:type-inferred
    #:resources-created
-   #:representation-mismatch
-   ))
+   #:representation-mismatch))

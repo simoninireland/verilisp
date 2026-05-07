@@ -18,14 +18,16 @@
 ;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (defpackage verilisp/test
-  (:use :cl :alexandria :fiveam :verilisp/core :verilisp/utils)
+  (:use :cl :alexandria :fiveam :verilisp/core :verilisp/utils :verilisp/dsl)
   (:local-nicknames
-   (:vl :verilisp/core))
+   (:vl :verilisp/core)
+   (:dsl :verilisp/dsl))
   (:import-from :fiveam #:is #:test))
 
 (in-package :verilisp/test)
 
 (def-suite verilisp/utils) ;; utilities
+(def-suite verilisp/dsl)   ;; DSL builder
 (def-suite verilisp/vl)    ;; synthesisable fragment of Lisp
 
 

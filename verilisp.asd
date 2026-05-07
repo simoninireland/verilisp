@@ -38,6 +38,13 @@
 			     (:file "list-utils")
 			     (:file "string-utils")))
 
+	       ;; DSL builder
+	       (:module "dsl"
+		:components ((:file "package")
+			     (:file "form-queue")
+			     (:file "dsl")
+			     (:file "conditions")))
+
 	       ;; core language
 	       (:module "vl"
 		:components ((:file "package")
@@ -47,7 +54,6 @@
 			     (:file "helpers")
 			     (:file "conditions")
 			     (:file "pretty-printer")
-			     (:file "dsl")
 			     (:file "passes")
 			     (:file "typeops")
 			     (:file "identifiers")

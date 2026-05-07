@@ -1,27 +1,27 @@
-;; Tests of modules
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.q
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Tests of modules
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.q
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/test)
 (in-suite verilisp/vl)
 
 
-;; ---------- Module lambda-lists ----------
+;;; ---------- Module lambda-lists ----------
 
 (test test-module-lambda-list
   "Test the parsing of module lambda lists."
@@ -61,7 +61,7 @@
      (vl::parse-module-lambda-list '(a b 5))))
 
 
-;; ---------- Module definition ----------
+;;; ---------- Module definition ----------
 
 (test test-typecheck-module
   "Test we can typecheck a module definition."
@@ -163,7 +163,7 @@
   (is (not (vl::module-late-initialisation-p))))
 
 
-;; ---------- Module instanciation ----------
+;;; ---------- Module instanciation ----------
 
 (test test-module-instanciate
   "Test we can instanciate a module."
@@ -329,13 +329,13 @@
 	(is (vl::variable-property 'd 'written))))))
 
 
-;; ---------- Larger and more complicated/contrived examples ----------
+;;; ---------- Larger and more complicated/contrived examples ----------
 
 (test test-module-real
   "Test module synthesis on a real-ish example."
   (let ((p (vl::expand/vl '(module clockworks (clk-in reset-in
-			  clk reset
-			  &key (slow 0))
+					       clk reset
+					       &key (slow 0))
 			   (declare (type bit clk-in reset-in clk reset)
 			    (direction in clk-in reset-in)
 			    (direction out clk reset))

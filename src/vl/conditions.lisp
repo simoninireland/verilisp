@@ -100,21 +100,6 @@ might still cause a cascade of further errors. use WITH-RECOVER-ON-ERROR
 to set up recovery actions."))
 
 
-;;; ---------- DSL definition ----------
-
-(define-condition dsl-error (error)
-  ((hint
-    :documentation "A hint as to how to fix the condition."
-    :initarg :hint
-    :initform nil
-    :reader hint))
-  (:report (lambda (c str)
-	     (format str "DSL error: ~s" (hint c))))
-  (:documentation "Error signalled by errors within the DSL-defining macros.
-
-The hint explains the problem."))
-
-
 ;;; ---------- Synthesis ----------
 
 (define-condition not-synthesisable (vl-error)
@@ -160,21 +145,6 @@ variable assignments."))
 
 This is caused either by an undeclared variable or by use of a variable
 that should be declared in the architectural environment, such as a register."))
-
-
-(define-condition unknown-form (vl-error)
-  ((form
-    :documentation "The form."
-    :initarg :form
-    :reader form))
-  (:report (lambda (c str)
-	     (format-condition-context (format nil "Unknown form ~a"
-					       (form c))
-				       c str)))
-  (:documentation "Condition signalled when an unknown form is encountered.
-
-This is usually caused by using a Lisp function that is not supported
-by Verilisp, or an undefined macro."))
 
 
 (define-condition syntax-error (vl-error)

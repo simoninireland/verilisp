@@ -228,82 +228,7 @@ This is used for setting defaults."
   (variable-property n 'direction))
 
 
-;;; ---------- Form context ----------
-
-(defparameter *current-form-queue* nil
-  "The current form being evaluated.
-
-This is a stack of forms being evaluated, used to contextualise
-conditions and change synthesis based on a form's position in
-the larger program.")
-
-
-(defmacro with-current-form (form &body body)
-  "Execute BODY within the current FORM.
-
-Any conditions reported in BODY will be pointed as FORM as the current
-form."
-  `(let ((*current-form-queue* (cons ,form *current-form-queue*)))
-     ,@body))
-
-
-(defmacro with-current-form-queue (formq &body body)
-  "Run BODY with FORMQ as the form queue."
-   `(let ((*current-form-queue* ,formq))
-     ,@body))
-
-
-;;; Form queue accessors
-
-(defun current-form ()
-  "Return the current form."
-  (car *current-form-queue*))
-
-
-(defun form-head (form)
-  "Return the head of the current form.
-
-This is safe for atomic and list forms."
-  (if (atom form)
-	form
-	(car form)))
-
-
-(defun current-form-head ()
-  "Return the head of the current form.
-
-This function is safe for atom forms or list forms."
-  (form-head (current-form)))
-
-
-(defun containing-form (&optional form)
-  "Return the form containing the current form.
-
-If FORM is provided then return the shallowest containing form
-that is that form."
-  (labels ((find-form (l)
-	     (cond ((null l)
-		    nil)
-
-		   ((eql (caar l) form)
-		    (car l))
-
-		   (t
-		    (find-form (cdr l))))))
-
-    (if form
-	;; search for the shallowest containing form with the given tag
-	(find-form (cdr *current-form-queue*))
-
-	;; extract the immediately containing form
-	(cadr *current-form-queue*))))
-
-
-(defun containing-containing-form ()
-  "Return the form containing the containing form."
-  (if (> (length *current-form-queue*) 2)
-      (caddr *current-form-queue*)))
-
+;;; ---------- Form and context classifiers ----------
 
 ;;; Form classifiers
 
@@ -388,27 +313,7 @@ Currently covers array elements and bit extractions."
   (eql (form-head form) 'module))
 
 
-;;; context classifiers
-
-(defun in-context-p (cl)
-  "Test whether there is some form in the form queue matchiong CL.
-
-CL should be a function of no variables, operating over the current
-form queue. Typically tis will be a form classifier, or a function
-built from them.
-
-Return the first matching form, or NIL."
-  (block found-context
-    (let ((context (cdr *current-form-queue*)))
-      (maplist (lambda (formq)
-		 (with-current-form-queue formq
-		   (when (funcall cl)
-		     (return-from found-context (current-form)))))
-	       context)
-
-      ;; if we get here, we've not found a matching form
-      nil)))
-
+;;; Context classifiers
 
 (defun in-top-level-context-p ()
   "Test whether the current context is top-level."
