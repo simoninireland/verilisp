@@ -294,12 +294,12 @@ schema is FAIL-UNKNOWN-FORM."
 
 	`(progn
 	   ,@(when queue-tag
-	       ;; store the pass name in the correct queue if one is given!
+	       ;; store the pass name in the correct queue if one is given
 	       (list `(add-pass-to-queue ',top-level-f
 					 (cadr (assoc ',queue-tag *pass-queue-tags*))
 					 :prepend ,(eql queue-position :prepend))))
 
-	   ;; define the top-level generic
+	   ;; define the top-level generic function
 	   (defgeneric ,top-level-f (,form ,@extra-args)
 	     (:documentation ,docstring)
 	     ,@(mapcar (lambda (m)
@@ -379,16 +379,18 @@ body of the method."
 
       (setq body (consume-options body)))
 
-    ;; if we have a schema we mustn't have a body
-    (if (and schema
-	     body)
-	(error 'dsl-error :hint "Method can have a schema or a body, but not both"))
+    ;; sanity checks on options
+    (cond ((and same-as
+		(or body
+		    schema))
+	   (error 'dsl-error :hint "Method can't be the same as another and have a body of schema of its own"))
 
-    ;; if we have a same-as we mustn't have a body or a schema
-    (if (and same-as
-	     (or body
-		 schema))
-	(error 'dsl-error :hint "Method can't be the same as another and have a body of schema of its own"))
+	  ((and (not same-as)
+		(or (and schema
+			 body)
+		    (and (not schema)
+			 (not body))))
+	   (error 'dsl-error :hint "Method needs a schema or a body")))
 
     ;; synthesise the method
     (let ((top-level-f (pass-top-level-function-name pass-name))
