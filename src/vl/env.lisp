@@ -1,26 +1,28 @@
-;; Environments
-;;
-;; Copyright (C) 2024--2026 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Environments
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 
 
-;; ---------- Defaults ----------
+;;; ---------- Defaults ----------
+
+;;; TODO: Get rid of this, it makes no sense for FPGAs
 
 (defparameter *default-register-width* 8
   "Default width for registers.
@@ -30,7 +32,7 @@ generally reflect the word size of the desired circuit, for
 example 8, 16, 32, or 64 bits.")
 
 
-;; ---------- Frames----------
+;;; ---------- Frames----------
 
 (defclass frame ()
   ((parent-frame
@@ -204,7 +206,7 @@ Returns the name oe the variable forgotten."
   n)
 
 
-;; ---------- Environments ----------
+;;; ---------- Environments ----------
 
 (defun get-environment-properties (n env)
   "Return the key/value list for N in ENV.
@@ -222,9 +224,8 @@ An UNKNOWN-VARIABLE error is signalled if N is undefined."
 
 (defun get-environment-names (env)
   "Return the names in ENV."
-  (foldr #'union (map-environment (lambda (n env) (list n))
-				  env)
-	 '()))
+  (union-all (map-environment (lambda (n env) (list n))
+			      env)))
 
 
 (defun empty-environment-p (env)

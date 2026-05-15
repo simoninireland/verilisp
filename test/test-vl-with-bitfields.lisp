@@ -114,7 +114,7 @@
 		      'vl::module))))
 
 
-(test test-test-wit-bitfields-fixed
+(test test-with-bitfields-fixed
   "Test we can generate code for fixed bits."
   ;; just test for code generated, ignore the details for now
 

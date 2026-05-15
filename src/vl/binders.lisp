@@ -20,8 +20,38 @@
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
+;;; LET and LET* binders. These mainly differ in their typing behaviour,
+;;; with the rest of their behaviour being shared.
 
-;;; ---------- Representationa ----------
+
+;;; ---------- Recursion schema ----------
+
+;;; There is a common recursion schema for binders in which a pass cascades
+;;; into the declaration initial values and the body, but not into the names
+;;; of the variables being declared.
+
+;; TODO: Doesn't handle extra arguments yet
+
+(define-recursion-schema into-decls-and-body (fun args pass-name)
+  "A recursion schema that recurses into initial values and body.
+
+The declaration variables are left unchanged."
+  (with-gensyms (decls body vdecls decl vbody)
+    `(destructuring-bind (,decls &rest ,body)
+	 ,args
+       (let ((,vdecls (mapcar (lambda (,decl)
+				(if (listp ,decl])
+				    (list (car ,decl)
+					  (apply #',pass-name (cadr ,decl)))
+
+				    ,decl))
+			      ,decls))
+	     (,vbody (apply #'pass-name (with-implicit-progn ,body))))
+
+	 (,fun ,decls ,@vbody)))))
+
+
+;;; ---------- Representationas----------
 
 (deftype representation ()
   "The type of variable representations."
@@ -49,8 +79,10 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 
 The declarations appear in the environment in the same order as
 they do in DECLS."
-   (if (listp decl)
-       ;; declare name and initial value
+  (declare (optimize debug))
+
+  (if (listp decl)
+      ;; declare name and initial value
        (destructuring-bind (n v)
 	   decl
 	 (declare-variable n `((initial-value ,v))))
@@ -65,32 +97,37 @@ they do in DECLS."
 The declarations appear in the environment in the same order as
 they do in DECLS."
   (unless (null decls)
-    (with-local-frame decls
-      (mapc #'add-decl-to-frame decls))))
+    (mapc #'add-decl-to-frame decls)))
 
-
-;;; LET and LET* need to maintain their initial function tag when
-;;; creating the extended decls
 
 (defun add-let-local-frame (fun args)
   (declare (optimize debug))
 
   (destructuring-bind (decls &rest body)
       args
-    (let ((decls (add-local-frame-to-decls decls)))
-      (compute-let-local-frame decls)
 
-      ;; return the form
-      `(,fun ,decls
-	     ,@(with-local-frame decls
-		 (mapcar #'add-frames body))))))
+    ;; (let ((decls (add-local-frame-to-decls decls)))
+    ;;   (break)
+    ;;   (compute-let-local-frame decls)
+
+    ;;   ;; return the form
+    ;;   `(,fun ,decls
+    ;;	     ,@(with-local-frame decls
+    ;;		 (mapcar #'add-frames body))))
+    (let ((local-decls (add-local-frame-to-decls decls)))
+      (with-local-frame local-decls
+	(compute-let-local-frame local-decls)
+
+	(let ((fbody (mapcar #'add-frames body)))
+	  `(,fun ,decls
+		 ,@fbody))))))
 
 
-(defmethod add-frames-sexp ((fun (eql 'let)) args)
+(defpassmethod add-frames (let &rest args)
   (add-let-local-frame 'let args))
 
 
-(defmethod add-frames-sexp ((fun (eql 'let*)) args)
+(defpassmethod add-frames (let* &rest args)
   (add-let-local-frame 'let* args))
 
 
@@ -111,41 +148,38 @@ they do in DECLS."
 	    (add-dependencies n (read-variables v))))))))
 
 
-(defmethod compute-dependencies-sexp ((fun (eql 'let)) args)
-  (destructuring-bind (decls &rest body)
-      args
+(defpassmethod compute-dependencies (let decls &rest body)
+  (with-local-frame decls
+    (compute-let-dependencies decls)
 
-    (with-local-frame decls
-      (compute-let-dependencies decls)
-
-      (compute-dependencies (with-implicit-progn body)))))
+    (compute-dependencies (with-implicit-progn body))))
 
 
-(defmethod compute-dependencies-sexp ((fun (eql 'let*)) args)
-  (compute-dependencies `(let ,@args)))
+(defpassmethod compute-dependencies (let* &rest args)
+  (:same-as let))
 
 
 ;;; ---------- Free variables ----------
 
 ;;; TODO: change free variables for LET*
 
-(defmethod read-variables-sexp ((fun (eql 'let)) args)
+(defpassmethod read-variables (let decls &rest body)
   (declare (optimize debug))
 
-  (destructuring-bind (decls &rest body)
-      args
+  (with-local-frame decls
+    (let ((lns (variables-declared-in-current-frame)))
 
-    (with-local-frame decls
-      (let ((lns (variables-declared-in-current-frame)))
+      ;; compute read variables
+      (let ((decl-rvs (union-all (mapcar #'read-variables
+					 (remove-nulls (mapcar #'get-initial-value lns)))))
+	    (body-rvs (read-variables (with-implicit-progn body))))
 
-	;; compute read variables
-	(let ((decl-rvs (foldr #'union (mapcar #'read-variables
-					       (remove-nulls (mapcar #'get-initial-value lns)))
-			       '()))
-	      (body-rvs (read-variables (with-implicit-progn body))))
+	;; remove any variables declared in this binder
+	(set-difference (union decl-rvs body-rvs) lns)))))
 
-	  ;; remove any variables declared in this binder
-	  (set-difference (union decl-rvs body-rvs) lns))))))
+
+(defpassmethod read-variables (let* &rest args)
+  (:same-as let))
 
 
 ;;; ---------- Typechecking ----------
@@ -155,6 +189,42 @@ they do in DECLS."
 
 The name is the first element, whether or not DECL is a list."
   (safe-car decl))
+
+
+(defun compute-let-env ()
+  "Compute the types of the declarations in the current frame for a LET.
+
+LET checks all bindings in an environment that doesn't include the
+other bindings."
+  (declare (optimize debug))
+
+  ;; for LET we detach the current (shallowest) frame and typecheck
+  ;; all the declarations in it within the parent environment, adding
+  ;; any properties to the detached frame, and then re-attach it
+  (with-detached-frame lenv
+
+    (dolist (n (variables-declared-in-frame lenv))
+      (with-recover-on-error
+	  ;; leave variable alone
+	  nil
+
+	;; constrain the variable with whatever information we have
+	(let ((ty (or (get-frame-property n 'type lenv :default nil)
+		      (if-let ((v (get-frame-property n 'initial-value lenv)))
+			(compute-type v))
+		      '(unsigned-byte 1))))
+
+	  ;; array and module types are known at construction, so don't need to be inferred
+	  (when (or (subtype-p ty 'array)
+		    (subtype-p ty 'module))
+	    (set-frame-property n 'type ty lenv)
+
+	    ;; modules also are their own representation
+	    (when (subtype-p ty 'module)
+	      (set-frame-property n 'as 'module lenv)))
+
+	  ;; constrain the variable
+	  (add-frame-type-constraint n ty lenv))))))
 
 
 (defun compute-let*-env ()
@@ -199,193 +269,143 @@ LET* adds bindings incrementally, so each can see those that went before."
 	    (declare-variable n (get-frame-properties n lenv))))))))
 
 
-(defun compute-let-env ()
-  "Compute the types of the declarations in the current frame for a LET.
-
-LET checks all bindings in an environment that doesn't include the
-other bindings."
+(defpassmethod compute-type (let decls &rest body)
   (declare (optimize debug))
 
-  ;; for LET we detach the current (shallowest) frame and typecheck
-  ;; all the declarations in it within the parent environment, adding
-  ;; any properties to the detached frame, and then re-attach it
-  (with-detached-frame lenv
+  (with-local-frame decls
+    (compute-let-env)   ; type-check in parent frame
 
-    (dolist (n (variables-declared-in-frame lenv))
+    ;; compute-type the body
+    (compute-type (with-implicit-progn body))))
+
+
+(defpassmethod compute-type (let* decls &rest body)
+  (declare (optimize debug))
+
+  (with-local-frame decls
+    (compute-let*-env)   ; type-check in progressively expanded frame
+
+    ;; compute-type the body
+    (compute-type (with-implicit-progn body))))
+
+
+(defpassmethod apply-type-constraints (let decls &rest body)
+  (declare (optimize debug))
+
+  (with-local-frame decls
+    (dolist (n (variables-declared-in-current-frame))
       (with-recover-on-error
-	  ;; leave variable alone
-	  nil
+	  ;; leave constraints alone on error
+	  t
 
-	;; constrain the variable with whatever information we have
-	(let ((ty (or (get-frame-property n 'type lenv :default nil)
-		      (if-let ((v (get-frame-property n 'initial-value lenv)))
-			(compute-type v))
-		      '(unsigned-byte 1))))
+	;; constrain the variable's type (which must be representable)
+	(let* ((constraints (get-type-constraints n))
+	       (lubty (if constraints (apply #'lurb constraints))))
 
-	  ;; array and module types are known at construction, so don't need to be inferred
-	  (when (or (subtype-p ty 'array)
-		    (subtype-p ty 'module))
-	    (set-frame-property n 'type ty lenv)
+	  (let ((ty (get-type n)))
+	    (if ty
+		;; check against provided type
+		(unless (subtype-p lubty ty)
+		  (warn 'type-mismatch :expected ty
+				       :got lubty
+				       :hint "Make sure explicit type matches usage"))
 
-	    ;; modules also are their own representation
-	    (when (subtype-p ty 'module)
-	      (set-frame-property n 'as 'module lenv)))
-
-	  ;; constrain the variable
-	  (add-frame-type-constraint n ty lenv))))))
-
-
-(defmethod compute-type-sexp ((fun (eql 'let)) args)
-  (declare (optimize debug))
-  (let ((decls (car args))
-	(body (cdr args)))
-
-    (with-local-frame decls
-      (compute-let-env)
-
-      ;; compute-type the body
-      (compute-type (with-implicit-progn body)))))
-
-
-(defmethod compute-type-sexp ((fun (eql 'let*)) args)
-  (declare (optimize debug))
-  (let ((decls (car args))
-	(body (cdr args)))
-
-    (with-local-frame decls
-      (compute-let*-env)
-
-      ;; compute-type the body
-      (compute-type (with-implicit-progn body)))))
-
-
-;;; LET and LET* have the same behaviour when applying type constraints
-
-(defmethod apply-type-constraints-sexp ((fun (eql 'let)) args)
-  (declare (optimize debug))
-
-  (destructuring-bind (decls &rest body)
-      args
-
-    (with-local-frame decls
-      (dolist (n (variables-declared-in-current-frame))
-	(with-recover-on-error
-	    ;; leave constraints alone on error
-	    t
-
-	  ;; constrain the variable's type (which must be representable)
-	  (let* ((constraints (get-type-constraints n))
-		 (lubty (if constraints (apply #'lurb constraints))))
-
-	    (let ((ty (get-type n)))
-	      (if ty
-		  ;; check against provided type
-		  (unless (subtype-p lubty ty)
-		    (warn 'type-mismatch :expected ty
-					 :got lubty
-					 :hint "Make sure explicit type matches usage"))
-
-		  ;; update the type with the constrained type
-		  (progn
-		    (set-variable-property n 'type lubty)
-		    (setq ty lubty)))
-
-	      ;; ensure the initial value is a valid element
-	      (if-let ((v (get-initial-value n)))
+		;; update the type with the constrained type
 		(progn
-		  (ensure-subtype (compute-type v) ty)
+		  (set-variable-property n 'type lubty)
+		  (setq ty lubty)))
 
-		  ;; cascade into any initial values
-		  (apply-type-constraints v)))))))
+	    ;; ensure the initial value is a valid element
+	    (if-let ((v (get-initial-value n)))
+	      (progn
+		(ensure-subtype (compute-type v) ty)
 
-      ;; cascade into the body
-      (apply-type-constraints (with-implicit-progn body)))))
+		;; cascade into any initial values
+		(apply-type-constraints v)))))))
+
+    ;; cascade into the body
+    (apply-type-constraints (with-implicit-progn body))))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'let*)) args)
-  (apply-type-constraints `(let ,@args)))
+(defpassmethod apply-type-constraints (let* &rest args)
+  (:same-as let))
 
 
 ;;; ---------- Representations ----------
 
-;;; LET and LET* infer representations in the same way
-
-(defmethod infer-representation-sexp ((fun (eql 'let)) args)
+(defpassmethod infer-representation (let decls &rest body)
   (declare (optimize debug))
 
-  (destructuring-bind (decls &rest body)
-      args
+  (with-local-frame decls
+    ;; do representation inference on initial values
+    (dolist (n (variables-declared-in-current-frame))
+      (if-let ((v (variable-property n 'initial-value)))
+	(infer-representation v)))
 
-    (with-local-frame decls
-      ;; do representation inference on initial values
-      (dolist (n (variables-declared-in-current-frame))
-	(if-let ((v (variable-property n 'initial-value)))
-	  (infer-representation v)))
+    ;; do representation inference in body
+    (infer-representation (with-implicit-progn body))
 
-      ;; do representation inference in body
-      (infer-representation (with-implicit-progn body))
+    ;; do representation inference on local variables
+    (dolist (n (variables-declared-in-current-frame))
+      (let ((read (variable-property n 'read))
+	    (written (variable-property n 'written))
+	    (ignored (variable-property n 'ignore))
+	    (ignorable (variable-property n 'ignorable)))
 
-      ;; do representation inference on local variables
-      (dolist (n (variables-declared-in-current-frame))
-	(let ((read (variable-property n 'read))
-	      (written (variable-property n 'written))
-	      (ignored (variable-property n 'ignore))
-	      (ignorable (variable-property n 'ignorable)))
+	(let ((rep (if written
+		       ;; variable is updated, must be a register
+		       'register
 
-	  (let ((rep (if written
-			 ;; variable is updated, must be a register
-			 'register
+		       (if read
+			   ;; variable is read and not updated
+			   (if-let ((v (get-initial-value n)))
+			     (cond ((make-array-form-p v)
+				    ;; arrays are always registers
+				    'register)
 
-			 (if read
-			     ;; variable is read and not updated
-			     (if-let ((v (get-initial-value n)))
-			       (cond ((make-array-form-p v)
-				      ;; arrays are always registers
-				      'register)
+				   ((static-p v)
+				    ;; static constant, a constant
+				    'constant)
 
-				     ((static-p v)
-				      ;; static constant, a constant
-				      'constant)
+				   (t
+				    ;; not constant, a wire
+				    'wire))
 
-				     (t
-				      ;; not constant, a wire
-				      'wire))
+			     ;; no initial value, assume a wire
+			     'wire)
 
-			       ;; no initial value, assume a wire
-			       'wire)
+			   ;; variable is unused, and is not a module (which we
+			   ;; don't report as they're never used directly)
+			   (progn
+			     (if (and (not (or ignored ignorable))
+				      (not (subtype-p (get-type n) 'module)))
+				 ;; not marked as ignored/able
+				 (warn 'unused-variable :variable n
+							:hint "Make sure variable is needed"))
 
-			     ;; variable is unused, and is not a module (which we
-			     ;; don't report as they're never used directly)
-			     (progn
-			       (if (and (not (or ignored ignorable))
-					(not (subtype-p (get-type n) 'module)))
-				   ;; not marked as ignored/able
-				   (warn 'unused-variable :variable n
-							  :hint "Make sure variable is needed"))
+			     ;; represent as a wire
+			     'wire)))))
 
-			       ;; represent as a wire
-			       'wire)))))
+	  (if (and (or read written)
+		   ignored)
+	      ;; variable is used despire being marked as ignored
+	      (warn 'used-variable :variable n
+				   :hint "Why is the variable used when marked as ignored?"))
 
-	    (if (and (or read written)
-		     ignored)
-		;; variable is used despire being marked as ignored
-		(warn 'used-variable :variable n
-				     :hint "Why is the variable used when marked as ignored?"))
+	  ;; check consistency with assigned representation
+	  (if-let ((given (get-representation n)))
+	    (when (not (eql rep given))
+	      (warn 'representation-mismatch :variable n
+					     :got rep
+					     :expected given
+					     :hint "Make sure the explicitly-assigned representation is appropriate"))
 
-	    ;; check consistency with assigned representation
-	    (if-let ((given (get-representation n)))
-	      (when (not (eql rep given))
-		(warn 'representation-mismatch :variable n
-					       :got rep
-					       :expected given
-					       :hint "Make sure the explicitly-assigned representation is appropriate"))
-
-	      ;; update representation if none given
-	      (set-variable-property n 'as rep))))))))
+	    ;; update representation if none given
+	    (set-variable-property n 'as rep)))))))
 
 
-(defmethod infer-representation-sexp ((fun (eql 'let*)) args)
-  (infer-representation `(let ,@args)))
+(defpassmethod infer-representation (let* &rest args)
+  (:same-as let))
 
 
 ;;; ---------- Variable re-writing ----------
@@ -413,31 +433,26 @@ other bindings."
       decl))
 
 
-;;; LET and LET* re-write variables in the same way
+(defpassmethod rewrite-variables (let decls &rest body)
+  (let* ((rwdecls (mapcar (rcurry #'rewrite-variables-decl rewrite) decls))
 
-(defmethod rewrite-variables-sexp ((fun (eql 'let)) args rewrite)
-  (destructuring-bind (decls &rest body)
-      args
-    (let* ((rwdecls (mapcar (rcurry #'rewrite-variables-decl rewrite) decls))
+	 ;; remove any re-writes referring to shadowed variables
+	 (rwnames (mapcar #'name-in-decl rwdecls))
+	 (rwrewrite (remove-if (lambda (rw)
+				 (member (car rw) rwnames))
+			       rewrite))
 
-	   ;; remove any re-writes referring to shadowed variables
-	   (rwnames (mapcar #'name-in-decl rwdecls))
-	   (rwrewrite (remove-if (lambda (rw)
-				   (member (car rw) rwnames))
-				 rewrite))
+	 ;; re-write the body with these new re-writes
+	 (rwbody (mapcar (rcurry #'rewrite-variables rwrewrite) body)))
 
-	   ;; re-write the body with these new re-writes
-	   (rwbody (mapcar (rcurry #'rewrite-variables rwrewrite) body)))
-
-      ;; rewrite the form to use re-written decls and the body
-      ;; re-written respecting shadowing
-      `(let ,rwdecls
-	 ,@rwbody))))
+    ;; rewrite the form to use re-written decls and the body
+    ;; re-written respecting shadowing
+    `(let ,rwdecls
+       ,@rwbody)))
 
 
-(defmethod rewrite-variables-sexp ((fun (eql 'let*)) args rewrite)
-  (rewrite-variables `(let ,@args) rewrite))
-
+(defpassmethod rewrite-variables (let* &rest args)
+  (:same-as let))
 
 
 ;;; ---------- Macro expansion ----------
@@ -454,23 +469,23 @@ other bindings."
       decl))
 
 
-;;; LET and LET have the same macro expansion behaviour but need to
-;;; maintain their function tag
-
 (defun expand-let-macros (fun args)
   (destructuring-bind (decls &rest body)
       args
     (let ((newdecls (mapcar #'expand-macros-decl decls))
 	  (newbody (mapcar #'expand-macros body)))
+
       `(,fun ,newdecls
-	 ,@newbody))))
+	     ,@newbody))))
 
 
-(defmethod expand-macros-sexp ((fun (eql 'let)) args)
+;;; TODO: Should this be a recursion schema too?
+
+(defpassmethod expand-macros (let &rest args)
   (expand-let-macros `let args))
 
 
-(defmethod expand-macros-sexp ((fun (eql 'let*)) args)
+(defpassmethod expand-macros (let* &rest args)
   (expand-let-macros `let* args))
 
 
@@ -491,11 +506,11 @@ other bindings."
 	     ,@newbody))))
 
 
-(defmethod elaborate-state-machines-sexp ((fun (eql 'let)) args)
+(defpassmethod elaborate-state-machines (let &rest args)
   (elaborate-let-state-machines 'let args))
 
 
-(defmethod elaborate-state-machines-sexp ((fun (eql 'let*)) args)
+(defpassmethod elaborate-state-machines (let* &rest args)
   (elaborate-let-state-machines 'let* args))
 
 
@@ -511,43 +526,38 @@ other bindings."
 	    regs)))
 
 
-;;; LET and LET* blocks float in the same way
-
-(defmethod float-let-blocks-sexp ((fun (eql 'let)) args)
+(defpassmethod float-let-blocks (let decls &rest body)
   (declare (optimize debug))
 
-  (destructuring-bind (decls &rest body)
-      args
+  (destructuring-bind (newbody newenv)
+      (float-let-blocks (with-implicit-progn body))
 
-    (destructuring-bind (newbody newenv)
-	(float-let-blocks (with-implicit-progn body))
+    ;; add our declarations to the environment
+    (when (null newenv)
+      (setq newenv (make-frame)))
+    (with-local-frame decls
+      ;; add the new declarations to the front of NEWENV
+      (add-frame-to-environment (current-frame) newenv t)
 
-      ;; add our declarations to the environment
-      (when (null newenv)
-	(setq newenv (make-frame)))
-      (with-local-frame decls
-	;; add the new declarations to the front of NEWENV
-	(add-frame-to-environment (current-frame) newenv t)
+      ;; return the re-written body and the new environment
+      (if (in-module-context-p)
+	  (list newbody newenv)
 
-	;; return the re-written body and the new environment
-	(if (in-module-context-p)
-	    (list newbody newenv)
+	  ;; get any initial value assignments to be added
+	  (let ((ivs (float-initial-values newenv)))
+	    (list (if ivs
+		      ;; initial values, prepend them to the new body
+		      `(progn
+			 ,@ivs
+			 ,newbody)
 
-	    ;; get any initial value assignments to be added
-	    (let ((ivs (float-initial-values newenv)))
-	      (list (if ivs
-			;; initial values, prepend them to the new body
-			`(progn
-			   ,@ivs
-			   ,newbody)
-
-			;; no initial values, return the body
-			newbody)
-		    newenv)))))))
+		      ;; no initial values, return the body
+		      newbody)
+		  newenv))))))
 
 
-(defmethod float-let-blocks-sexp ((fun (eql 'let*)) args)
-  (float-let-blocks `(let ,@args)))
+(defpassmethod float-let-blocks (let* &rest args)
+  (:same-as let))
 
 
 ;;; ---------- PROGN simplification ----------
@@ -566,8 +576,6 @@ by LET and MODULE forms."
 	 body
 	 '()))
 
-;;; LET and LET* blocks simplify their PROGNs in the same way but
-;;; need to retain their function tags
 
 (defun simplify-let-progn (fun args)
   (destructuring-bind (decls &rest body)
@@ -576,11 +584,11 @@ by LET and MODULE forms."
       `(,fun ,decls ,@(simplify-implied-progn newbody)))))
 
 
-(defmethod simplify-progn-sexp ((fun (eql 'let)) args)
+(defpassmethod simplify-progn (let &rest args)
   (simplify-let-progn `let args))
 
 
-(defmethod simplify-progn-sexp ((fun (eql 'let*)) args)
+(defpassmethod simplify-progn (let* &rest args)
   (simplify-let-progn `let* args))
 
 
@@ -727,24 +735,19 @@ Valid RHSs are either null, array or object constructors, or simple expressions.
 	   (synthesise-register n)))))))
 
 
-;;; LET and LET* synthesise the same way (although they're type-checked differently)
-
-(defmethod synthesise-sexp ((fun (eql 'let)) args)
+(defpassmethod synthesise (let decls &rest body)
   (declare (optimize debug))
 
-  (let ((decls (car args))
-	(body (cdr args)))
+  (with-local-frame decls
+    ;; synthesise the constants and registers
+    (as-block-forms decls :process #'synthesise-decl)
 
-    (with-local-frame decls
-      ;; synthesise the constants and registers
-      (as-block-forms decls :process #'synthesise-decl)
+    (if (> (length decls) 0)
+	(as-blank-line))
 
-      (if (> (length decls) 0)
-	  (as-blank-line))
-
-      ;; synthesise the body
-      (as-block-forms body))))
+    ;; synthesise the body
+    (as-block-forms body)))
 
 
-(defmethod synthesise-sexp ((fun (eql 'let*)) args)
-  (synthesise `(let ,@args)))
+(defpassmethod synthesise (let* &rest args)
+  (:same-as let))

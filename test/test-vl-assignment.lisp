@@ -113,10 +113,10 @@
 
 
 (test test-synthesise-setq
-  "Test we can synthesise assignments."
+  "Test we can synthesise/vlassignments."
   ;; as statements
-  (is (vl::synthesise '(setq a 5)))
-  (is (vl::synthesise '(setq a 5 :sync t))))
+  (is (vl::synthesise/vl '(setq a 5)))
+  (is (vl::synthesise/vl '(setq a 5 :sync t))))
 
 
 (test test-typecheck-setq-generalised-place
@@ -128,8 +128,8 @@
 
 
 (test test-setq-dependencies
-  "Test we can extract SETQ dependencies."
   (vl::with-new-frame
+  "Test we can extract SETQ dependencies."
     (vl::declare-variable 'a '((type (unsigned-byte 8))))
     (vl::declare-variable 'b '((type (unsigned-byte 8))))
     (vl::declare-variable 'c '((type (unsigned-byte 8))))
@@ -167,7 +167,7 @@
 
 
 (test test-synthesise-setf-conditional
-  "Test we can synthesise SETF with a conditional value."
+  "Test we can synthesise/vlSETF with a conditional value."
   (vl::with-new-frame
     (let ((p (vl::expand/vl '(let ((a 12)
 				   (b 2))
@@ -175,7 +175,7 @@
 					  a
 					  (+ a 1)))))))
       (vl::typecheck p)
-      (is (vl::synthesise p)))))
+      (is (vl::synthesise/vl p)))))
 
 
 ;; Tests of the actual generalised place forms appear in their

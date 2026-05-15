@@ -1,27 +1,32 @@
-;; Evaluating Verilisp as Lisp
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Evaluating Verilisp as Lisp
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
+;;; These functions allow code that is either Lisp or Verilisp to be evaluated.
+;;; Verilisp code is Lispified and then evaluated in a static environment,
+;;; meaning these functions can be used to expand code at compile-time for
+;;; operations like constant folding.
 
-;; ---------- Static tests ----------
+
+;;; ---------- Static tests ----------
 
 (defun constant-p (form)
   "Test whether FORM is a constant.
@@ -57,11 +62,11 @@ This just evaluates FORM and throws away the result."
     (error () nil)))
 
 
-;; ---------- Environment closure ----------
+;;; ---------- Environment closure ----------
 
-;; These functions work on explicitly-provided environments, *not*
-;; the current global environment -- although the given environment
-;; will typically be derived from there.
+;;; These functions work on explicitly-provided environments, *not*
+;;; the current global environment -- although the given environment
+;;; will typically be derived from there.
 
 (defun make-environment-alist (env)
   "Return a list of name/value pairs of the elements of ENV.
@@ -110,10 +115,10 @@ first use LISPIFY to generate proper Lisp for evaluation."
 	   ,form))))
 
 
-;; ---------- Closure against specific sub-environments ----------
+;;; ---------- Closure against specific sub-environments ----------
 
-;; These functions close a form against a specific sub-environment of
-;; the current global environment.
+;;; These functions close a form against a specific sub-environment of
+;;; the current global environment.
 
 
 (defun close-form-in-constant-environment (form)
@@ -140,7 +145,7 @@ the form is placed into an environment that is known at compile time."
     (close-form-in-environment form staticenv)))
 
 
-;; ---------- Lisp evaluation ----------
+;;; ---------- Lisp evaluation ----------
 
 ;; These functions evaluate Lisp expressions.
 
@@ -167,10 +172,10 @@ EVAL-IN-STATIC-ENVIRONMENT."
       (eval closed-form))))
 
 
-;; ---------- Verilisp evaluation ----------
+;;; ---------- Verilisp evaluation ----------
 
-;; The forms passed to these functions should be Verilisp, which is
-;; Lispified before closure and evaluation
+;;; The forms passed to these functions should be Verilisp, which is
+;;; Lispified before closure and evaluation
 
 (defun eval-in-static-environment (form)
   "Evaluate Verilisp FORM as Lisp in the static part of the current environment.

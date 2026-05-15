@@ -67,15 +67,15 @@ This only changes the printed length: the entire fragment is retained.")
 (defmethod format-condition-context (detail (c vl-condition) str)
   (format str "~a" detail)
 
-  ;;;; add hint if present
+  ;; add hint if present
   (if-let ((hint (hint c)))
     (format str " (~a)" hint))
 
-  ;;;; add underlying condition if present
+  ;; add underlying condition if present
   (if-let ((e (underlying-condition c)))
     (format str " (Underlying condition: ~s)" e))
 
-  ;;;; add context if known
+  ;; add context if known
   (if-let ((code (fragment c)))
     (format str " Context: ~a" (shorten *maximum-code-fragment-length*
 					(format nil "~a" code)

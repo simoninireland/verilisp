@@ -172,9 +172,6 @@
    #:vl-error
    #:vl-warning
 
-   ;; restarts
-   #:recover
-
    ;; errors
    #:dsl-error
    #:not-synthesisable

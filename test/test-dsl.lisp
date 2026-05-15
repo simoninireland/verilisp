@@ -31,9 +31,9 @@
 (defmacro with-no-passes (&body body)
   "Clear all the pass queues before running BODY."
   `(progn
-     (dolist (queue (list (dsl::get-pass-queue 'firstq)
-			  (dsl::get-pass-queue 'secondq)
-			  (dsl::get-pass-queue 'thirdq)))
+     (dolist (queue '(firstq
+		      secondq
+		      thirdq))
        (dsl::clear-pass-queue queue))
 
      ,@body))
@@ -45,70 +45,112 @@
   "Test we can define a pass."
   ;; single passes with different arguments, not on a queue
   (with-no-passes
-    (defpass one ())
-    (is (null (dsl::pass-queue-queue (dsl::get-pass-queue 'firstq))))
-    (is (null (dsl::pass-queue-queue (dsl::get-pass-queue 'secondq))))
-    (is (null (dsl::pass-queue-queue (dsl::get-pass-queue 'thirdq)))))
+    (defpass one (form))
+    (is (null (dsl::get-pass-queue 'firstq)))
+    (is (null (dsl::get-pass-queue 'secondq)))
+    (is (null (dsl::get-pass-queue 'thirdq))))
 
   (with-no-passes
-    (defpass one ()
+    (defpass one (form)
       (:documentation "Explicit queue, docstring, no body."))
-    (is (null (dsl::pass-queue-queue (dsl::get-pass-queue 'firstq))))
-    (is (null (dsl::pass-queue-queue (dsl::get-pass-queue 'secondq))))
-    (is (null (dsl::pass-queue-queue (dsl::get-pass-queue 'thirdq)))))
+    (is (null (dsl::get-pass-queue 'firstq)))
+    (is (null (dsl::get-pass-queue 'secondq)))
+    (is (null (dsl::get-pass-queue 'thirdq))))
 
   (with-no-passes
-    (defpass one ()
+    (defpass one (form)
       (:queue firstq))
-    (is (member 'one (dsl::pass-queue-queue (dsl::get-pass-queue 'firstq))))
-    (is (null (dsl::pass-queue-queue (dsl::get-pass-queue 'secondq))))
-    (is (null (dsl::pass-queue-queue (dsl::get-pass-queue 'thirdq)))))
+    (is (dsl::pass-on-pass-queue-p 'one 'firstq))
+    (is (null (dsl::get-pass-queue 'secondq)))
+    (is (null (dsl::get-pass-queue 'thirdq))))
 
   ;; several passes with queues and orderings
   (with-no-passes
-    (defpass one ()
+    (defpass one (form)
       (:queue firstq))
-    (defpass two ()
+    (defpass two (form)
       (:queue firstq))
 
-    (is (equal (dsl::pass-queue-queue (dsl::get-pass-queue 'firstq)) '(one two))))
+    (is (equal (dsl::get-pass-queue 'firstq)
+	       (mapcar #'dsl::pass-wrap-level-function-name '(one two)))))
 
   (with-no-passes
-    (defpass one ()
+    (defpass one (form)
       (:queue firstq))
-    (defpass two ()
+    (defpass two (form)
       (:queue firstq)
       (:queue-position :prepend))
 
-    (is (equal (dsl::pass-queue-queue (dsl::get-pass-queue 'firstq)) '(two one))))
+    (is (equal (dsl::get-pass-queue 'firstq)
+	       (mapcar #'dsl::pass-wrap-level-function-name '(two one)))))
 
   (with-no-passes
-    (defpass one ()
+    (defpass one (form)
       (:queue firstq))
-    (defpass two ()
+    (defpass two (form)
       (:queue firstq)
       (:queue-position :prepend))
-    (defpass three ()
+    (defpass three (form)
       (:queue firstq)
       (:queue-position :append))
 
-    (is (equal (dsl::pass-queue-queue (dsl::get-pass-queue 'firstq)) '(two one three))))
+    (is (equal (dsl::get-pass-queue 'firstq)
+	       (mapcar #'dsl::pass-wrap-level-function-name '(two one three)))))
 
   (with-no-passes
-    (defpass one ()
+    (defpass one (form)
       (:queue firstq))
-    (defpass two ()
+    (defpass two (form)
       (:queue firstq)
       (:queue-position :prepend))
-    (defpass three ()
+    (defpass three (form)
       (:queue firstq)
       (:queue-position :append))
-    (defpass four ()
+    (defpass four (form)
       (:queue secondq)
       (:queue-position :append))
 
-    (is (equal (dsl::pass-queue-queue (dsl::get-pass-queue 'firstq)) '(two one three)))
-    (is (member 'four (dsl::pass-queue-queue (dsl::get-pass-queue 'secondq))))))
+    (is (equal (dsl::get-pass-queue 'firstq)
+	       (mapcar #'dsl::pass-wrap-level-function-name '(two one three))))
+    (is (equal (dsl::get-pass-queue 'secondq)
+	       (mapcar #'dsl::pass-wrap-level-function-name '(four))))))
+
+
+(test test-dsl-pass-pre-post
+  "Check we can add pre- and post-processing code to a pass."
+  (let (a)
+
+    (with-no-passes
+      (defpass one (form)
+	(:queue firstq)
+	(:pre (lambda (form) (setf a t) form)))
+      (defpassmethod one ((n integer))
+	(+ n 1))
+
+      (is (null a))
+      (is (= (one 5) 6))
+      (is (null a))
+      (is (= (dsl::run-pass-queue 'firstq '5) 6))
+      (is (eql a t))))
+
+    (let (a b)
+
+      (with-no-passes
+	(defpass one (form)
+	  (:queue firstq)
+	  (:pre (lambda (form) (setf a 1) form))
+	  (:post (lambda (form result) (setf b 2))))
+	(defpassmethod one ((n integer))
+	  (+ n 1))
+
+	(is (null a))
+	(is (null b))
+	(is (= (one 5) 6))
+	(is (null a))
+	(is (null b))
+	(is (= (dsl::run-pass-queue 'firstq '5) 2))  ; value of post
+	(is (eql a 1))
+	(is (eql b 2)))))
 
 
 ;;; ---------- Pass methods ----------
@@ -116,7 +158,7 @@
 (test test-dsl-pass-methods
   "Test we can define pass methods."
   (with-no-passes
-    (defpass one ())
+    (defpass one (form))
 
     (defpassmethod one ((n integer))
       (+ n 1))
@@ -130,7 +172,7 @@
 (test test-dsl-pass-methods-from-pass
   "Test we can add methods to the right generic functions from the pass definition."
   (with-no-passes
-    (defpass one ()
+    (defpass one (form)
       (:method ((n integer))
 	(+ n 1))
       (:method (+ a b)
@@ -142,28 +184,33 @@
 
 ;;; ---------- Pass recursion schemata ----------
 
-
 (test test-dsl-schemata
   "Test we can add a default schema to a pass."
   (with-no-passes
-    (defpass no-default ())
+    (defpass no-default (form))
 
     (signals unknown-form
       (no-default '(+ 1 2))))
 
   (with-no-passes
-    (defpass into-args ()
+    (defpass into-args (form)
       (:schema into-arguments)
       (:method (n)
 	(+ n 1)))
 
-    (is (equal (into-args '(+ 1 2)) '(+ 2 3)))))
+    (is (equal (into-args '(+ 1 2)) '(+ 2 3))))
+
+  (with-no-passes
+    (defpass with-default (form)
+      (:schema constant-form 5))
+
+    (is (equal (with-default '(+ 1 2)) 5))))
 
 
 (test test-dsl-methods-schemata
   "Test we can create methods with different schemata."
   (with-no-passes
-    (defpass one ())
+    (defpass one (form))
 
     (defpassmethod one ((n integer))
       (+ n 1))
@@ -177,7 +224,7 @@
 (test test-dsl-methods-same-as
   "Test we can set one method to be the same as another."
   (with-no-passes
-    (defpass one ()
+    (defpass one (form)
       (:method ((n integer))
 	(+ n 1)))
 
@@ -188,3 +235,18 @@
       (:same-as +))
 
     (is (= (one '(+ 1 (* 2 3))) 9))))
+
+
+(test test-dsl-extra-args
+  "Test we can construct a pass with extra arguments."
+  (with-no-passes
+    (defpass extraargs (form arg1 arg2)
+      (:schema into-arguments)
+      (:method (+ a b)
+	(+ a b arg1 arg2)))
+
+    (defpassmethod extraargs (* a b)
+      (+ a b arg1 arg2))
+
+    (is (= (extraargs '(+ 1 2) 10 20) (+ 1 2 10 20)))
+    (is (= (extraargs '(* 1 2) 10 20) (+ 1 2 10 20)))))

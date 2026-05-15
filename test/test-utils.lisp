@@ -132,7 +132,7 @@
   (is (equal (safe-car-cdr (list 1 2 3)) (list 1 (list 2 3))))
   (is (equal (safe-car-cdr (list 1 (list 2 3))) (list 1 (list (list 2 3)))))
   (is (equal (safe-car-cdr (cons 1 2)) (list 1 (list 2))))
-  (is (equal (safe-car-cdr 1) (list 1)))
+  (is (equal (safe-car-cdr 1) (list 1 nil)))
   (is (null (safe-cadr (safe-car-cdr 1))))
   (is (null (cadr (safe-car-cdr 1)))))
 

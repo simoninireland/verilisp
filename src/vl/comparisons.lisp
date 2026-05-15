@@ -19,6 +19,10 @@
 
 (in-package :verilisp/core)
 
+;;; The comparison operators. We provide all the ones commonly used in
+;;; Common Lisp: there are others we should perhaps add too.
+
+
 (defun ensure-boolean (ty)
   "Ensure TY is a boolean (bit).
 
@@ -29,69 +33,130 @@ in many applications."
 
 ;;; ---------- Assertedness ----------
 
-(defmethod compute-type-sexp ((fun (eql 'asserted-p)) args)
+(defpassmethod compute-type (asserted-p v)
   '(unsigned-byte 1))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'asserted-p)) args)
-  (destructuring-bind (v)
-      args
-    (ensure-fixed-width (compute-type v))))
+(defpassmethod apply-type-constraints (asserted-p v)
+  (ensure-fixed-width (compute-type v)))
 
 
-(defmethod simple-expression-form-p-sexp ((fun (eql 'asserted-p)) args)
+(defpassmethod simple-expression-form-p (asserted-p v)
   (simple-expression-form-p v))
 
 
-(defmethod synthesise-sexp ((fun (eql 'asserted-p)) args)
-  (destructuring-bind (v)
-      args
-    (as-literal "(")
-    (synthesise v)
-    (as-literal " != 0)")))
+(defpassmethod synthesise (asserted-p v)
+  (as-literal "(")
+  (synthesise v)
+  (as-literal " != 0)"))
 
 
 ;;; ---------- Maths ----------
 
-(defmacro define-fixed-width-binary-maths-comparator (symbol &optional verilog-operator)
-  "Declare the necessary functions for SYMBOL.
+;;; =
+;;; This is the prototype for all the other maths comparisons
 
-Use VERILOG-OPERATOR if provided for synthesis."
-  (unless verilog-operator
-    (setq verilog-operator symbol))
+;;; TODO: Extend to handle arbitrary numbers of arguments like Common Lisp.
 
-  `(progn
-     (defmethod compute-type-sexp ((fun (eql ',symbol)) args)
-       '(unsigned-byte 1))
+;;; TODO: Capture more of the commonality, maybe with a surrounding macro?
 
-
-     (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
-       (destructuring-bind (l r)
-	   args
-	 (ensure-fixed-width (compute-type l))
-	 (ensure-fixed-width (compute-type r))))
+(defpassmethod compute-type (= l r)
+  '(unsigned-byte 1))
 
 
-     (defmethod simple-expression-form-p-sexp ((fun (eql ',symbol)) args)
-       (every #'simple-expression-form-p args))
+(defpassmethod apply-type-constraints (= l r)
+  (ensure-fixed-width (compute-type l))
+  (ensure-fixed-width (compute-type r)))
 
 
-     (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
-       (destructuring-bind (l r)
-	   args
-	 (as-literal "(")
-	 (synthesise l)
-	 (as-literal ,(format nil " ~a " verilog-operator))
-	 (synthesise r)
-	 (as-literal ")")))))
+(defpassmethod simple-expression-form-p (= &rest args)
+  (every #'simple-expression-form-p args))
 
 
-;; equality
-(define-fixed-width-binary-maths-comparator = "==")
-(define-fixed-width-binary-maths-comparator /= "!=")
+(defpassmethod synthesise (= l r)
+  (as-literal "(")
+  (synthesise l)
+  (as-literal "==")
+  (synthesise r)
+  (as-literal ")"))
 
-;; ordering
-(define-fixed-width-binary-maths-comparator <)
-(define-fixed-width-binary-maths-comparator <=)
-(define-fixed-width-binary-maths-comparator >)
-(define-fixed-width-binary-maths-comparator >=)
+
+;;; /=
+
+(defpassmethod compute-type (/= l r)
+  (:same-as =))
+(defpassmethod apply-type-constraints (/= l r)
+  (:same-as =))
+(defpassmethod simple-expression-form-p (/= l r)
+  (:same-as =))
+
+(defpassmethod synthesise (/= l r)
+  (as-literal "(")
+  (synthesise l)
+  (as-literal "!=")
+  (synthesise r)
+  (as-literal ")"))
+
+
+;;; <
+(defpassmethod compute-type (< l r)
+  (:same-as =))
+(defpassmethod apply-type-constraints (< l r)
+  (:same-as =))
+(defpassmethod simple-expression-form-p (< l r)
+  (:same-as =))
+
+(defpassmethod synthesise (< l r)
+  (as-literal "(")
+  (synthesise l)
+  (as-literal "<")
+  (synthesise r)
+  (as-literal ")"))
+
+
+;;; <=
+(defpassmethod compute-type (<= l r)
+  (:same-as =))
+(defpassmethod apply-type-constraints (<= l r)
+  (:same-as =))
+(defpassmethod simple-expression-form-p (<= l r)
+  (:same-as =))
+
+(defpassmethod synthesise (<= l r)
+  (as-literal "(")
+  (synthesise l)
+  (as-literal "<=")
+  (synthesise r)
+  (as-literal ")"))
+
+
+;;; >
+(defpassmethod compute-type (> l r)
+  (:same-as =))
+(defpassmethod apply-type-constraints (> l r)
+  (:same-as =))
+(defpassmethod simple-expression-form-p (> l r)
+  (:same-as =))
+
+(defpassmethod synthesise (> l r)
+  (as-literal "(")
+  (synthesise l)
+  (as-literal ">")
+  (synthesise r)
+  (as-literal ")"))
+
+
+;;; >=
+(defpassmethod compute-type (>= l r)
+  (:same-as =))
+(defpassmethod apply-type-constraints (>= l r)
+  (:same-as =))
+(defpassmethod simple-expression-form-p (>= l r)
+  (:same-as =))
+
+(defpassmethod synthesise (>= l r)
+  (as-literal "(")
+  (synthesise l)
+  (as-literal ">=")
+  (synthesise r)
+  (as-literal ")"))

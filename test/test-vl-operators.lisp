@@ -1,27 +1,27 @@
-;; Tests of synthesisable fragment passes and synthesis
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Tests of synthesisable fragment passes and synthesis
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/test)
 (in-suite verilisp/vl)
 
 
-;; ---------- Addition and subtraction ----------
+;;; ---------- Addition and subtraction ----------
 
 (test test-add-widths
   "Test we can determine the widths of additions."
@@ -48,19 +48,19 @@
   ;; arithmetic
   (dolist (op '(+ - *))
     ;; conventional two-operand
-    (is (vl::synthesise `(,op 1 2)))
+    (is (vl::synthesise/vl `(,op 1 2)))
 
     ;; Lisp-y multi-operand
-    (is (vl::synthesise `(,op 1 2 3)))
+    (is (vl::synthesise/vl `(,op 1 2 3)))
 
     ;; nested operator application
-    (is (vl::synthesise `(,op 1 (,op 2 3)))))
+    (is (vl::synthesise/vl `(,op 1 (,op 2 3)))))
 
   ;; unary minus
-  (is (vl::synthesise `(- 1))))
+  (is (vl::synthesise/vl `(- 1))))
 
 
-;; ---------- Shifts ----------
+;;; ---------- Shifts ----------
 
 (test test-width-shifts
   "Test we can extract the widths of shifts."
@@ -70,24 +70,17 @@
 		     '(unsigned-byte 19)))
 
   (is (vl::subtype-p (vl::typecheck '(>> 16 4))
-		     '(unsigned-byte 5)))
-
-  ;; wrong number of arguments
-  (dolist (op '(<< >>))
-    (signals (vl::not-synthesisable)
-      (vl::typecheck `(,op 1 2 3)))
-    (signals (vl::not-synthesisable)
-      (vl::typecheck `(,op 3)))))
+		     '(unsigned-byte 5))))
 
 
 (test test-synthesise-shift-operators
   "Test we can synthesise shift operators."
   (dolist (op '(<< >>))
     ;; conventional two-operand
-    (is (vl::synthesise `(,op 1 2)))))
+    (is (vl::synthesise/vl `(,op 1 2)))))
 
 
-;; ---------- Bitwise operators ----------
+;;; ---------- Bitwise operators ----------
 
 (test test-typecheck-logop
   "Test we can typecheck the logical operators."
@@ -97,7 +90,7 @@
   (is (vl::subtype-p (vl::typecheck '(logand #2r10110 #2r1111110))
 		    '(unsigned-byte 7))))
 
-;; ---------- Variable access ----------
+;;; ---------- Variable access ----------
 
 (test test-operator-accesses
   "Test we extract the right variable accesses."

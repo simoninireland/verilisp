@@ -189,7 +189,6 @@
 
     (vl::typecheck p)
     (let ((q (vl::elaborate-state-machines p)))
-
       ;; first state
       (is (contains-form-p '(setq a 0) q))
 
@@ -197,7 +196,8 @@
       (is (contains-form-p '(setq a 1) q))
 
       ;; second state
-      (is (contains-form-p '(setq c 1) q)))))
+      (is (contains-form-p '(setq c 1) q)))
+      ))
 
 
 (test test-tagbody-nested-if

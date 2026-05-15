@@ -1,27 +1,27 @@
-;; Tests of sinple assignment and generalised places
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Tests of sinple assignment and generalised places
+;;;;
+;;;; Copyright (C) 2024--2025 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/test)
 (in-suite verilisp/vl)
-q
 
-;; ---------- Single- and double-armeed condtionals (IF) ----------
+
+;;; ---------- Single- and double-armeed condtionals (IF) ----------
 
 (test test-if-then-else
   "Test we can check a complete if form."
@@ -65,7 +65,7 @@ q
     (let ((p (vl::expand/vl x)))
       (vl::with-new-frame
 	(vl::typecheck p)
-	(is (vl::synthesise p)))))
+	(is (vl::synthesise/vl p)))))
 
   ;; no else branch
   (let ((p (vl::expand/vl '(let ((a 0))
@@ -73,7 +73,7 @@ q
 			    (if (logand 1 1)
 				(setf a (+ 1 2)))))))
     (vl::typecheck p)
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 (test test-if-dependencies
@@ -97,7 +97,7 @@ q
 		     '(b c))))))
 
 
-;; ---------- Multi-armed value comparisons (CASE) ----------
+;;; ---------- Multi-armed value comparisons (CASE) ----------
 
 (test test-case-compatible
   "Test we can typecheck cases with compatible clauses."
@@ -152,7 +152,7 @@ q
 			       (setf b 0)))))))
     (vl::with-new-frame
       (vl::typecheck p)
-      (is (vl::synthesise p)))))
+      (is (vl::synthesise/vl p)))))
 
 
 (test test-synthesise-case-assignment
@@ -167,7 +167,7 @@ q
 
     (vl::with-new-frame
       (vl::typecheck p)
-      (is (vl::synthesise p)))))
+      (is (vl::synthesise/vl p)))))
 
 
 (test test-synthesise-case-complex-bodies
@@ -184,7 +184,7 @@ q
 				(t 0)))))))
 
       (vl::typecheck p)
-      (vl::synthesise p))))
+      (vl::synthesise/vl p))))
 
 
 (test test-synthesise-let-decl
@@ -195,7 +195,7 @@ q
 			   (setf a (+ a 2))))))
 
     (vl::typecheck p)
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 (test test-case-dependencies

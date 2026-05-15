@@ -37,6 +37,7 @@
    #:remove-nulls
    #:set-p
    #:duplicates
+   #:union-all
    #:pairwise
    #:union2
    #:foldl
@@ -55,8 +56,10 @@
 
    ;; data structure manipulations
    #:safe-car
+   #:safe-cdr
    #:safe-cadr
    #:safe-car-cdr
+   #:safe-list
    #:assoc-decls
    #:mapappend
    #:merge-alists

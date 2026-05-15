@@ -20,10 +20,20 @@
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
+;;; The top-level interface to Verilisp from within Common Lisp. This
+;;; consists of a small collection of macros that construct modules
+;;; and run the nanopass queues for the compiler.
+
 
 ;;; ---------- Module registry ----------
 
 ;;; Modules are all held in the global environment.
+
+(defparameter *last-module-type* nil
+  "Variable holding the type of the last module type-checked.
+
+This is filled-in by COMPUTE-TYPE as the result of the TYPECHECKING pass.")
+
 
 (defun declare-module (modname intf code)
   "Declare a module MODNAME with the given INTF and CODE.
@@ -31,6 +41,8 @@
 The module is declared in *GLOBAL-ENVIRONMENT*. Modules can be
 re-defined, overwriting previous declarations and signalling
 a DUPLICATE-MODULE warning."
+  (declare (optimize debug))
+
   (in-global-environment
 
     ;; test whether the module already exists
@@ -103,7 +115,7 @@ corresponding module body to be synthesised."
 	      (get-environment-names env)))))
 
 
-;;; ---------- Module declaration ----------
+;;; ---------- Compiler macro-passes ----------
 
 (defun expand/vl (form)
   "Compiler pass to expand FORM into core Verilisp.
@@ -113,19 +125,7 @@ the expanded, framed, transformed, analysed form.
 
 This function is not usually called directly, but is called as part
 of a larger compilation process."
-  (declare (optimize debug))
-
-  ;; expand macros and apply frames
-  (let* ((expanded (expand-macros-in-environment form))
-	 (framed (add-frames (copy-tree expanded))))
-
-    ;; compute the dependencies between variables
-    (compute-dependencies framed)
-
-    ;; infer representations on the tree
-    (infer-representation framed)
-
-    framed))
+  (run-pass-queue 'expanding form))
 
 
 (defun typecheck/vl (form)
@@ -135,11 +135,21 @@ Returns the overall type of FORM, which will typically be a module.
 
 This function is not usually called directly, but is called as part
 of a larger compilation process."
-  (typecheck form))
+  (run-pass-queue 'typing form))
 
 
-(defun elaborate/vl (form)
-  "Elaborate FORM as a module.
+(defun typecheck (form)
+  "Return the type of FORM.
+
+This is an internal function maily for testing that runs the default
+parts of the TYPING pass and returns the type."
+  (let ((ty (compute-type form)))
+    (apply-type-constraints form)
+    ty))
+
+
+(defun transform/vl (form)
+  "Transform FORM.
 
 FORM should be a program in core Verilisp, with macros expanded
 and frames applied, as done by EXPAND/VL.
@@ -151,14 +161,32 @@ module ready for synthesis.
 This function is not usually called directly, but is called as part
 of a larger compilation process."
   (declare (optimize debug))
-q
-  ;; simplify
-  (let* ((transformed (elaborate-state-machines form))
-	 (floated (car (float-let-blocks transformed)))
-	 (simplified (simplify-progn floated)))
 
-    simplified))
+  (run-pass-queue 'transforming form)
+  ;; (let ((f form))
+  ;;   (dolist (pass-name (verilisp/dsl::get-pass-queue 'transforming))
+  ;;     (setq f (funcall pass-name f))
+  ;;     (break))
 
+  ;;   ;; return the result of the last pass
+  ;;   f)
+  )
+
+
+(defun synthesise/vl (m &optional (str t))
+  "Synthesise module M to STR.
+
+M can be an elaborated Verilisp form or a symbol identifying
+a loaded module. STR defaults to standard output"
+  (with-synthesis-to-stream str
+    (let ((vl (if (symbolp m)
+		  (get-module m)
+		  m)))
+      (run-pass-queue 'synthesising vl)
+      t)))
+
+
+;;; ---------- Module declaration ----------
 
 (defmacro defmodule/vl (modname decls &body body)
   "Declare a module MODNAME with given DECLS and BODY.
@@ -166,7 +194,7 @@ q
 The module is loaded, annotated, macro-expanded, type-checked
 (meaning that it will be at least minimally syntactically correct
 afterwards -- although possibly still not finally synthesisable),
-and then be processed ready for synthesis (which might cause further
+and then be transformed ready for synthesis (which might cause further
 warnings or errors).
 
 The resulting fully-elaborated module is added to *GLOBAL-ENVIRONMENT*
@@ -178,17 +206,16 @@ old module will be overwritten.
 Return the name of the newly-defined module."
   (declare (optimize debug))
 
-  (with-gensyms (module expanded intf elaborated)
+  (with-gensyms (module expanded typed transformed)
     (let ((code `(module ,modname ,decls
 			 ,@body)))
       `(let* ((,module ',code)
 	      (,expanded (expand/vl ,module))
-	      (,intf (typecheck/vl ,expanded))
-	      (,elaborated (elaborate/vl ,expanded))
-	      )
+	      (,typed (typecheck/vl ,expanded))
+	      (,transformed (transform/vl ,typed)))
 
 	 ;; declare the module
-	 (declare-module ',modname ,intf ,elaborated)
+	 (declare-module ',modname *last-module-type* ,transformed)
 
 	 ',modname))))
 
@@ -234,17 +261,3 @@ into the final bitstream from within the FPGA toolchain."
   "Forget the macro or module NAME from the global environment."
   (in-global-environment
     (forget-variable name)))
-
-
-;;; ---------- Module synthesis ----------
-
-(defun synthesise/vl (m str)
-  "Synthesise module M to STR.
-
-M can be an elaborated Verilisp form or a symbol identifying
-a loaded module."
-  (with-synthesis-to-stream str
-    (let ((vl (if (symbolp m)
-		  (get-module m)
-		  m)))
-      (synthesise vl))))

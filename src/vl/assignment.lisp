@@ -1,24 +1,28 @@
-;; Assignments
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Assignments
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
+
+;;; Assignments using SETQ and SETF. The complicated part of SETF is the
+;;; use of generalised places, which are handled alongside those places,
+;;; not here.
 
 
 (defun writeable-p (n)
@@ -45,57 +49,50 @@ isn't declared."
 			      :hint "Ensure target is writeable")))
 
 
-;; ---------- setq ----------
+;;; ---------- setq ----------
 
-(defmethod compute-type-sexp ((fun (eql 'setq)) args)
-  (destructuring-bind (n v &key sync)
-      args
+(defpassmethod compute-type (setq n v &key sync)
+  (let ((ty (compute-type v)))
+    ;; constraint the variable directly
+    (add-type-constraint n ty)
 
-    (let ((ty (compute-type v)))
-      ;; constraint the variable directly
-      (add-type-constraint n ty)
-
-      ty)))
+    ty))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'setq)) args)
-  (destructuring-bind (n v &key sync)
-      args
-    (ensure-writeable n)
-    (apply-type-constraints `(setf ,n ,v :sync ,sync))))
+(defpassmethod apply-type-constraints (setq n v &key sync)
+  (ensure-writeable n)
+  (apply-type-constraints `(setf ,n ,v :sync ,sync)))
 
 
-(defmethod read-variables-sexp ((fun (eql 'setq)) args)
-  (read-variables `(setf ,@args)))
+(defpassmethod read-variables (setq &rest args)
+  (:same-as setf))
 
 
-(defmethod read-variables-setf ((selector symbol) val selectorargs)
-  (union (list selector)
-	 (read-variables val)))
+(defpassmethod read-variables-setf (setq n v &key sync)
+  (:same-as setf))
 
 
-(defmethod compute-dependencies-sexp ((fun (eql 'setq)) args)
-  (destructuring-bind (n v &key sync)
-      args
+(defpassmethod compute-dependencies (setq n v &key sync)
+  (declare (optimize debug))
 
-    ;; catch the common mistake of using SETQ when we need SETF
-    (when (listp n)
-      (error 'not-synthesisable :hint "Do you need SETF instead of SETQ?"))
+  ;; catch the common mistake of using SETQ when we need SETF
+  (when (listp n)
+    (error 'not-synthesisable :hint "Did you mean SETF instead of SETQ?"))
 
-    ;; catch assigning to a non-variable
-    (unless (symbolp n)
-      (error 'not-synthesisable :hint "Assignment target is not a variable"))
+  ;; catch assigning to a non-variable
+  (unless (symbolp n)
+    (error 'not-synthesisable :hint "Assignment target is not a variable"))
 
-    (let ((read (read-variables v)))
-      (add-dependencies n read)
-      (set-variable-property n 'written t))))
-
-
-(defmethod synthesise-sexp ((fun (eql 'setq)) args)
-  (synthesise `(setf ,@args)))
+  (let ((read (read-variables v)))
+    (add-dependencies n read)
+    (set-variable-property n 'written t)))
 
 
-;; ---------- Parallel SETQ ----------
+(defpassmethod synthesise (setq &rest args)
+  (:same-as setf))
+
+
+;;; ---------- Parallel SETQ ----------
 
 (defcoremacro/vl psetq (&rest var-vals)
   "Update variables to values in parallel.
@@ -138,94 +135,77 @@ generalised places."
 			      vars tempvars)))))))))
 
 
-;; ---------- setf (generalised places) ----------
+;;; ---------- setf (generalised places) ----------
 
-(defun ensure-generalised-place (form)
-  "Ensure FORM is a generalised place."
-  (unless (generalised-place-p form)
-    (error 'not-synthesisable :hint "Make sure the target of the assignment is a generalised, SETF-able, place")))
-
-
-(defmethod read-variables-sexp ((fun (eql 'setf)) args)
-  (declare (optimize debug))
-  (destructuring-bind (place val &key sync)
-      args
-    (if (listp place)
-	(destructuring-bind (selector &rest selectorargs)
-	    place
-
-	  (union (read-variables val)
-		 (read-variables-setf selector val selectorargs)))
-
-	;; a SETF to a simple variable is a SETQ
-	(read-variables val))))
-
-
-(defmethod compute-dependencies-sexp ((fun (eql 'setf)) args)
+(defpassmethod read-variables (setf place val &key sync)
   (declare (optimize debug))
 
-  (destructuring-bind (place val &key sync)
-      args
+  (if (listp place)
+      (union (read-variables val)
+	     (read-variables-setf place))
 
-    (if (listp place)
-	(destructuring-bind (selector &rest selectorargs)
-	    place
-
-	  (let ((written (written-variables-setf selector val selectorargs))
-		(read (read-variables-setf selector val selectorargs)))
-
-	    (dolist (n written)
-	      (add-dependencies n read)
-	      (set-variable-property n 'written t))))
-
-	;; a SETF applied to a variable is just a SETQ
-	(compute-dependencies `(setq ,place ,val :sync ,sync)))))
+      ;; a SETF to a simple variable is a SETQ
+      (read-variables val)))
 
 
-(defmethod compute-type-sexp ((fun (eql 'setf)) args)
-  (destructuring-bind (place val &key sync)
-      args
-    (compute-type place)
-    (compute-type val)))
+(defpassmethod read-variables-setf (setf place val &key sync)
+  (union (read-variables place
+	 (read-variables val))))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'setf)) args)
-  (destructuring-bind (place val &key sync)
-      args
+(defpassmethod compute-dependencies (setf place val &key sync)
+  (declare (optimize debug))
 
-    ;; ensure we can do the assignment
-    (ensure-generalised-place place)
+  (if (listp place)
+      (let ((written (written-variables-setf place))
+	    (read (union (read-variables-setf place)
+			 (read-variables val))))
 
-    ;; ensure the types match
-    (let* ((tyvar (compute-type place))
-	   (tyval (compute-type val)))
-      (ensure-subtype tyval tyvar))
+	(dolist (n written)
+	  (add-dependencies n read)
+	  (set-variable-property n 'written t)))
 
-    (apply-type-constraints place)
-    (apply-type-constraints val)))
+      ;; a SETF applied to a variable is just a SETQ
+      (compute-dependencies `(setq ,place ,val :sync ,sync))))
 
 
-(defmethod synthesise-sexp ((fun (eql 'setf)) args)
-  (destructuring-bind (var val &key (sync nil))
-      args
-    (if (in-module-context-p)
-	;; outermost in a module
-	(progn
-	  (as-literal "assign ")
-	  (synthesise var)
-	  (as-literal " = ")
-	  (synthesise val))
+(defpassmethod compute-type (setf place val &key sync)
+  (compute-type place)
+  (compute-type val))
 
-	;; elsewhere (in a block)
-	(progn
-	  (synthesise var)
-	  (if (and (in-synchronous-block-context-p)
-		   (not sync))
-	      ;; use non-blocking assignment
-	      (as-literal " <= ")
 
-	      ;; use blocking assignment
-	      (as-literal " = "))
-	  (synthesise val)))
+(defpassmethod apply-type-constraints (setf place val &key sync)
+  ;; ensure we can do the assignment
+  (ensure-generalised-place place)
 
-    (as-literal ";")))
+  ;; ensure the types match
+  (let* ((tyvar (compute-type place))
+	 (tyval (compute-type val)))
+    (ensure-subtype tyval tyvar))
+
+  (apply-type-constraints place)
+  (apply-type-constraints val))
+
+
+(defpassmethod synthesise (setf var val &key sync)
+  (if (in-module-context-p)
+      ;; outermost in a module
+      (progn
+	(as-literal "assign ")
+	(synthesise var)
+	(as-literal " = ")
+	(synthesise val))
+
+      ;; elsewhere (in a block)
+      (progn
+	(synthesise var)
+	(if (and (in-synchronous-block-context-p)
+		 (not sync))
+	    ;; use non-blocking assignment
+	    (as-literal " <= ")
+
+	    ;; use blocking assignment
+	    (as-literal " = "))
+	(synthesise val)))
+
+  (as-literal ";"))

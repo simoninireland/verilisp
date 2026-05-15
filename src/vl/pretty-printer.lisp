@@ -1,27 +1,27 @@
-;; A simple pretty -printer for block-structured languages
-;;
-;; Copyright (C) 2024 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; A simple pretty -printer for block-structured languages
+;;;;
+;;;; Copyright (C) 2024 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
 
-;; ---------- Streams and indentation ----------
+;;; ---------- Streams and indentation ----------
 
 (defvar *synthesis-stream* *standard-output*
   "Stream receiving the logical blocks.")
@@ -48,7 +48,7 @@ to *INDENTATION-LEVEL*.")
 		       *indentation*)))
 
 
-;; ---------- Helper macros ----------
+;;; ---------- Helper macros ----------
 
 (defmacro with-synthesis-to-stream (str &body body)
   "Send all code synthesised in the BODY forms to STR."
@@ -62,25 +62,25 @@ to *INDENTATION-LEVEL*.")
      ,@body))
 
 
-;; ---------- Pretty-printing forms ----------
+;;; ---------- Pretty-printing forms ----------
 
-;; The pretty-printer understands several different structures:
-;;
-;; - Inline literals, printed one after the other (as-literal)
-;; - Inline lists, printed one a line with a separator (as-list)
-;; - Body forms, printed on separate lines with pre and post (as-block)
-;; - Argument lists, printed on seperate lines with pre and post (as-argument-list)
-;; - Operators, with the operator between elements of an line list (as-infix)
-;;
-;; Each makes use of four lower-level functions:
-;;
-;; - Printing an individual inline form (as-form)
-;; - A set of forms separated by newlines (as-block-forms)
-;; - A set of forms on the same line (as-inline-forms)
-;; - A newline (as-newline)
-;;
-;; Each of these functions can take a processor to generate the
-;; actual form (synthesise by default).
+;;; The pretty-printer understands several different structures:
+;;;
+;;; - Inline literals, printed one after the other (as-literal)
+;;; - Inline lists, printed one a line with a separator (as-list)
+;;; - Body forms, printed on separate lines with pre and post (as-block)
+;;; - Argument lists, printed on seperate lines with pre and post (as-argument-list)
+;;; - Operators, with the operator between elements of an line list (as-infix)
+;;;
+;;; Each makes use of four lower-level functions:
+;;;
+;;; - Printing an individual inline form (as-form)
+;;; - A set of forms separated by newlines (as-block-forms)
+;;; - A set of forms on the same line (as-inline-forms)
+;;; - A newline (as-newline)
+;;;
+;;; Each of these functions can take a processor to generate the
+;;; actual form (synthesise by default).
 
 
 (defun as-form (arg &key (process #'synthesise))

@@ -1,27 +1,27 @@
-;; Tests of control flow
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Tests of control flow
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/test)
 (in-suite verilisp/vl)
 
 
-;; ---------- PROGN ----------
+;;; ---------- PROGN ----------
 
 (test test-progn-type
   "Test we can typecheck a PROGN correctly."
@@ -52,7 +52,7 @@
 
 (test test-synthesise-progn
   "Test we can synthesise PROGN forms."
-  (is (vl::synthesise '(progn
+  (is (vl::synthesise/vl '(progn
 		       (setf a 5)
 		       (setf b 34)))))
 
@@ -93,7 +93,7 @@
 		     '(b c))))))
 
 
-;; ---------- @ ----------
+;;; ---------- @ ----------
 
 (test test-typecheck-at
   "Test we can type-check triggered blocks."
@@ -154,7 +154,7 @@
 			     (setq a clk))))))
     (vl::with-new-frame
       (vl::typecheck p)
-      (is (vl::synthesise p)))))
+      (is (vl::synthesise/vl p)))))
 
 
 (test test-synthesise-wire-singleton
@@ -166,7 +166,7 @@
 			     (setq a clk))))))
     (vl::with-new-frame
       (vl::typecheck p)
-      (is (vl::synthesise p)))))
+      (is (vl::synthesise/vl p)))))
 
 
 (test test-synthesise-wire-trigger
@@ -178,7 +178,7 @@
 			     (setq a clk))))))
     (vl::with-new-frame
       (vl::typecheck p)
-      (is (vl::synthesise p)))))
+      (is (vl::synthesise/vl p)))))
 
 
 (test test-at-dependencies
@@ -214,7 +214,7 @@
 		     '(b c clk))))))
 
 
-;; ---------- Accesses ----------
+;;; ---------- Accesses ----------
 
 (test test-progn-accesses
   "Test we can extract variable accesses from a PROGN."

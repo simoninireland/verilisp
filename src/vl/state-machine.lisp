@@ -1,27 +1,27 @@
-;; State machine construction
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; State machine construction
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
 
-;; ---------- State representation ----------
+;;; ---------- State representation ----------
 
 (defclass state ()
   ((label
@@ -47,7 +47,7 @@
 
 (defmethod initialize-instance :after ((s state) &key label &allow-other-keys)
   (unless label
-    ;; no label given, construct oe and mark it as synthetic
+    ;; no label given, construct one and mark it as synthetic
     (setf (slot-value s 'label) (gensym))
     (setf (slot-value s 'synthetic-p) t)))
 
@@ -65,7 +65,7 @@ with successors will have a GO appended to them."
   (not (null (successor-state state))))
 
 
-;; ---------- Jump targets ----------
+;;; ---------- Jump targets ----------
 
 (defvar *jump-targets* nil
   "Set of jump targets in the current machine synthesis.
@@ -88,7 +88,7 @@ A jump target is a state label that is the target of a GO expression.")
   (member label  *jump-targets*))
 
 
-;; ---------- TAGBODY ----------
+;;; ---------- TAGBODY ----------
 
 (defun state-label-p (form)
   "Test whether FORM is a new state label.
@@ -124,10 +124,10 @@ corresponding state body."
     (reverse (foldr #'extract-state forms '()))))
 
 
-(defmethod compute-type-sexp ((fun (eql 'tagbody)) args)
+(defpassmethod compute-type (tagbody &rest body)
   (declare (optimize debug))
 
-  (let* ((states (extract-states args))
+  (let* ((states (extract-states body))
 	 (state-labels (mapcar #'car states))
 	 (state-bodies (mapcar #'cdr states)))
 
@@ -145,22 +145,32 @@ corresponding state body."
       t)))
 
 
-(defmethod read-variables-sexp ((fun (eql 'tagbody)) args)
+(defpassmethod read-variables (tagbody &rest body)
   (foldr (lambda (deps form)
 	   (if (state-label-p form)
 	       deps
 	       (union deps (read-variables form))))
-	 args '()))
+	 body '()))
 
 
-(defmethod compute-dependencies-sexp ((fun (eql 'tagbody)) args)
-  (let* ((states (extract-states args))
+(defpassmethod compute-dependencies (tagbody &rest body)
+  (let* ((states (extract-states body))
 	 (state-bodies (mapcar #'cdr states)))
 
     ;; compute-type the bodies
     (dolist (b state-bodies)
       (compute-dependencies (with-implicit-progn b)))))
 
+
+;;; ---------- State machine transformation ----------
+
+;;; We elaborate TAGBODY-style state machies in CASE-style machines that
+;;; can be directly synthesised. This involes a lot of processing, to identify
+;;; states and the appropriate transitions.
+;;;
+;;; States may also be synthesised if required to ensure dataflow consistency.
+
+;;; TODO: Rewrite this function as a pass (will require more machinery in the DSL)
 
 (defgeneric parse-tagbody-forms-sexp (fun args forms current-state exit-state)
   (:documentation "Parse FUN applied to ARGS.
@@ -215,10 +225,6 @@ the entry state first.")
 	    (if trailing-states
 		trailing-states))))
 
-
-(defun name (args)
-  "doc"
-  )
 
 (defmethod parse-tagbody-forms-sexp ((fun (eql 'if)) args forms current-state exit-state)
   (declare (optimize debug))
@@ -451,7 +457,7 @@ looping macros like FOREVER, to keep the machine running."
     (append states (list passive-state))))
 
 
-;; TODO: Do this before linking states above
+;;; TODO: Do this before linking states above
 
 (defun merge-state-machine-empty-states (machine)
   "Return an alist mapping states in MACHINE to only the necessary states.
@@ -556,11 +562,11 @@ Return LABEL if the the state is not merged."
 			 ,@clauses)))))))
 
 
-(defmethod elaborate-state-machines-sexp ((fun (eql 'tagbody)) args)
+(defpassmethod elaborate-state-machines (tagbody &rest body)
   (declare (optimize debug))
 
   (destructuring-bind (newbody newenv)
-      (float-let-blocks (with-implicit-tagbody args))
+      (float-let-blocks (with-implicit-tagbody body))
 
     (destructuring-bind (newfun &rest newargs)
 	newbody
@@ -573,7 +579,7 @@ Return LABEL if the the state is not merged."
       ;; ones in scope when the code was analysed, with others beng created
       ;; by SYNTHESISE-STATE-MACHINE. which adds the necessary types and
       ;; representations directly
-
+      ;;
       ;; We put the state machine synthesis into its own frame so that
       ;; it can declare the state variable and merge table metavariables
       ;; for use in its own further transformation.
@@ -599,13 +605,12 @@ Return LABEL if the the state is not merged."
 	  (elaborate-state-machines p))))))
 
 
-;; ---------- GO ----------
+;;; ---------- GO ----------
 
-(defmethod compute-type-sexp ((fun (eql 'go)) args)
+(defpassmethod compute-type (go label)
   (declare (optimize debug))
 
-  (let* ((label (car args))
-	 (merged-states (if (variable-declared-p 'tagbody-merged-states)
+  (let* ((merged-states (if (variable-declared-p 'tagbody-merged-states)
 			    (get-initial-value 'tagbody-merged-states)))
 
 	 ;; re-write label if we have a merge table
@@ -621,16 +626,17 @@ Return LABEL if the the state is not merged."
     t))
 
 
-(defmethod compute-dependencies-sexp ((fun (eql 'go)) args))
+(defpassmethod compute-dependencies (go label)
+  nil)
 
 
-(defmethod read-variables-sexp ((fun (eql 'go)) args)
+(defpassmethod read-variables (go label)
   '())
 
 
-(defmethod elaborate-state-machines-sexp ((fun (eql 'go)) args)
+(defpassmethod elaborate-state-machines (go label)
   (let* ((merged-states (get-initial-value 'tagbody-merged-states))
-	 (state-label (get-label-from-merged-states (car args) merged-states))
+	 (state-label (get-label-from-merged-states label merged-states))
 	 (state-variable (get-initial-value 'tagbody-state-variable)))
 
     `(setq ,state-variable ,state-label)))

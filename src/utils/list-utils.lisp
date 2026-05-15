@@ -1,25 +1,25 @@
-;; Helper functions and macros
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Helper functions and macros
+;;;;
+;;;; Copyright (C) 2024--2025 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/utils)
 
-;; ---------- Searching lists for non-nil ----------
+;;; ---------- Searching lists for non-nil ----------
 
 (defun index-non-nil (l)
   "Return the index (0-based) of the first non-nil element of sequnce L."
@@ -43,14 +43,14 @@ next nil element of the end of the sequence."
     (subseq l i)))
 
 
-;; ---------- Remove duplicates and nil values from a sequence ----------
+;;; ---------- Remove duplicates and nil values from a sequence ----------
 
 (defun uniquify (s)
   "Remove duplicates and nils from sequence S."
   (remove-if #'null (remove-duplicates s)))
 
 
-;; ---------- Increasing and decreasing list nesting ----------
+;;; ---------- Increasing and decreasing list nesting ----------
 
 (defun listify (l)
   "Wrap each element of L in a singleton list."
@@ -75,7 +75,14 @@ So (FLATTEN1 '((1 2) (3 (4)))) evaluates to (1 2 3 (4)), and
     (foldr #'append1 l '())))
 
 
-;; ---------- Zipping in the presence of null ----------
+(defun safe-list (l)
+  "If L is a list, return it; otherwise make it a singleton list."
+  (if (listp l)
+      l
+      (list l)))
+
+
+;;; ---------- Zipping in the presence of null ----------
 
 (defun zip (l1 l2)
   "Zip corresponding elements of L1 and L2.
@@ -107,7 +114,37 @@ If either element is null, the pair is omitted."
 	      (zip-without-null (cdr xs) (cdr ys))))))
 
 
-;; ---------- Alists with non-list elements (i.e., decls) ----------
+; ---------- Folds ----------
+
+;; These are just wrappers around REDUCE, but I find them easier to remember.
+
+(defun foldl (fun l init)
+  "Fold the values of L left through FUN, starting with initial value INIT."
+  (reduce fun l :from-end t :initial-value init))
+
+
+(defun foldr (fun l init)
+  "Fold the values of L rightwards through FUN, starting with INIT."
+  (reduce fun l :initial-value init))
+
+
+(defun foldr-over-null (fun l init)
+  "Fold FUN right over L starting with INIT, ignoring nulls.
+
+This is like FOLDR except that a null in either the accumulated total
+or one of the values automatically returns the other value."
+  (flet ((fun-null (a v)
+	   (cond ((null a)
+		  v)
+		 ((null v)
+		  a)
+		 (t
+		  (funcall fun a v)))))
+
+    (foldr #'fun-null l init)))
+
+
+;;; ---------- Alists with non-list elements (i.e., decls) ----------
 
 (defun assoc-decls (n decls)
   "Find the binding of N in DECLS.
@@ -126,14 +163,14 @@ Return with the association or the matching singleton element."
     nil))
 
 
-;; ---------- Filtering nulls ----------
+;;; ---------- Filtering nulls ----------
 
 (defun remove-nulls (l)
   "Remove all sub-lists of L that are nil."
   (remove-if #'null l))
 
 
-;; ---------- Set testing ----------
+;;; ---------- Set testing ----------
 
 (defun set-p (s &key (test #'eql) (key #'identity))
   "Test whether S is a set, composed of elaments unequal to any other.
@@ -178,8 +215,14 @@ is IDENTITY, testing the values themselves."
 	     counts '()))))
 
 
+;;; ---------- Set operations ---------
 
-;; ---------- Pairwise application across several sets ----------
+(defun union-all (sets)
+  "Union all of SETS."
+  (foldr #'union sets '()))
+
+
+;;; ---------- Pairwise application across several sets ----------
 
 (defun pairwise (f l1 l2)
   "Apply F pairwise to the elements of L1 and L2.
@@ -194,7 +237,7 @@ have the same length."
   (pairwise #'union p1 p2))
 
 
-;; ---------- Repetition ----------
+;;; ---------- Repetition ----------
 
 (defun n-copies (l n)
   "Return a list consisting of N copies of L.
@@ -208,7 +251,7 @@ L may be an atom or a list, including NIL."
 	  (iota n)))
 
 
-;; ---------- Filtering on multiple predicates ----------
+;;; ---------- Filtering on multiple predicates ----------
 
 (defun filter-by-predicates (l &rest predicates)
   "Return sub-lists of L matching PREDICATES.
@@ -218,8 +261,8 @@ Each sub-list consists of all the elements of L that match
 the corresponding predicate.
 
 If an element of L satisfies several of PREDICATES it
-will appear several times, in each list. If elekents of L
-are duplicated, each suplicate will appear."
+will appear several times, in each list. If elements of L
+are duplicated, each duplicate will appear."
   (mapcar (lambda (pred)
 	    (remove-if (lambda (v)
 			 (not (funcall pred v)))
@@ -227,9 +270,9 @@ are duplicated, each suplicate will appear."
 	  predicates))
 
 
-;; ---------- Second element of pair or list ----------
+;;; ---------- Second element of pair or list ----------
 
-;; Neither of `elt' or `cadr' ar safe when applied to pairs.
+;;; Neither of `elt' or `cadr' are safe when applied to pairs.
 
 (defun safe-cadr (l)
   "Return the second element of L.
@@ -247,30 +290,32 @@ L can be a list or a pair."
       l))
 
 
+(defun safe-cdr (l)
+  "Return the cdr of L if it is a list, or NIL."
+  (if (listp l)
+      (cdr l)))
+
+
 (defun safe-car-cdr (l)
   "Return a list of the car of L and its cdr (as a list).
 
 If L is not a list, return a list of L and nil. If L is
 a pair, its cdr is returned as a list anyway."
-  (if (listp l)
-      (list (car l) (let ((ls (cdr l)))
-		      (cond ((null ls)
-			     (list '()))
-			    ((listp ls)
-			     ls)
-			    (t
-			     (list ls)))))
-      (list l)))
+  (list (safe-car l)
+	(let ((c (safe-cdr l)))
+	  (if (listp c)
+	      c
+	      (list c)))))
 
 
-;; ---------- Flat maps ----------
+;;; ---------- Flat maps ----------
 
 (defun mapappend (f &rest ls)
   "Apply F to all elements of lists LS at whatever depth, returning a flat list of results."
   (flatten (mapcar f (flatten ls))))
 
 
-;; ---------- A map returning only the last result ----------
+;;; ---------- A map returning only the last result ----------
 
 ;; this could be a lot more optimised
 (defun mapn (fun &rest lists)
@@ -284,37 +329,7 @@ The name MAPN is supposed to bring to mind the behaviour of PROGN."
 	(car (last res)))))
 
 
-;; ---------- Folds ----------
-
-;; These are just wrappers around REDUCE, but I find them easier to remember.
-
-(defun foldl (fun l init)
-  "Fold the values of L left through FUN, starting with initial value INIT."
-  (reduce fun l :from-end t :initial-value init))
-
-
-(defun foldr (fun l init)
-  "Fold the values of L rightwards through FUN, starting with INIT."
-  (reduce fun l :initial-value init))
-
-
-(defun foldr-over-null (fun l init)
-  "Fold FUN right over L starting with INIT, ignoring nulls.
-
-This is like FOLDR except that a null in either the accumulated total
-or one of the values automatically returns the other value."
-  (flet ((fun-null (a v)
-	   (cond ((null a)
-		  v)
-		 ((null v)
-		  a)
-		 (t
-		  (funcall fun a v)))))
-
-    (foldr #'fun-null l init)))
-
-
-;; ---------- max and min in the presence of null ----------
+;;; ---------- max and min in the presence of null ----------
 
 (defun max-null (&rest vs)
   "Return the maximum of values VS, where NIL is less than any value."
@@ -326,7 +341,7 @@ or one of the values automatically returns the other value."
   (foldr-over-null #'min vs nil))
 
 
-;; ---------- Sub-lists ----------
+;;; ---------- Sub-lists ----------
 
 (defun sublist (l start &optional end)
   "Extract the sub-list of L starting at START and ending at END or the end."
@@ -397,7 +412,7 @@ decision.
     (fil l)))
 
 
-;; ---------- Alist access, updating, and merging ----------
+;;; ---------- Alist access, updating, and merging ----------
 
 (defun alist-keys (al)
   "Return the keys in alist AL."

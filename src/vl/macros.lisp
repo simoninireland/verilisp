@@ -1,27 +1,35 @@
-;; Macro definition macros
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Macro definition macros
+;;;;
+;;;; Copyright (C) 2024--20256 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
+;;; Macro definition. We can't simply inherit Lisp's macros because they
+;;; can't be guaranteed to generate valid Verilisp, so we re-create the
+;;; macros we want explicitly.
+;;;
+;;; Some macros are core, defined in the core environment and so
+;;; always available; others are defined in the global environment;
+;;; and others are "local" to other macros.
 
-;; ---------- Environment management----------
+
+;;; ---------- Environment management----------
 
 (defun declare-macro (m f)
   "Declare M as a macro with body F in the current environment."
@@ -35,7 +43,7 @@
        (eql (get-representation m) 'macro)))
 
 
-;; ---------- Declaration ----------
+;;; ---------- Declaration ----------
 
 (defun translate-lambda-list (l)
   "Translate a macro-style lambda-list L to a function-style lambda-list.
@@ -85,6 +93,8 @@ rise to an error, not a warning."
 				   ,tll
 				 ,@body))))))
 
+
+;;; TODO: We should do SYMBOL-MACROLET/VL as well
 
 (defmacro macrolet/vl (decls &body body)
   "Declare the macros in DECLS within BODY.

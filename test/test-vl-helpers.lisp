@@ -21,7 +21,7 @@
 (in-suite verilisp/vl)
 
 
-;; ---------- with-rtl-errors-not-synthesisable ----------
+;; ---------- with-vl-errors-not-synthesisable ----------
 
 (test test-helper-errors
   "Test we trap non-Verilisp errors."
@@ -38,13 +38,13 @@
 				   (setq b (+ 12 2)))))))
 
 
-;; ---------- with-unknown-form ----------
+;; ---------- Unknown forms ----------
 
 (test test-unknown-form
-  "Test we can trap unknown forms."
-  (signals (vl::unknown-form)
+  "Test we detect unknown forms."
+  (signals (dsl::unknown-form)
     (vl::typecheck (vl::expand/vl '(let (a)
-				  (blig 34))))))
+				    (blig 34))))))
 
 
 ;; ---------- with-recover-on-error ----------

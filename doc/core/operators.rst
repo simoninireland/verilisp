@@ -41,6 +41,15 @@ Bitwise operators
 | ``lognot``    + ``(lognot a)``               |
 +---------------+------------------------------+
 
+There is also an additional operator, not needed in Common Lisp, that
+converts a value that is true when non-zero.
+
++----------------+----------------------------+
+| Operator       | Example                    |
++================+============================+
+| ``asserted-p`` + ``(asserted-p v)``         |
++----------------+----------------------------+
+
 
 Bitwise shift operators
 -----------------------

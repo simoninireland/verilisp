@@ -20,6 +20,9 @@
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
+;;; Array types, constructors, and access.
+;;; An array is accessed using AREF, which is a generic place suitable for SETF.
+
 
 ;;; ---------- Array type ----------
 
@@ -94,6 +97,8 @@
 
 ;;; ---------- Array initialisation data ----------
 
+;;; TODO: Should allow multi-dimensionsal shapes
+
 (defun valid-array-shape-p (shape)
   "Test that SHAPE is a valid array shape.
 
@@ -148,62 +153,52 @@ Verilisp, but don't *require* it."
     *default-register-width*))
 
 
-;; shape needs to be statically determinable
+(defpassmethod compute-type (make-array shape &key (initial-element 0)
+					initial-contents
+					element-type)
+  ;; skip an initial quotes, allowed for Lisp compatability
+  (unquote shape)
+  (unquote element-type)
+  (unquote initial-contents)
 
-(defmethod compute-type-sexp ((fun (eql 'make-array)) args)
-  (destructuring-bind (shape &key
-			       (initial-element 0)
-			       initial-contents
-			       element-type)
-      args
+  ;; check shape
+  (ensure-valid-array-shape shape)
 
-    ;; skip an initial quotes, allowed for Lisp compatability
-    (unquote shape)
-    (unquote element-type)
-    (unquote initial-contents)
+  ;; initialise type from the initial element unless an explicit element type is provided
+  (unless element-type
+    (setq element-type (compute-type initial-element)))
 
-    ;; check shape
-    (ensure-valid-array-shape shape)
-
-    ;; initialise type from the initial element unless an explicit element type is provided
-    (unless element-type
-      (setq element-type (compute-type initial-element)))
-
-    `(array ,element-type ,shape)))
+  `(array ,element-type ,shape))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'make-array)) args)
-  (destructuring-bind (shape &key
-			       (initial-element 0)
-			       initial-contents
-		       &allow-other-keys)
-      args
+(defpassmethod apply-type-constraints (make-array shape &key (initial-element 0)
+						  initial-contents
+						  element-type)
+  ;; skip an initial quotes, allowed for Lisp compatability
+  (unquote shape)
+  (unquote initial-contents)
 
-    ;; skip an initial quotes, allowed for Lisp compatability
-    (unquote shape)
-    (unquote initial-contents)
+  ;; initial contents must either match the size of the array
+  ;; or identify a file
+  ;; TODO: We need to type-check the initial contents, which we can't
+  ;; at the moment as we don't know the inferred element type
+  (if initial-contents
+      (if (listp initial-contents)
+	  (cond ((eql (car initial-contents) :file)
+		 ;; nothing to do at the moment
+		 t)
 
-    ;; initial contents must either match the size of the array
-    ;; or identify a file
-    ;; TODO: We need to type-check the initial contents, which we can't
-    ;; at the moment as we don;t know the inferred element type
-    (if initial-contents
-	(if (listp initial-contents)
-	    (cond ((eql (car initial-contents) :file)
-		   ;; nothing to do at the moment
-		   t)
-
-		  (t
-		   ;; check all elements of literal data
-		   (ensure-data-has-shape initial-contents shape)))))))
+		(t
+		 ;; check all elements of literal data
+		 (ensure-data-has-shape initial-contents shape))))))
 
 
-(defmethod read-variables-sexp ((fun (eql 'make-array)) args)
-  ;; can't have any free variables (I don't think)
+(defpassmethod read-variables (make-array &rest args)
   '())
 
 
-(defmethod compute-dependencies-sexp ((fun (eql 'make-array)) args))
+(defpassmethod compute-dependencies (make-array &rest args)
+  (:schema constant-form nil))
 
 
 (defun rebuild-options (ns vs)
@@ -218,8 +213,8 @@ Verilisp, but don't *require* it."
     (foldr #'key-value (zip ns vs) '())))
 
 
-;; Only works for one-dimensional arrays at the moment
-;; Should expand constants
+;;; Only works for one-dimensional arrays at the moment
+;;; TODO: xpand constants
 
 (defun synthesise-array-init-from-data (n data shape)
   "Return the initialisation of N using DATA with the given SHAPE."
@@ -332,101 +327,72 @@ probably should, for those that are statically determined."
   (cadr ty))
 
 
-(defmethod compute-type-sexp ((fun (eql 'aref)) args)
+(defpassmethod compute-type (aref place &rest indices)
+  (let ((ty (compute-type place)))
+    ;; constrain the variable
+    (add-type-constraint place `array)
+
+    (element-type-of-array ty)))
+
+
+(defpassmethod apply-type-constraints (aref place &rest indices)
+  (let ((ty (compute-type place)))
+    (ensure-subtype ty 'array)
+    (mapc (compose #'ensure-fixed-width #'compute-type) indices)))
+
+
+(defpassmethod read-variables (aref place &rest indices)
+  (let ((place-rws (if (symbolp place)
+		       ;; place targets a variable directly
+		       (list place)
+
+		       ;; place is complex, recurse into it
+		       (read-variables place)))
+	(indices-rws (union-all (mapcar #'read-variables indices))))
+
+    (union place-rws indices-rws)))
+
+
+(defpassmethod compute-dependencies (aref &rest args)
+  (dolist (n (read-variables `(aref ,@args)))
+     (set-variable-property n 'read t)))
+
+
+(defpassmethod read-variables-setf (aref place indices)
   (declare (optimize debug))
 
-  (destructuring-bind (place &rest indices)
-      args
+  (let ((val-indices (union-all (mapcar #'read-variables (safe-list indices)))))
 
-    (let ((ty (compute-type place)))
-      ;; constrain the variable
-      (add-type-constraint place `array)
+    (if (symbolp place)
+	;; place is just a symbol
+	val-indices
 
-      (element-type-of-array ty))))
-
-
-(defmethod apply-type-constraints-sexp ((fun (eql 'aref)) args)
-  (destructuring-bind (place &rest indices)
-      args
-    (let ((ty (compute-type place)))
-      (ensure-subtype ty 'array)
-      (mapc (compose #'ensure-fixed-width #'compute-type) indices))))
+	;; place is more than just a symbol, destructure again
+	(union val-indices
+	       (read-variables place)))))
 
 
-(defmethod read-variables-sexp ((fun (eql 'aref)) args)
+(defpassmethod written-variables-setf (aref place indices)
   (declare (optimize debug))
 
-  (destructuring-bind (place &rest indices)
-      args
-    (let ((place-rws (if (symbolp place)
-			 ;; place targets a variable directly
-			 (list place)
+  (if (symbolp place)
+      ;; variable, this is written to
+      (list place)
 
-			 ;; place is complex, recurse into it
-			 (read-variables place)))
-	  (indices-rws (foldr #'union (mapcar #'read-variables indices) '())))
-
-      (union place-rws indices-rws))))
+      ;; complex place, recurse into it
+      (written-variables-setf place)))
 
 
-(defmethod compute-dependencies-sexp ((fun (eql 'aref)) args)
-  (dolist (n (read-variables `(bref ,@args)))
-    (set-variable-property n 'read t)))
+(defpassmethod generalised-place-p (aref place &rest indices)
+  (generalised-place-p place))
 
 
-(defmethod read-variables-setf ((selector (eql 'aref)) val selectorargs)
-  (declare (optimize debug))
-
-  (destructuring-bind (place &rest indices)
-      selectorargs
-
-    (let ((val-indices	(union (foldr #'union (mapcar #'read-variables indices) '())
-			       (read-variables val))))
-      (if (symbolp place)
-	  val-indices
-
-	  (destructuring-bind (psel &rest pselargs)
-	      place
-	    (union val-indices
-		   (read-variables-setf psel val pselargs)))))))
-
-
-(defmethod written-variables-setf ((selector (eql 'aref)) val selectorargs)
-  (declare (optimize debug))
-
-  (destructuring-bind (place &rest indices)
-      selectorargs
-
-    (if (listp place)
-	;; complex place, recurse into it
-	(destructuring-bind (psel &rest pselargs)
-	    place
-	  (written-variables-setf psel val pselargs))
-
-	;; variable, this is written to
-	(list place))))
-
-
-(defmethod generalised-place-sexp-p ((selector (eql 'aref)) selectorargs)
-  (destructuring-bind (place &rest indices)
-      selectorargs
-    (generalised-place-p place)))
-
-
-(defmethod simple-expression-form-p-sexp ((fun (eql 'aref)) args)
+(defpassmethod simple-expression-form-p  (aref &rest args)
   (every #'simple-expression-form-p args))
 
 
-(defmethod synthesise-sexp ((fun (eql 'aref)) args)
-  (destructuring-bind (place &rest indices)
-      args
-    (synthesise place)
+(defpassmethod synthesise (aref place &rest indices)
+   (synthesise place)
     (as-literal "[ ")
     (as-list indices)
-    (as-literal " ]")))
-
-
-(defmethod lispify-sexp ((fun (eql 'aref)) args)
-  (destructuring-bind (place &rest indices)
-      args
-    `(aref ,place ,@indices)))
+    (as-literal " ]"))

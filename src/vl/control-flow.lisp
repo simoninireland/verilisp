@@ -1,29 +1,36 @@
-;; Synthesisable control flow
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Synthesisable control flow
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
+;;; PROGN is the main sequencing construct, coupled with @ blocks
+;;; (that do not appear in Common Lisp, of course) ans the
+;;; corresponding POSEDGE and NEGEDGE operators
 
-;; ---------- PROGN ----------
+;;; TODO: We should make sure the edge triggers only appear in
+;;; sensitivity lists.
 
-(defmethod compute-type-sexp ((fun (eql 'progn)) args)
+
+;;; ---------- PROGN ----------
+
+(defpassmethod compute-type (progn &rest body)
   (declare (optimize debug))
 
   (labels ((compute-type-forms (forms)
@@ -41,17 +48,18 @@
 		   ;; otherwise proceed to the next forms
 		   (compute-type-forms (cdr forms))))))
 
-    (if (= (length args) 0)
+    (if (= (length body) 0)
 	t
 
-	(compute-type-forms args))))
+	(compute-type-forms body))))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'progn)) args)
-  (dolist (form args)
+(defpassmethod apply-type-constraints (progn &rest body)
+  (dolist (form body)
     (with-recover-on-error
 	;; ignore any errors
 	t
+
       (apply-type-constraints form))))
 
 
@@ -66,18 +74,16 @@
 	 '()))
 
 
-(defmethod simplify-progn-sexp ((fun (eql 'progn)) args)
-  (destructuring-bind (&rest body)
-      args
-    (let ((newbody (mapcar #'simplify-progn body)))
-      (with-implicit-progn (simplify-progn-body newbody)))))
+(defpassmethod simplify-progn (progn &rest body)
+  (let ((newbody (mapcar #'simplify-progn body)))
+    (with-implicit-progn (simplify-progn-body newbody))))
 
 
-(defmethod synthesise-sexp ((fun (eql 'progn)) args)
-  (as-block args :indent nil))
+(defpassmethod synthesise (progn &rest body)
+  (as-block body :indent nil))
 
 
-;; ---------- Sensitive blocks ----------
+;;; ---------- Sensitive blocks ----------
 
 (defun combinatorial-trigger-p (form)
   "Test whether FORM is a combinatorial trigger.
@@ -89,36 +95,34 @@ block, and are represented by the symbol *."
        (eql (car form) '*)))
 
 
-(defmethod compute-type-sexp ((fun (eql '@)) args)
-  (destructuring-bind (sensitivities &rest body)
-      args
-    ;; We accept single variables or lists of variables as sensitivity,
-    ;; but there's an ambiguity over posedge and negedge operators, so
-    ;; we explicity check the car of any list to see whether it's
-    ;; "really" an atom
-    ;;
-    ;; These checks actually need to be slightly different, to make
-    ;; sure we identify something with wires and not just a value.
-    ;; That's not quite "compute-type-ing" in the sense we use it.
-    (if (listp sensitivities)
-	(cond ((combinatorial-trigger-p sensitivities)
-	       ;; sensitive to everything
-	       nil)
+(defpassmethod compute-type (@ sensitivities &rest body)
+  ;; We accept single variables or lists of variables as sensitivity,
+  ;; but there's an ambiguity over posedge and negedge operators, so
+  ;; we explicity check the car of any list to see whether it's
+  ;; "really" an atom
+  ;;
+  ;; These checks actually need to be slightly different, to make
+  ;; sure we identify something with wires and not just a value.
+  ;; That's not quite "compute-type-ing" in the sense we use it.
+  (if (listp sensitivities)
+      (cond ((combinatorial-trigger-p sensitivities)
+	     ;; sensitive to everything
+	     nil)
 
-	      ((edge-trigger-p sensitivities)
-	       ;; a single instance of a trigger operator
-	       (compute-type sensitivities))
+	    ((edge-trigger-p sensitivities)
+	     ;; a single instance of a trigger operator
+	     (compute-type sensitivities))
 
-	      (t
-	       ;; a list of sensitivities
-	       (dolist (s sensitivities)
-		 (compute-type s))))
+	    (t
+	     ;; a list of sensitivities
+	     (dolist (s sensitivities)
+	       (compute-type s))))
 
-	;; an atom
-	(compute-type sensitivities))
+      ;; an atom
+      (compute-type sensitivities))
 
-    ;; check the body in the outer environment
-    (compute-type (with-implicit-progn body))))
+  ;; check the body in the outer environment
+  (compute-type (with-implicit-progn body)))
 
 
 (defun read-variables-sensitivities (sensitivities)
@@ -136,7 +140,7 @@ This includes all the named variables, and excluses the * wildcard."
 
 		       (t
 			;; a list of sensitivities
-			(foldr #'union (mapcar #'read-variables sensitivities) '())))
+			(union-all (mapcar #'read-variables sensitivities))))
 
 		 ;; an atom
 		 (read-variables sensitivities))))
@@ -145,58 +149,51 @@ This includes all the named variables, and excluses the * wildcard."
     (set-difference rws (list '*))))
 
 
-(defmethod read-variables-sexp ((fun (eql '@)) args)
+(defpassmethod read-variables (@ sensitivities &rest body)
   (declare (optimize debug))
 
-  (destructuring-bind (sensitivities &rest body)
-      args
-
-    (let ((s-rws (read-variables-sensitivities sensitivities))
-	  (v-rws (read-variables (with-implicit-tagbody body))))
-      (union s-rws v-rws))))
+  (let ((s-rws (read-variables-sensitivities sensitivities))
+	(v-rws (read-variables (with-implicit-tagbody body))))
+    (union s-rws v-rws)))
 
 
-(defmethod compute-dependencies-sexp ((fun (eql '@)) args)
-  (dolist (n (read-variables-sensitivities args))
+(defpassmethod compute-dependencies (@ sensitivities &rest body)
+  (dolist (n (read-variables-sensitivities sensitivities))
     (set-variable-property n 'read t))
 
-  (compute-dependencies (with-implicit-progn args)))
+  (compute-dependencies (with-implicit-progn body)))
 
 
-(defmethod simplify-progn-sexp ((fun (eql '@)) args)
-  (destructuring-bind ((&rest sensitivities) &rest body)
-      args
-    (let ((newbody (mapcar #'simplify-progn body)))
-      `(@ ,sensitivities ,@(simplify-progn-body newbody)))))
+(defpassmethod simplify-progn (@ sensitivities &rest body)
+  (let ((newbody (mapcar #'simplify-progn body)))
+    `(@ ,sensitivities ,@(simplify-progn-body newbody))))
 
 
-(defmethod synthesise-sexp ((fun (eql '@)) args)
+(defpassmethod synthesise (@ sensitivities &rest body)
   (declare (optimize debug))
-  (destructuring-bind (sensitivities &rest body)
-      args
-    (if (combinatorial-trigger-p sensitivities)
-	;; luteral expansion for combinatoreial blocks
-	(as-literal "always @(*)")
+  (if (combinatorial-trigger-p sensitivities)
+      ;; luteral expansion for combinatoreial blocks
+      (as-literal "always @(*)")
 
-	;; expand specified wires
-	(as-list (if (listp sensitivities)
-		     (if (edge-trigger-p sensitivities)
-			 ;; an edge trigger, synthesise as an operator
-			 (list sensitivities)
+      ;; expand specified wires
+      (as-list (if (listp sensitivities)
+		   (if (edge-trigger-p sensitivities)
+		       ;; an edge trigger, synthesise as an operator
+		       (list sensitivities)
 
-			 ;; a list of triggers, synthesise as a list
-			 sensitivities)
+		       ;; a list of triggers, synthesise as a list
+		       sensitivities)
 
-		     ;; a single trigger, synthesise as a list
-		     (list sensitivities))
-		 :before "always @(" :after ")"))
-    (as-newline)
+		   ;; a single trigger, synthesise as a list
+		   (list sensitivities))
+	       :before "always @(" :after ")"))
+  (as-newline)
 
-    (as-block body :before "begin" :after "end" :always t)
-    (as-blank-line)))
+  (as-block body :before "begin" :after "end" :always t)
+  (as-blank-line))
 
 
-;; ---------- Triggers ----------
+;;; ---------- Triggers ----------
 
 (defun edge-trigger-p (form)
   "Test whether FORM is an edge trigger expression."
@@ -204,46 +201,37 @@ This includes all the named variables, and excluses the * wildcard."
        (member (car form) '(posedge negedge))))
 
 
-(defmethod compute-type-sexp ((fun (eql 'posedge)) args)
+(defpassmethod compute-type (posedge v)
   'bit)
 
 
-(defmethod read-variables-sexp ((fun (eql 'posedge)) args)
-  (read-variables (car args)))
+(defpassmethod read-variables (posedge v)
+  (read-variables v))
 
 
-(defmethod compute-dependencies-sexp ((fun (eql 'posedge)) args)
-  (let ((n (car args)))
-    (set-variable-property n 'read t)))
+(defpassmethod compute-dependencies (posedge n)
+  (set-variable-property n 'read t))
 
 
-(defmethod synthesise-sexp ((fun (eql 'posedge)) args)
-  (destructuring-bind (pin)
-      args
-    (as-literal"posedge(")
-    (synthesise pin)
-    (as-literal ")")))
+(defpassmethod synthesise (posedge v)
+  (as-literal"posedge(")
+  (synthesise v)
+  (as-literal ")"))
 
 
-(defmethod compute-type-sexp ((fun (eql 'negedge)) args)
-  (destructuring-bind (pin)
-      args
-    (set-variable-property pin 'read t)
-    'bit))
+(defpassmethod compute-type (negedge v)
+  (:same-as posedge))
 
 
-(defmethod read-variables-sexp ((fun (eql 'negedge)) args)
-  (read-variables (car args)))
+(defpassmethod read-variables (negedge v)
+  (:same-as posedge))
 
 
-(defmethod compute-dependencies-sexp ((fun (eql 'negedge)) args)
-  (let ((n (car args)))
-    (set-variable-property n 'read t)))
+(defpassmethod compute-dependencies (negedge n)
+  (:same-as posedge))
 
 
-(defmethod synthesise-sexp ((fun (eql 'negedge)) args)
-  (destructuring-bind (pin)
-      args
-    (as-literal "negedge(")
-    (synthesise pin)
-    (as-literal")")))
+(defpassmethod synthesise (negedge v)
+  (as-literal"negedge(")
+  (synthesise v)
+  (as-literal ")"))

@@ -1,21 +1,21 @@
-;; Tests of references to variables
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Tests of references to variables
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/test)
 (in-suite verilisp/vl)
@@ -46,8 +46,7 @@
     (let ((s (make-array '(0) :element-type 'base-char
 			      :fill-pointer 0 :adjustable t)))
       (with-output-to-string (str s)
-	(vl::with-synthesis-to-stream str
-	  (vl::synthesise p)))
+	(vl::synthesise/vl p str))
 
       ;; check for no illegal identifiers -- rough, just
       ;; using a pattern search
@@ -72,8 +71,7 @@
   (let ((s (make-array '(0) :element-type 'base-char
 			    :fill-pointer 0 :adjustable t)))
     (with-output-to-string (str s)
-      (vl::with-synthesis-to-stream str
-	(vl::synthesise (vl::get-module 'clock/123))))
+      (vl::synthesise/vl (vl::get-module 'clock/123) str))
 
     ;; check for no illegal identifiers -- rough, just
     ;; using a pattern search
@@ -85,6 +83,8 @@
 
 (test test-legalise-modules-instanciate
   "Test that we synthesise module instanciation correctly."
+  (declare (optimize debug))
+
   (vl::clear-global-environment)
 
   (defmodule/vl clock/123 (clk-in
@@ -110,8 +110,7 @@
 
     (vl::typecheck p)
     (with-output-to-string (str s)
-      (vl::with-synthesis-to-stream str
-	(vl::synthesise p)))
+      (vl::synthesise/vl p str))
 
     ;; check for no illegal identifiers -- rough, just
     ;; using a pattern search

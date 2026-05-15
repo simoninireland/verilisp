@@ -1,26 +1,32 @@
-;; Fixed-width types
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Fixed-width types
+;;;;
+;;;; Copyright (C) 2024--2025 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 
+;;; We re-use the Common Lisp fixed-width types like UNSIGNED--BYTE, but
+;;; we need more flexible checking and manipulation.
 
-;; ---------- Fixed-width integers ----------
+;;; TODO: Change the ways that the extensible sub-typing works to
+;;; be more like passes
+
+
+;;; ---------- Fixed-width integers ----------
 
 (defmethod subtype-type ((ty1tag (eql 'unsigned-byte)) ty1args
 			 (ty2tag (eql 'unsigned-byte)) ty2args)
@@ -93,9 +99,9 @@
 			 :got ty)))
 
 
-;; ---------- Representability ----------
+;;; ---------- Representability ----------
 
-;; Fixed-width types are representable if they have positive widths
+;;; Fixed-width types are representable if they have positive widths
 
 (defmethod representable-type-sexp-p ((tytag (eql 'unsigned-byte)) tyargs)
   (if (not (null tyargs))
@@ -113,7 +119,7 @@
 	(> w 0))))
 
 
-;; ---------- Least upper-bound ----------
+;;; ---------- Least upper-bound ----------
 
 (defmethod lub-type ((ty1tag (eql 'unsigned-byte)) ty1args
 		     (ty2tag (eql 'unsigned-byte)) ty2args)
@@ -204,7 +210,7 @@
 	(call-next-method))))
 
 
-;; ---------- Widths ----------
+;;; ---------- Widths ----------
 
 (defun bits-for-integer (val)
   "Return the number of bits needed to represent VAL."

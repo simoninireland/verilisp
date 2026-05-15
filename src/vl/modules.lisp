@@ -87,6 +87,7 @@ why the MODULE type also includes the environment created for these names."
 		    ;; map any underlying errors to syntax errors
 		    (error 'syntax-error :form decls
 					 :hint "Make sure lambda list is well-formed"))))
+
 	(parse-ordinary-lambda-list decls))
 
     (let ((opt-names (mapcar #'safe-car opts))
@@ -225,16 +226,16 @@ Signal VALUE-MISMATCH as an error if not."
     `(module ,reqs ,opts ,keys ,(current-frame))))
 
 
-(defmethod add-frames-sexp ((fun (eql 'module)) args)
-  (destructuring-bind (modname decls &rest body)
-      args
-    (add-local-frame-to-decls decls)
-    (compute-module-local-frame decls)
+(defpassmethod add-frames (module modname decls &rest body)
+  (declare (optimize debug))
 
-    ;; return the form
-    `(module ,modname ,decls
-	     ,@(with-local-frame decls
-		 (mapcar #'add-frames body)))))
+  (add-local-frame-to-decls decls)
+  (compute-module-local-frame decls)
+
+  ;; return the form
+  `(module ,modname ,decls
+	   ,@(with-local-frame decls
+	       (mapcar #'add-frames body))))
 
 
 (defun compute-module-env (decls)
@@ -245,195 +246,150 @@ Signal VALUE-MISMATCH as an error if not."
       (add-type-constraint n ty))))
 
 
-(defmethod compute-type-sexp ((fun (eql 'module)) args)
+(defpassmethod compute-type (module modname decls &rest body)
   (declare (optimize debug))
 
-  (destructuring-bind (modname decls &rest body)
-      args
+  (with-local-frame decls
+    (compute-module-env decls)
 
-    (with-local-frame decls
-      (compute-module-env decls)
+    ;; typecheck the body of the module in its environment
+    (compute-type (with-implicit-progn body))
 
-      ;; typecheck the body of the module in its environment
-      (compute-type (with-implicit-progn body))
-
-      ;; return the interface type
-      (compute-module-interface-type decls))))
+    ;; return the interface type
+    (compute-module-interface-type decls)))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'module)) args)
+(defpassmethod apply-type-constraints (module modname decls &rest body)
   (declare (optimize debug))
 
-  (destructuring-bind (modname decls &rest body)
-      args
+  (with-local-frame decls
+    (let ((intf (compute-module-interface-type decls)))
+      (dolist (n (variables-declared-in-current-frame))
+	(if (member n (module-arguments intf))
+	    ;; constrain the variable's type (which must be representable)
+	    (let* ((constraints (get-type-constraints n))
+		   (lubty (if constraints (apply #'lub constraints))))
 
-    (with-local-frame decls
-      (let ((intf (compute-module-interface-type decls)))
-	(dolist (n (variables-declared-in-current-frame))
-	  (if (member n (module-arguments intf))
-	      ;; constrain the variable's type (which must be representable)
-	      (let* ((constraints (get-type-constraints n))
-		     (lubty (if constraints (apply #'lub constraints))))
+	      (let ((ty (get-type n)))
+		(if ty
+		    ;; check against provided type
+		    (unless (subtype-p lubty ty)
+		      (warn 'type-mismatch :expected ty
+					   :got lubty
+					   :hint "Make sure explicit type matches usage"))
 
-		(let ((ty (get-type n)))
-		  (if ty
-		      ;; check against provided type
-		      (unless (subtype-p lubty ty)
-			(warn 'type-mismatch :expected ty
-					     :got lubty
-					     :hint "Make sure explicit type matches usage"))
-
-		      ;; update the type with the constrained type
-		      (progn
-			(set-variable-property n 'type lubty)
-			(setq ty lubty)))
-
-		  ;; ensure the initial value is a valid element
-		  (if-let ((v (get-initial-value n)))
+		    ;; update the type with the constrained type
 		    (progn
-		      (ensure-subtype (compute-type v) ty)
+		      (set-variable-property n 'type lubty)
+		      (setq ty lubty)))
 
-		      ;; cascade into any initial values
-		      (apply-type-constraints v))))))))
+		;; ensure the initial value is a valid element
+		(if-let ((v (get-initial-value n)))
+		  (progn
+		    (ensure-subtype (compute-type v) ty)
 
-      ;; cascade into the body
-      (apply-type-constraints (with-implicit-progn body)))))
+		    ;; cascade into any initial values
+		    (apply-type-constraints v))))))))
+
+    ;; cascade into the body
+    (apply-type-constraints (with-implicit-progn body))))
 
 
-(defmethod read-variables-sexp ((fun (eql 'module)) args)
+(defpassmethod read-variables (module &rest args)
   '())
 
 
-(defmethod compute-dependencies-sexp ((fun (eql 'module)) args)
-  (destructuring-bind (modname decls &rest body)
-      args
-
-    (with-local-frame decls
-      (compute-dependencies (with-implicit-progn body)))))
+(defpassmethod compute-dependencies (module modname decls &rest body)
+  (with-local-frame decls
+    (compute-dependencies (with-implicit-progn body))))
 
 
-(defmethod infer-representation-sexp ((fun (eql 'module)) args)
+(defpassmethod infer-representation (module modname decls &rest body)
   (declare (optimize debug))
 
-  (destructuring-bind (modname decls &rest body)
-      args
+  (with-local-frame decls
+    ;; do representation inference in body
+    (infer-representation (with-implicit-progn body))
 
-    (with-local-frame decls
-      ;; do representation inference in body
-      (infer-representation (with-implicit-progn body))
+    ;; do direction inference on local variables (not parameters)
+    (dolist (n (remove-if (lambda (n)
+			    (eql (get-representation n) 'parameter))
+			  (variables-declared-in-current-frame)))
+      (let ((read (variable-property n 'read))
+	    (written (variable-property n 'written))
+	    (ignored (variable-property n 'ignore))
+	    (ignorable (variable-property n 'ignorable)))
 
-      ;; do direction inference on local variables (not parameters)
-      (dolist (n (remove-if (lambda (n)
-			      (eql (get-representation n) 'parameter))
-			    (variables-declared-in-current-frame)))
-	(let ((read (variable-property n 'read))
-	      (written (variable-property n 'written))
-	      (ignored (variable-property n 'ignore))
-	      (ignorable (variable-property n 'ignorable)))
+	(let ((dir (if written
+		       (if read
+			   ;; variable is read and updated
+			   'inout
 
-	  (let ((dir (if written
-			 (if read
-			     ;; variable is read and updated
-			     'inout
+			   ;; variable is just written to
+			   'out
+			   )
 
-			     ;; variable is just written to
-			     'out
-			     )
+		       (if read
+			   ;; variable is read but not updated
+			   'in
 
-			 (if read
-			     ;; variable is read but not updated
-			     'in
+			   ;; variable is neither read nor written
+			   (progn
+			     (if (not (or ignored ignorable))
+				 ;; not marked as ignored/able
+				 (warn 'unused-variable :variable n
+							:hint "Make sure variable is needed"))
 
-			     ;; variable is neither read nor written
-			     (progn
-			       (if (not (or ignored ignorable))
-				   ;; not marked as ignored/able
-				   (warn 'unused-variable :variable n
-							  :hint "Make sure variable is needed"))
+			     ;; treat as read-only
+			     'in)))))
 
-			       ;; treat as read-only
-			       'in)))))
+	  (if (and (or read written)
+		   ignored)
+	      ;; variable is used despire being marked as ignored
+	      (warn 'used-variable :variable n
+				   :hint "Why is the variable used when marked as ignored?"))
 
-	    (if (and (or read written)
-		     ignored)
-		;; variable is used despire being marked as ignored
-		(warn 'used-variable :variable n
-				     :hint "Why is the variable used when marked as ignored?"))
+	  ;; check consistency with assigned direction
+	  (if-let ((given (get-direction n)))
+	    (when (not (eql dir given))
+	      (warn 'direction-mismatch :variable n
+					:got dir
+					:expected given
+					:hint "Make sure the explicitly-assigned direction is appropriate"))
 
-	    ;; check consistency with assigned direction
-	    (if-let ((given (get-direction n)))
-	      (when (not (eql dir given))
-		(warn 'direction-mismatch :variable n
-					  :got dir
-					  :expected given
-					  :hint "Make sure the explicitly-assigned direction is appropriate"))
-
-	      ;; update direction if none given
-	      (set-variable-property n 'direction dir))))))))
+	    ;; update direction if none given
+	    (set-variable-property n 'direction dir)))))))
 
 
 ;;; The top-level module grabs the floated LET blocks and coalesces them
-;;; into a single block. Thie is *always* a LET* regardless of the
-;;; underlying blocks that have been combined, which is safe as long
-;;; as we've uniquified all the variable names.
+;;; into a single block.
 
-(defmethod float-let-blocks-sexp ((fun (eql 'module)) args)
+(defpassmethod float-let-blocks (module modname decls &rest body)
   (declare (optimize debug))
 
-  (destructuring-bind (modname decls &rest body)
-      args
+  ;; extract any declarations
+  (destructuring-bind (newbody newenv)
+      (float-let-blocks (with-implicit-progn body))
 
-    ;; extract any declarations
-    (destructuring-bind (newbody newenv)
-	(float-let-blocks (with-implicit-progn body))
+    (list
+     `(module ,modname
+	      ,decls
 
-      (list
-       `(module ,modname
-		,decls
+	      ,(float-apply newbody newenv))
 
-		,(if newenv
-		     ;; declare the floated declarations around the body
-		     (let ((newdecls (mapcar (lambda (np)
-					       (destructuring-bind (n props)
-						   np
-						 (list n
-						       (get-environment-property n 'initial-value newenv))))
-					     (decls newenv))))
-
-		       ;; add the new decls as a local frame
-		       (setq newdecls (add-local-frame-to-decls newdecls))
-		       (compute-let-local-frame newdecls)
-		       (with-local-frame newdecls
-			 (dolist (np (decls newenv))
-			   (destructuring-bind (n props)
-			       np
-			     (set-variable-properties n (copy-list props)))))
-
-		       ;; always a LET*, not a LET
-		       `(let* ,newdecls
-			  ,newbody))
-
-		     ;; no declarations, just use the new body
-		     newbody))
-
-       ;; no remaining variables to float
-       (make-frame)))))
+     ;; no remaining variables to float
+     (make-frame))))
 
 
-(defmethod simplify-progn-sexp ((fun (eql 'module)) args)
-  (destructuring-bind (modname decls &rest body)
-      args
-    (let ((newbody (mapcar #'simplify-progn body)))
-      `(module ,modname ,decls ,@(simplify-implied-progn newbody)))))
+(defpassmethod simplify-progn (module modname decls &rest body)
+  (let ((newbody (mapcar #'simplify-progn body)))
+    `(module ,modname ,decls ,@(simplify-implied-progn newbody))))
 
 
-(defmethod elaborate-state-machines-sexp ((fun (eql 'module)) args)
-  (destructuring-bind (modname decls &rest body)
-      args
-
-    `(module ,modname ,decls
-	     ,@(with-local-frame decls
-		 (mapcar #'elaborate-state-machines body)))))
+(defpassmethod elaborate-state-machines (module modname decls &rest body)
+  `(module ,modname ,decls
+	   ,@(with-local-frame decls
+	       (mapcar #'elaborate-state-machines body))))
 
 
 (defun synthesise-param (n)
@@ -471,51 +427,49 @@ Signal VALUE-MISMATCH as an error if not."
       (synthesise n))))
 
 
-(defmethod synthesise-sexp ((fun (eql 'module)) args)
+(defpassmethod synthesise (module modname decls &rest body)
   (declare (optimize debug))
   (when (not (in-top-level-context-p))
     (error 'not-synthesisable :hint "Nested modules don't make sense"))
 
-  (destructuring-bind (modname decls &rest body)
-      args
-    (with-local-frame decls
+  (with-local-frame decls
 
-      (destructuring-bind (reqs opts keys)
-	  (parse-module-lambda-list decls)
+    (destructuring-bind (reqs opts keys)
+	(parse-module-lambda-list decls)
 
-	(as-literal "module ")
-	(synthesise modname)
+      (as-literal "module ")
+      (synthesise modname)
 
-	;; parameters
-	(when (> (length keys) 0)
-	  (as-argument-list (mapcar 'safe-car keys)
-			    :before " #(" :after ")"
-			    :sep ", "
-			    :process #'synthesise-param))
-
-	;; arguments
-	(as-argument-list (append reqs (mapcar #'safe-car opts))
-			  :before "(" :after ");"
+      ;; parameters
+      (when (> (length keys) 0)
+	(as-argument-list (mapcar 'safe-car keys)
+			  :before " #(" :after ")"
 			  :sep ", "
-			  :process #'synthesise-arg)
-	(as-blank-line)
+			  :process #'synthesise-param))
 
-	;; body
+      ;; arguments
+      (as-argument-list (append reqs (mapcar #'safe-car opts))
+			:before "(" :after ");"
+			:sep ", "
+			:process #'synthesise-arg)
+      (as-blank-line)
+
+      ;; body
+      (with-indentation
+	(synthesise `(progn ,@body)))
+
+      ;; late initialisation (if any)
+      (when (module-late-initialisation-p)
+	(as-blank-line)
+	(as-literal "initial begin" :newline t)
 	(with-indentation
-	  (synthesise `(progn ,@body)))
+	  (run-module-late-initialisation))
+	(as-literal "end" :newline t))
 
-	;; late initialisation (if any)
-	(when (module-late-initialisation-p)
-	  (as-blank-line)
-	  (as-literal "initial begin" :newline t)
-	  (with-indentation
-	    (run-module-late-initialisation))
-	  (as-literal "end" :newline t))
-
-	(as-blank-line)
-	(as-literal "endmodule // ")
-	(as-literal (format nil "~(~a~)" (ensure-legal-identifier modname)) :newline t)
-	(as-blank-line)))))
+      (as-blank-line)
+      (as-literal "endmodule // ")
+      (as-literal (format nil "~(~a~)" (ensure-legal-identifier modname)) :newline t)
+      (as-blank-line))))
 
 
 ;;; ---------- Module instanciation ----------
@@ -525,56 +479,50 @@ Signal VALUE-MISMATCH as an error if not."
   (make-keyword n))
 
 
-(defmethod compute-type-sexp ((fun (eql 'make-instance)) args)
+(defpassmethod compute-type (make-instance modname &rest initargs)
   (declare (optimize debug))
 
-  (destructuring-bind (modname &rest initargs)
-      args
+  ;; skip over leading quote of module name,
+  ;; for compatability with Common Lisp usage
+  (unquote modname)
 
-    ;; skip over leading quote of module name,
-    ;; for compatability with Common Lisp usage
-    (unquote modname)
+  ;; add type constraints for all variables in the interface
+  (let* ((intf (get-module-interface modname))
+	 (modargs (adjacent-pairs initargs))
+	 (f (module-frame intf)))
 
-    ;; add type constraints for all variables in the interface
-    (let* ((intf (get-module-interface modname))
-	   (modargs (adjacent-pairs initargs))
-	   (f (module-frame intf)))
+    (dolist (n (module-arguments intf))
+      (let ((v (cadr (assoc (module-argument-name-to-keyword n) modargs))))
+	(when (and (not (null v))
+		   (symbolp v))
+	  (add-type-constraint v (with-frame f (get-type n))))))
 
-      (dolist (n (module-arguments intf))
-	(let ((v (cadr (assoc (module-argument-name-to-keyword n) modargs))))
-	  (when (and (not (null v))
-		     (symbolp v))
-	    (add-type-constraint v (with-frame f (get-type n))))))
-
-      intf)))
+    intf))
 
 
-(defmethod infer-representation-sexp ((fun (eql 'make-instance)) args)
+(defpassmethod infer-representation (make-instance modname &rest initargs)
   (declare (optimize debug))
 
-  (destructuring-bind (modname &rest initargs)
-      args
+  ;; skip over leading quote of module name,
+  ;; for compatability with Common Lisp usage
+  (unquote modname)
 
-    ;; skip over leading quote of module name,
-    ;; for compatability with Common Lisp usage
-    (unquote modname)
+  (let* ((intf (get-module-interface modname))
+	 (modargs (adjacent-pairs initargs))
+	 (f (module-frame intf)))
 
-    (let* ((intf (get-module-interface modname))
-	   (modargs (adjacent-pairs initargs))
-	   (f (module-frame intf)))
+    ;; convert directions into read/written constraints
+    (dolist (n (module-arguments intf))
+      (let* ((v (cadr (assoc (module-argument-name-to-keyword n) modargs)))
+	     (rs (read-variables v)))
 
-      ;; convert directions into read/written constraints
-      (dolist (n (module-arguments intf))
-	(let* ((v (cadr (assoc (module-argument-name-to-keyword n) modargs)))
-	       (rs (read-variables v)))
+	(unless (null rs)
+	  (let ((dir (with-frame f (get-direction n))))
 
-	  (unless (null rs)
-	    (let ((dir (with-frame f (get-direction n))))
-
-	      (when (eql dir 'in)
-		(mark-variables-as-read rs))
-	      (when (member dir '(out inout))
-		(mark-variables-as-written rs)))))))))
+	    (when (eql dir 'in)
+	      (mark-variables-as-read rs))
+	    (when (member dir '(out inout))
+	      (mark-variables-as-written rs))))))))
 
 
 (defun ensure-module-arguments-match-interface (modname initargs intf)
@@ -610,68 +558,60 @@ Signal VALUE-MISMATCH as an error if not."
 				 :hint "Make sure all arguments provided are declared in the interface"))))))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'make-instance)) args)
+(defpassmethod apply-type-constraints (make-instance modname &rest initargs)
   (declare (optimize debug))
 
-  (destructuring-bind (modname &rest initargs)
-      args
+  ;; skip over leading quote of module name,
+  ;; for compatability with Common Lisp usage
+  (unquote modname)
 
-    ;; skip over leading quote of module name,
-    ;; for compatability with Common Lisp usage
-    (unquote modname)
-
-    ;; check arguments
-    (let ((intf (get-module-interface modname)))
-      (ensure-module-arguments-match-interface modname initargs intf)
-
-      (let ((kv (adjacent-pairs initargs)))
-	;; required arguments
-	(dolist (n (module-required-arguments intf))
-	  (let ((v (cadr (assoc (module-argument-name-to-keyword n) kv)))
-		(ty (with-frame (module-frame intf)
-		      (get-type n))))
-	    (ensure-subtype (compute-type v) ty)))
-
-	;; optional arguments
-	(dolist (n (module-required-arguments intf))
-	  (if-let ((m (assoc (module-argument-name-to-keyword n) kv)))
-	    (let ((v (cadr m))
-		  (ty (with-frame (module-frame intf)
-			(get-type n))))
-	      (ensure-subtype (compute-type v) ty))))
-
-	;; if an argument is written to, it must be a generalised place
-	(let ((written-args (with-frame (module-frame intf)
-			      (remove-if-not #'variable-written-p (module-arguments intf)))))
-	  (dolist (n written-args)
-	    (let* ((k (module-argument-name-to-keyword n))
-		   (v (cadr (assoc k kv))))
-
-	      (unless (generalised-place-p v)
-		(error 'not-importable :module modname
-				       :arg k
-				       :hint "Argument must be a generalised place")))))))))
-
-
-(defmethod read-variables-sexp ((fun (eql 'make-instance)) args)
-  (destructuring-bind (modname &rest initargs)
-      args
+  ;; check arguments
+  (let ((intf (get-module-interface modname)))
+    (ensure-module-arguments-match-interface modname initargs intf)
 
     (let ((kv (adjacent-pairs initargs)))
-      (foldr #'union (mapcar #'read-variables (mapcar #'safe-cadr kv)) '()))))
+      ;; required arguments
+      (dolist (n (module-required-arguments intf))
+	(let ((v (cadr (assoc (module-argument-name-to-keyword n) kv)))
+	      (ty (with-frame (module-frame intf)
+		    (get-type n))))
+	  (ensure-subtype (compute-type v) ty)))
+
+      ;; optional arguments
+      (dolist (n (module-required-arguments intf))
+	(if-let ((m (assoc (module-argument-name-to-keyword n) kv)))
+	  (let ((v (cadr m))
+		(ty (with-frame (module-frame intf)
+		      (get-type n))))
+	    (ensure-subtype (compute-type v) ty))))
+
+      ;; if an argument is written to, it must be a generalised place
+      (let ((written-args (with-frame (module-frame intf)
+			    (remove-if-not #'variable-written-p (module-arguments intf)))))
+	(dolist (n written-args)
+	  (let* ((k (module-argument-name-to-keyword n))
+		 (v (cadr (assoc k kv))))
+
+	    (unless (generalised-place-p v)
+	      (error 'not-importable :module modname
+				     :arg k
+				     :hint "Argument must be a generalised place"))))))))
 
 
-(defmethod rewrite-variables-sexp ((fun (eql 'make-instance)) args rewrites)
+(defpassmethod read-variables (make-instance modname &rest initargs)
+  (let ((kv (adjacent-pairs initargs)))
+    (union-all (mapcar #'read-variables (mapcar #'safe-cadr kv)))))
+
+
+(defpassmethod rewrite-variables (make-instance modname &rest initargs)
   (labels ((rewrite-args (l)
 	     (if (null l)
 		 l
 		 (append (list (car l)
-			       (rewrite-variables (cadr l) rewrites))
+			       (rewrite-variables (cadr l) rewrite))
 			 (rewrite-args (cddr l))))))
 
-    (destructuring-bind (modname &rest initargs)
-	args
-      `(,fun ,modname ,@(rewrite-args initargs)))))
+    `(make-instance ,modname ,@(rewrite-args initargs))))
 
 
 (defun synthesise-param-binding (n kv)
@@ -723,18 +663,15 @@ Signal VALUE-MISMATCH as an error if not."
 		    :process (rcurry #'synthesise-arg-binding kv)))
 
 
-(defmethod synthesise-sexp ((fun (eql 'make-instance)) args)
-  (destructuring-bind (modname &rest initargs)
-      args
+(defpassmethod synthesise (make-instance modname &rest initargs)
+  ;; skip over leading quote of module name,
+  ;; for compatability with Common Lisp usage
+  (unquote modname)
 
-    ;; skip over leading quote of module name,
-    ;; for compatability with Common Lisp usage
-    (unquote modname)
-
-    (let ((intf (get-module-interface modname))
-	  (kv (adjacent-pairs initargs)))
-      (synthesise modname)
-      (synthesise-module-instance-params (module-parameters intf) kv)
-      (synthesise modname)
-      (as-literal " ")
-      (synthesise-module-instance-args (module-arguments intf) kv))))
+  (let ((intf (get-module-interface modname))
+	(kv (adjacent-pairs initargs)))
+    (synthesise modname)
+    (synthesise-module-instance-params (module-parameters intf) kv)
+    (synthesise modname)
+    (as-literal " ")
+    (synthesise-module-instance-args (module-arguments intf) kv)))

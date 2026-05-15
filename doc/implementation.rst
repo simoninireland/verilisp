@@ -15,3 +15,4 @@ Some notes on the implementation of Verilisp. These aren't needed to
     implementation/tagbody
     implementation/constraints
     implementation/coercion-casting
+    implementation/dsl

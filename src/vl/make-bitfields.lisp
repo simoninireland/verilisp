@@ -23,18 +23,14 @@
 
 ;;; ---------- make-bitfields ----------
 
-(defmethod compute-type-sexp ((fun (eql 'make-bitfields)) args)
-  (destructuring-bind (&rest pats)
-      args
-    (let ((tys (mapcar #'compute-type pats)))
-      `(and ,@tys))))
+(defpassmethod compute-type (make-bitfields &rest pats)
+  (let ((tys (mapcar #'compute-type pats)))
+    `(and ,@tys)))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'make-bitfields)) args)
-  (destructuring-bind (&rest pats)
-      args
-    (let ((tys (mapcar #'compute-type pats)))
-      (mapc #'ensure-fixed-width tys))))
+(defpassmethod apply-type-constraints (make-bitfieldsK &rest pats)
+  (let ((tys (mapcar #'compute-type pats)))
+    (mapc #'ensure-fixed-width tys)))
 
 
 (defun synthesise-fixed-width-constant (c width &optional (base 2))
@@ -63,49 +59,41 @@ The BASE used can be 2, 8, 10, or 16."
       (synthesise f)))
 
 
-(defmethod simple-expression-form-p-sexp ((fun (eql 'make-bitfields)) args)
-  (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-form-p (make-bitfields &rest pats)
+  (every #'simple-expression-form-p pats))
 
 
-(defmethod synthesise-sexp ((fun (eql 'make-bitfields)) args)
+(defpassmethod synthesise (make-bitfields &rest pats)
   (as-literal "{")
-  (as-inline-forms args :sep ", " :process #'synthesise-make-bitfields-field)
+  (as-inline-forms pats :sep ", " :process #'synthesise-make-bitfields-field)
   (as-literal "}"))
 
 
 ;;; ---------- extend-bits ----------
 
-(defmethod compute-type-sexp ((fun (eql 'extend-bits)) args)
-  (destructuring-bind (bs times)
-      args
-    (let ((tybs (compute-type bs))
-	  (n (eval-in-static-environment times)))
+(defpassmethod compute-type (extend-bits bs times)
+  (let ((tybs (compute-type bs))
+	(n (eval-in-static-environment times)))
 
-      `(and ,@(n-copies tybs n)))))
+    `(and ,@(n-copies tybs n))))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'extend-bits)) args)
-  (destructuring-bind (bs times)
-      args
-    (let ((tyb (compute-type bs)))
-      (ensure-fixed-width tyb))))
+(defpassmethod apply-type-constraints (extend-bits bs times)
+  (let ((tyb (compute-type bs)))
+    (ensure-fixed-width tyb)))
 
 
-(defmethod read-variables-sexp ((fun (eql 'extend-bits)) args)
-  (destructuring-bind (bs times)
-      args
-    (foldr #'union (mapcar #'read-variables (list bs times)) '())))
+(defpassmethod read-variables (extend-bits bs times)
+  (union-all (mapcar #'read-variables (list bs times))))
 
 
-(defmethod simple-expression-form-p-sexp ((fun (eql 'extend-bits)) args)
+(defpassmethod simple-expression-form-p (extend-bits &rest args)
   (every #'simple-expression-form-p args))
 
 
-(defmethod synthesise-sexp ((fun (eql 'extend-bits)) args)
-  (destructuring-bind (bs width)
-      args
-    (as-literal "{")
-    (synthesise width)
-    (as-literal "{")
-    (synthesise-make-bitfields-field bs)
-    (as-literal "}}")))
+(defpassmethod synthesise (extend-bits bs times)
+  (as-literal "{")
+  (synthesise times)
+  (as-literal "{")
+  (synthesise-make-bitfields-field bs)
+  (as-literal "}}"))

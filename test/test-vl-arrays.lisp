@@ -63,7 +63,7 @@
 			    (setf c 0)))))
 
     (vl::typecheck p)
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 (test test-synthesise-array-decl-type-inferred
@@ -76,7 +76,7 @@
 			    (setf c 100)))))
 
     (vl::typecheck p)
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 (test test-synthesise-array-init-from-data
@@ -88,7 +88,7 @@
 			    (setf c (aref b 1))))))
 
     (vl::typecheck p)
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 (test test-synthesise-array-init-from-file
@@ -102,7 +102,7 @@
 			    (setf c (aref b 1))))))
 
     (vl::typecheck p)
-    (vl::synthesise p)
+    (vl::synthesise/vl p)
     (is (vl::module-late-initialisation-p))))
 
 
@@ -136,7 +136,7 @@
 			    (setf (aref a 8) (aref a 0))))))
 
     (vl::typecheck p)
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 (test test-array-inferred
@@ -241,7 +241,7 @@
 				 (b 0))
 			    (setf b (aref a 1))))))
     (vl::typecheck p)
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 ;; The next test uses ROM data from the SAP-1 example
@@ -255,5 +255,5 @@
 			      (setf b (aref a 1))))))
 
     (vl::typecheck p)
-    (is (vl::synthesise p))
+    (is (vl::synthesise/vl p))
     (vl::run-module-late-initialisation)))

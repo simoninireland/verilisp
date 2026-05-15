@@ -64,10 +64,10 @@
   "Test we can synthesise constructed bitfields."
   (let ((p (vl::expand/vl '(vl::make-bitfields #2r111 #2r100))))
     (vl::typecheck p)
-    (is (vl::synthesise p)))
+    (is (vl::synthesise/vl p)))
 
   (let ((p (vl::expand/vl '(let ((a 1)
 				b)
 			   (setq b (vl::make-bitfields (vl::extend-bits a 5)))))))
     (vl::typecheck p)
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))

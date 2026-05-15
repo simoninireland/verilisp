@@ -1,48 +1,52 @@
-;; Synthesisable conditionals
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Synthesisable conditionals
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
-
-;; ---------- if ----------
-
-(defmethod compute-type-sexp ((fun (eql 'if)) args)
-  (destructuring-bind (condition then &rest else)
-      args
-    (let ((tycond (compute-type condition))
-	  (tythen (compute-type then))
-	  (tyelse (if else
-		      (compute-type (with-implicit-progn else)))))
-
-      ;; the type of the expression is the widest of the
-      ;; types of the two arms
-      (if else
-	  `(or ,tythen ,tyelse)
-	  tythen))))
+;;; The main conditions. IF and CASE and core language; COND is a macro.
+;;;
+;;; CASE follows Common Lisp in not evaluating the values in the arms.
+;;; However, we do allow those values to be constant variables, which is
+;;; more general than Common Lisp (which doesn't really have constants).
+;;; This means that some conditionals that would need COND in Common Lisp
+;;; can use CASE in Verilisp, whcih is more efficient when synthesised.
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'if)) args)
-  (destructuring-bind (condition then &rest else)
-      args
-    (let ((tycond (compute-type condition)))
-      (ensure-boolean tycond))))
+;;; ---------- if ----------
+
+(defpassmethod compute-type (if condition then &rest else)
+  (let ((tycond (compute-type condition))
+	(tythen (compute-type then))
+	(tyelse (if else
+		    (compute-type (with-implicit-progn else)))))
+
+    ;; the type of the expression is the widest of the
+    ;; types of the two arms
+    (if else
+	`(or ,tythen ,tyelse)
+	tythen)))
+
+
+(defpassmethod apply-type-constraints (if condition then &rest else)
+  (let ((tycond (compute-type condition)))
+    (ensure-boolean tycond)))
 
 
 (defun synthesise-if-expression (form)
@@ -62,63 +66,57 @@
 	      (synthesise-if-expression (car else))
 	      (as-literal ")"))
 
-	    (synthesise-sexp fun args)))
+	    (synthesise form)))
 
       (synthesise form)))
 
 
-(defmethod simple-expression-form-p-sexp ((fun (eql 'if)) args)
+(defpassmethod simple-expression-form-p (if condition then &rest else)
   (declare (optimize debug))
-  (destructuring-bind (condition then &rest else)
-      args
-
-    (and (simple-expression-form-p condition)
-	 (simple-expression-form-p then)
-	 (or (null else)
-	     (every #'simple-expression-form-p else)))))
+  (and (simple-expression-form-p condition)
+       (simple-expression-form-p then)
+       (or (null else)
+	   (every #'simple-expression-form-p else))))
 
 
-(defmethod synthesise-sexp ((fun (eql 'if)) args)
+(defpassmethod synthesise (if condition then &rest else)
   (declare (optimize debug))
 
-  (destructuring-bind (condition then &rest else)
-      args
+  (if (in-expression-context-p)
+      ;; in expression, synthesise as a conditional expression
+      (synthesise-if-expression `(if ,condition ,then ,@else))
 
-    (if (in-expression-context-p)
-	;; in expression, synthesise as a conditional expression
-	(synthesise-if-expression `(if ,condition ,then ,@else))
+      ;; elsewhere, synthesise as a conditional statement
+      (progn
+	;; condition
+	(as-literal "if(")
+	(synthesise condition)
+	(as-literal ")")
+	(as-newline)
 
-	;; elsewhere, synthesise as a conditional statement
-	(progn
-	  ;; condition
-	  (as-literal "if(")
-	  (synthesise condition)
-	  (as-literal ")")
-	  (as-newline)
+	;; then arm
+	(as-block (list then) :before "begin" :after "end"
+			      :always t)
 
-	  ;; then arm
-	  (as-block (list then) :before "begin" :after "end"
-				:always t)
+	;; else arm
+	(when else
+	  (if (and (listp else)
+		   (listp (car else))
+		   (eql (caar else) 'if))
+	      ;; else arm is another if, don't indent
+	      (progn
+		(as-literal "else ")
+		(as-block else :indent nil
+			       :always t))
 
-	  ;; else arm
-	  (when else
-	    (if (and (listp else)
-		     (listp (car else))
-		     (eql (caar else) 'if))
-		;; else arm is another if, don't indent
-		(progn
-		  (as-literal "else ")
-		  (as-block else :indent nil
-				 :always t))
-
-		;; otherwise indent
-		(progn
-		  (as-literal "else" :newline t)
-		  (as-block else :before "begin" :after "end"
-				 :always t))))))))
+	      ;; otherwise indent
+	      (progn
+		(as-literal "else" :newline t)
+		(as-block else :before "begin" :after "end"
+			       :always t)))))))
 
 
-;; ---------- case ----------
+;;; ---------- case ----------
 
 (defun compute-type-clause (clause)
   "Typecheck case CLAUSE.
@@ -137,11 +135,9 @@ The type is the union of the clause types."
   `(or ,@(mapcar #'compute-type-clause clauses)))
 
 
-(defmethod compute-type-sexp ((fun (eql 'case)) args)
-  (destructuring-bind (condition &rest clauses)
-      args
-    (let ((ty (compute-type condition)))
-      (compute-type-clauses clauses))))
+(defpassmethod compute-type (case condition &rest clauses)
+  (let ((ty (compute-type condition)))
+    (compute-type-clauses clauses)))
 
 
 (defun constrain-clause (ty clause)
@@ -165,12 +161,10 @@ Each test element must be testable against TY."
 	    (ensure-subtype tyval ty))))))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql 'case)) args)
-  (destructuring-bind (condition &rest clauses)
-      args
-    (let ((ty (compute-type condition)))
+(defpassmethod apply-type-constraints (case condition &rest clauses)
+  (let ((ty (compute-type condition)))
 
-      (mapc (curry #'constrain-clause ty) clauses))))
+    (mapc (curry #'constrain-clause ty) clauses)))
 
 
 (defun synthesise-clause (clause)
@@ -241,28 +235,25 @@ Each test element must be testable against TY."
   (as-literal "endcase"))
 
 
-(defmethod simple-expression-form-p-sexp ((fun (eql 'case)) args)
-  (destructuring-bind (condition &rest clauses)
-      args
-    (and (simple-expression-form-p condition)
-	 (every (lambda (clause)
-		  (and (= (length (cdr clause) 1))
-		       (simple-expression-form-p (cadr clause))))))))
+(defpassmethod simple-expression-form-p (case condition &rest clauses)
+  (and (simple-expression-form-p condition)
+       (every (lambda (clause)
+		(and (= (length (cdr clause) 1))
+		     (simple-expression-form-p (cadr clause)))))))
 
 
-(defmethod synthesise-sexp ((fun (eql 'case)) args)
+(defpassmethod synthesise (case condition &rest clauses)
   (declare (optimize debug))
-  (destructuring-bind (condition &rest clauses)
-      args
-    (if (in-expression-context-p)
-	;; within an expression, expand as nested conditional expressions
-	(synthesise (synthesise-nested-if condition clauses))
 
-	;; otherwise synthesise as a Verilog case
-	(synthesise-case condition clauses))))
+  (if (in-expression-context-p)
+      ;; within an expression, expand as nested conditional expressions
+      (synthesise (synthesise-nested-if condition clauses))
+
+      ;; otherwise synthesise as a Verilog case
+      (synthesise-case condition clauses)))
 
 
-;; ---------- cond ----------
+;;; ---------- cond ----------
 
 (defcoremacro/vl cond (&rest arms)
   "Compile each case in ARMS to a nested conditional.

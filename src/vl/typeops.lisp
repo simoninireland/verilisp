@@ -1,26 +1,28 @@
-;; Type operations
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Type operations
+;;;;
+;;;; Copyright (C) 2024--2025 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 
 
-;; ---------- Type manipulation ----------
+;;; TODO: Change this to be pass-like
+
+;;; ---------- Type manipulation ----------
 
 (defun deconstruct-type (ty)
   "Deconstruct the type specifier TY into tag and arguments.
@@ -44,7 +46,7 @@ of TYTAG and TYARGS."
       (cons tytag tyargs)))
 
 
-;; ---------- Type algebra ----------
+;;; ---------- Type algebra ----------
 
 ;; The builtin SUBTYPEP is sometimes either too aggressive or too
 ;; demanding in what it requires. So we provide a generic version
@@ -128,7 +130,7 @@ when comparing Verilisp types."
 	     (subtype-type ty1tag ty1args ty2tag ty2args))))))
 
 
-;; ---------- Evaluate type parameters ----------
+;;; ---------- Evaluate type parameters ----------
 
 (defgeneric eval-type-type (tytag tyargs)
   (:documentation "Evaluate any parameters in a type.
@@ -158,7 +160,7 @@ The default is for there to be no parameters to expand.")
   (apply #'eval-type-type (deconstruct-type ty)))
 
 
-;; ---------- Type checking ----------
+;;; ---------- Type checking ----------
 
 (defun ensure-subtype (ty1 ty2)
   "Ensure TY1 is a sub-type of TY2 in the current enironment.
@@ -169,7 +171,7 @@ can be ignored for systems not concerned with loss of precision."
     (warn 'type-mismatch :expected ty2 :got ty1)))
 
 
-;; ---------- Bit widths ----------
+;;; ---------- Bit widths ----------
 
 (defgeneric bitwidth-type (tytag tyargs)
   (:documentation "Return the width need for values of a type.
@@ -200,7 +202,7 @@ The default width of a type is zero, meaning it won;t be representable.")
   (apply #'bitwidth-type (deconstruct-type ty)))
 
 
-;; ---------- Representability ----------
+;;; ---------- Representability ----------
 
 (defun representable-type-p (ty)
   "Tes that type TY can be represented."
@@ -224,7 +226,7 @@ The default is that types are not representable.")
       (representable-type-p (get-frame-property n 'type f)))))
 
 
-;; ---------- Least upper-bounds ----------
+;;; ---------- Least upper-bounds ----------
 
 (defgeneric lub-type (ty1tag ty1args ty2tag ty2args)
   (:documentation "Return the least upper-bound of two types in the current environment.
@@ -346,7 +348,7 @@ largest representable type that can be formed."
 	(foldr #'lurbtype tys ty))))
 
 
-;; ---------- Type constraints ----------
+;;; ---------- Type constraints ----------
 
 (defun add-frame-type-constraint (n ty env)
   "Constrain variable N to have type TY in ENV.

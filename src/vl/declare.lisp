@@ -1,24 +1,81 @@
-;; Variable annotation declarations
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Variable annotation declarations
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/core)
 
+;;; We support a different set of annotations to those in Common Lisp.
+
+;;; TODO: Add optimisation annotations to the environment so that they
+;;; can be used by passes.
+
+
+(defpassmethod expand-macros (declare &rest clauses)
+  (let ((eclauses (mapcar (lambda (clause)
+			    (destructuring-bind (annotation &rest args)
+				clause
+			      `(,annotation ,@ (mapcar #'expand-macros args))))
+			  clauses)))
+
+    `(declare ,@eclauses)))
+
+
+(defpassmethod compute-type (declare &rest args)
+  t)
+
+
+(defpassmethod apply-type-constraints (declare &rest args)
+  nil)
+
+
+(defpassmethod float-let-blocks (declare &rest args)
+  ;; delete declarations when blocks are floated
+  '(() ()))
+
+
+(defpassmethod synthesise (declare &rest args)
+  nil)
+
+
+(defpassmethod read-variables (declare &rest args)
+  '())
+
+
+(defpassmethod compute-dependencies (declare &rest args)
+  nil)
+
+
+(defpassmethod add-frames (declare &rest args)
+  (mapc (lambda (dec)
+	  (with-current-form dec
+	    (destructuring-bind (tag &rest decargs)
+		dec
+	      (declare-annotation tag decargs))))
+	args)
+
+  ;;;; return form unaltered
+  `(declare ,@args))
+
+
+;;; ---------- Declaring annotations ----------
+
+;;; TODO: This should be a pass, to let the annotation structure
+;;; be clearly bound to syntax.
 
 (defgeneric declare-annotation (tag args)
   (:documentation "Handle the annotation declaration TAG with ARGS.
@@ -32,43 +89,7 @@ Unrecognised annotations are ignored with a warning.")
     (warn 'unrecognised-declaration :tag tag)))
 
 
-(defmethod add-frames-sexp ((fun (eql 'declare)) args)
-  (mapc (lambda (dec)
-	  (with-current-form dec
-	    (destructuring-bind (tag &rest decargs)
-		dec
-	      (declare-annotation tag decargs))))
-	args)
-
-  ;; return form unaltered
-  `(declare ,@args))
-
-
-(defmethod compute-type-sexp ((fun (eql 'declare)) args)
-  t)
-
-
-(defmethod apply-type-constraints-sexp ((fun (eql 'declare)) args)
-  nil)
-
-
-(defmethod float-let-blocks-sexp ((fun (eql 'declare)) args)
-  ;; delete declarations when blocks are floated
-  '(() ()))
-
-
-(defmethod read-variables-sexp ((fun (eql 'declare)) args)
-  '())
-
-
-(defmethod compute-dependencies-sexp ((fun (eql 'declare)) args))
-
-
-(defmethod synthesise-sexp ((fun (eql 'declare)) args)
-  nil)
-
-
-;; ---------- Standard annotations ----------
+;;; ---------- Standard annotations ----------
 
 (defmethod declare-annotation ((tag (eql 'type)) args)
   (destructuring-bind (ty &rest vars)

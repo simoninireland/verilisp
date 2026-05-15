@@ -30,41 +30,31 @@
 ;;; ---------- Pass queues ----------
 
 ;;; The pass queues correspond to "macro-passes", composed of
-;;; nanopasses. They are run in the following order, which allows
-;;; implementations to attach new nanopasses in the appropriate place.
-;;; The standard nanopasses are added at system initialisation.
+;;; nanopasses. Implementations can attach new nanopasses in the
+;;; appropriate place.
+;;;
+;;; The standard nanopasses are added as defined below and added to the
+;;; appropriate queues. Note that the order that passes are added to
+;;; their queue is probably significant.
 
-(define-pass-queue expanding)
-(define-pass-queue typing)
-(define-pass-queue transforming)
-(define-pass-queue synthesising)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (define-pass-queue expanding)
+  (define-pass-queue typing)
+  (define-pass-queue transforming)
+  (define-pass-queue synthesising))
 
 
 ;;; ---------- Free variables ----------
 
-(defgeneric read-variables (form)
+(defpass read-variables (form)
   (:documentation "Return all variables in FORM that are read from.
 
 This function is used for constructing dependencies of variables.
 Return the set of variables as a list.")
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (read-variables-sexp fun args))))
+  (:schema into-arguments-union))
 
 
-(defgeneric read-variables-sexp (fun args)
-  (:documentation "Return all variables that are read in FUN applied to ARGS.
-
-Methods on this functon should return a set consisting of the
-variables that could be read during the evaluation of FORM.
-
-The default is to combine all the variables in the arguments.")
-  (:method (fun args)
-    (foldr #'union (mapcar #'read-variables args) '())))
-
-
-(defgeneric read-variables-setf (selector val selectorargs)
+(defpass read-variables-setf (form)
   (:documentation "Return all variables that are read in an assignment.
 
 This function needs a method for each generalised place, to determine
@@ -75,7 +65,7 @@ provided by WRITTEN-VARIABLES-SETF.
 Return the set of variables as a list."))
 
 
-(defgeneric written-variables-setf (selector val selectorargs)
+(defpass written-variables-setf (form)
   (:documentation "Return all variables that are written in an assignment.
 
 This function needs a method per generalised place, to determine
@@ -85,189 +75,85 @@ should not return variables that are only read and not updated.
 Return the set of variables as a list."))
 
 
-;;; ---------- Dependencies ----------
+;;; ---------- Macro expansion ----------
 
-(defgeneric compute-dependencies (form)
-  (:documentation "Annotate the environment with the dependencies of FORM.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (define-recursion-schema into-arguments-macros (fun args pass-name)
+    "A recursion schema that expands a form as a macro.
 
-Methods on this function should update the dependencies of variables,
-typically in assignments and binders. The function ADD-DEPENDENCIES
-can be called to actually add dependencies to the current frame. The
-dependencies added should be 'direct', in the sense that the variables
-are used in assignments; the TRAVERSE-DEPENDENCIES function can be
-used to trace 'indirect' chains of dependencies.
+The schema simply calls EXPAND-IF-MACRO witrh the appropriate variables."
+    (declare (ignore pass-name))
 
-Methods should also mark variables as read or written to using
-MARK-VARIABLE-AS-READ and MARK-VARIABLE-AS-WRITTEN.")
-  (:method (form))
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-
-      (with-current-form form
-	(with-recover-on-error
-	    ;; leave dependencies unchanged on error
-	    t
-
-	  (compute-dependencies-sexp fun args))))))
+    `(expand-if-macro ,fun ,args)))
 
 
-(defgeneric compute-dependencies-sexp (fun args)
-  (:documentation "Compute dependencies in FUN applied to ARGS.
+(defpass expand-macros (form)
+  (:documentation "Expand macros in FORM.")
+  (:queue expanding)
+  (:schema into-arguments-macros)
 
-The default maps COMPUTE-DEPENDENCIES across ARGS.")
-  (:method (fun args)
-    (mapc #'compute-dependencies args)))
-
-
-(defun add-dependencies (n deps)
-  "Add variables DEPS as dependencies for N.
-
-A dependency is a variable that's read in assigning values to N."
-  (let ((old-deps (variable-property n 'depends-on)))
-    (set-variable-property n 'depends-on (union deps old-deps)))
-
-  ;; any variables we depend on are read by definition
-  (dolist (m deps)
-    (set-variable-property m 'read t)))
+  (:method (form)
+    form))
 
 
-(defun mark-variable-as-read (n)
-  "Annotate N as having been read."
-  (set-variable-property n 'read t))
+(defun expand-if-macro (fun args)
+  "Expand a form as a macro.
+
+If FUN is a macro, expand it and then re-expand the resulting
+substitution. If it is not a macro, descend into ARGS."
+  (declare (optimize debug))
+
+  (if (macro-declared-p fun)
+      ;; macro is expandable
+      (let ((realfun (variable-property fun 'initial-value)))
+
+	;; expand the macro in a nested environment that will contain
+	;; any locally-declared macros
+	(with-new-frame
+	  (let ((expansion (apply realfun args)))
+
+	    ;; expand the expansion
+	    (expand-macros expansion))))
+
+      ;; macro is not expandable, descend into the form
+      (expand-descend fun args)))
 
 
-(defun mark-variables-as-read (ns)
-  "Annotate all variables in NS as having been read."
-  (mapc #'mark-variable-as-read ns))
+(defun expand-descend (fun args)
+  "Expand macros in ARGS when FUN applied."
+  `(,fun ,@(remove-nulls (mapcar (lambda (arg)
+				   (unless (null arg)
+				     (expand-macros arg)))
+				 args))))
 
 
-(defun variable-read-p (n)
-  "Test whether N is accessed as part of a read operation."
-  (variable-property n 'read))
+(defun expand-macros-in-environment (form &optional (f *global-environment*))
+  "Recursively expand all macros in FORM in an environment.
 
+Thos pass expands all macros to convert FORM into Core Verilisp.
+Macros are taken from the global environment unless a specific
+frame F is provided.
 
-(defun mark-variable-as-written (n)
-  "Annotate N as having been written to."
-  (set-variable-property n 'written t))
-
-
-(defun mark-variables-as-written (ns)
-  "Annotate all variables in NS as having been written to."
-  (mapc #'mark-variable-as-written ns))
-
-
-(defun variable-written-p (n)
-  "Test whether N is updated over its extent.
-
-This does not include the assignment of any initial value, only
-subsequent updates."
-  (variable-property n 'written))
-
-
-(defun traverse-dependencies (ns)
-  "Traverse the dependencies for the variables NS.
-
-NS can be a variable name or a list of variables.
-
-Return the dependencies of the NS, and all the dependencies of those
-dependencies, and so on recursively. Constants do not count as
-dependencies as they can't be updated."
-
-  ;; get the direct dependencies
-  (let ((direct (foldr #'union
-		       (mapcar (lambda (n)
-				 (variable-property n 'depends-on :default nil))
-			       (if (listp ns)
-				   ns
-				   (list ns)))
-		       '())))
-
-    ;; traverse to further dependencies
-    (foldr #'union (mapcar (lambda (n)
-			     (if (static-constant-p n)
-				 nil
-				 (union (list n)
-					(variable-property n 'depends-on :default nil
-							   ))))
-			   direct)
-	   '())))
-
-
-;;; ---------- Variable re-writing ----------
-
-(defgeneric rewrite-variables (form rewrite)
-  (:documentation "Re-write free occurrances of variables in FORM.
-
-The REWRITE alist provides the mapping from variables to their new
-forms, whchi may not be variables at all. Methods should only
-rewrite free occurrances, not those that appear under binders.")
-  (:method ((form integer) rewrite)
-    form)
-  (:method ((form symbol) rewrite)
-    (if-let ((a (assoc form rewrite
-		       :key #'symbol-name
-		       :test #'string-equal)))
-      ;; reference to rewriteable variable, re-write it
-      (cadr a)
-
-      ;; leave alone
-      form))
-  (:method ((form list) rewrite)
-    (destructuring-bind (fun &rest args)
-	form
-      (rewrite-variables-sexp fun args rewrite))))
-
-
-(defgeneric rewrite-variables-sexp (fun args rewrite)
-  (:documentation "Rewite variables in REWRITE in FUN applied to ARGS.
-
-Note that /everything/ gets re-written by default, including FUN.
-(This is the only consistent way to deal with, for example, macros
-that haven't yet been expanded in the body of a macro that needs to
-re-write variables, such as WITH-BITFIELDS.) Override the default
-method to change this behaviour.")
-  (:method (fun args rewrite)
-    (mapcar (rcurry #'rewrite-variables rewrite)
-	    `(,fun ,@args))))
+Return the expanded form."
+  (in-frame f
+    (expand-macros form)))
 
 
 ;;; ---------- Applying and removing frames ----------
 
-(defgeneric add-frames (form)
-  (:documentation "Add frames to FORM .
+(defpass add-frames (form)
+  (:documentation "Add frames to FORM.
 
 Frames are used to maintain the lexical environment for the compiler.
 Methods on this function should construct frames, associate them with
 the appropriate binders so they can be applied in other passes, and
 populate them with the variables being declared. These declarations
 will then be used by, and extended by, other passes.")
+  (:schema into-arguments)
+  (:queue expanding)
+
   (:method (form)
-    form)
-  (:method ((form list))
-    (let ((fun (car form))
-	  (args (cdr form)))
-      (with-current-form form
-	(add-frames-sexp fun args)))))
-
-
-(defgeneric add-frames-sexp (fun args)
-  (:documentation "Add frames to FUN applied to ARGS.
-
-Mathods on this function should add a local frame to the form for later
-use and recurse into sub-forms.
-
-The frame should be populated with the names of any variables introduced
-by the form: this allows later passes to interrogate the locally-defined
-environment, and to add and access properties of those variables.
-
-The way the frame is stored is not specified, but the functions
-ADD-FRAMES-TO-DECLS and GET-LOCAL-FRAME-AND-DECLS pefrom adding
-and accessing by extending the list of declarations found in LET and
-MODULE forms. The WITH-LOCAL-FRAME macro can then be used to apply
-the frame automatically in other methods.")
-  (:method (fun args)
-    `(,fun ,@(mapcar #'add-frames args))))
+    form))
 
 
 (defun add-local-frame-to-decls (decls &optional (f (make-frame)))
@@ -350,9 +236,138 @@ environment is restored on leaving BODY."
 	   ,@body)))))
 
 
+;;; ---------- Dependencies ----------
+
+(defpass compute-dependencies (form)
+  (:documentation "Annotate the environment with the dependencies of FORM.
+
+Methods on this function should update the dependencies of variables,
+typically in assignments and binders. The function ADD-DEPENDENCIES
+can be called to actually add dependencies to the current frame. The
+dependencies added should be 'direct', in the sense that the variables
+are used in assignments; the TRAVERSE-DEPENDENCIES function can be
+used to trace 'indirect' chains of dependencies.
+
+Methods should also mark variables as read or written to using
+MARK-VARIABLE-AS-READ and MARK-VARIABLE-AS-WRITTEN.")
+  (:schema over-arguments)
+  (:queue expanding)
+
+  ;; return the original form (environments updated in place)
+  (:post (lambda (form res)
+	   (declare (ignore res))
+
+	   form))
+
+  (:method (form))
+
+  (:method ((form list))
+    (destructuring-bind (fun &rest args)
+	form
+
+      (with-current-form form
+	(with-recover-on-error
+	    ;; leave dependencies unchanged on error
+	    t
+
+	  (compute-dependencies/form fun args))))))
+
+
+(defun add-dependencies (n deps)
+  "Add variables DEPS as dependencies for N.
+
+A dependency is a variable that's read in assigning values to N."
+  (let ((old-deps (variable-property n 'depends-on)))
+    (set-variable-property n 'depends-on (union deps old-deps)))
+
+  ;; any variables we depend on are read by definition
+  (dolist (m deps)
+    (set-variable-property m 'read t)))
+
+
+(defun mark-variable-as-read (n)
+  "Annotate N as having been read."
+  (set-variable-property n 'read t))
+
+
+(defun mark-variables-as-read (ns)
+  "Annotate all variables in NS as having been read."
+  (mapc #'mark-variable-as-read ns))
+
+
+(defun variable-read-p (n)
+  "Test whether N is accessed as part of a read operation."
+  (variable-property n 'read))
+
+
+(defun mark-variable-as-written (n)
+  "Annotate N as having been written to."
+  (set-variable-property n 'written t))
+
+
+(defun mark-variables-as-written (ns)
+  "Annotate all variables in NS as having been written to."
+  (mapc #'mark-variable-as-written ns))
+
+
+(defun variable-written-p (n)
+  "Test whether N is updated over its extent.
+
+This does not include the assignment of any initial value, only
+subsequent updates."
+  (variable-property n 'written))
+
+
+(defun traverse-dependencies (ns)
+  "Traverse the dependencies for the variables NS.
+
+NS can be a variable name or a list of variables.
+
+Return the dependencies of the NS, and all the dependencies of those
+dependencies, and so on recursively. Constants do not count as
+dependencies as they can't be updated."
+
+  ;; get the direct dependencies
+  (let ((direct (union-all (mapcar (lambda (n)
+				 (variable-property n 'depends-on :default nil))
+			       (safe-list ns)))))
+
+    ;; traverse to further dependencies
+    (union-all (mapcar (lambda (n)
+			 (if (static-constant-p n)
+			     nil
+			     (union (list n)
+				    (variable-property n 'depends-on :default nil))))
+		       direct))))
+
+
+;;; ---------- Variable re-writing ----------
+
+(defpass rewrite-variables (form rewrite)
+  (:documentation "Re-write free occurrances of variables in FORM.
+
+The REWRITE alist provides the mapping from variables to their new
+forms, which may not be variables at all. Methods should only
+rewrite free occurrances, not those that appear under binders.")
+  (:schema into-arguments)
+
+  (:method ((form integer))
+    form)
+
+  (:method ((form symbol))
+    (if-let ((a (assoc form rewrite
+		       :key #'symbol-name
+		       :test #'string-equal)))
+      ;; reference to rewriteable variable, re-write it
+      (cadr a)
+
+      ;; leave alone
+      form)))
+
+
 ;;; ---------- Type checking and inference ----------
 
-(defgeneric apply-type-constraints (form)
+(defpass apply-type-constraints (form)
   (:documentation "Evaluate type constraints to constraining variables in FORM.
 
 This pass is called after type-checking and inference, meaning that
@@ -360,6 +375,13 @@ the environment will be populated with explicit and inferred types
 and other information. Functions on this method should check this
 information to decide whether necessary constraints are met, and
 signal warnings or errors appropriately.")
+  (:schema over-arguments)
+  (:queue typing)
+
+  ;; return the original form overall from the pass
+  (:post (lambda (form res)
+	   form))
+
   (:method (form)
     nil)
 
@@ -371,20 +393,11 @@ signal warnings or errors appropriately.")
 	    ;; leave the constraints alone on error
 	    t
 
-	  (apply-type-constraints-sexp fun args))))))
+	  (apply-type-constraints/form fun args))))))
 
 
-(defgeneric apply-type-constraints-sexp (fun args)
-  (:documentation "Apply type constraints in FUN applied to ARGS.
-
-Methods on this function should apply any type constraints they place
-upon FUN.")
-  (:method (fun args)
-    (mapc #'apply-type-constraints args)))
-
-
-(defgeneric compute-type (form)
-  (:documentation "Compute the type of FORM.
+(defpass compute-type (form)
+   (:documentation "Compute the type of FORM.
 
 Methods on this function should add type constraints to the
 environment for the variables they use. ADD-TYPE-CONSTRAINTS adds the
@@ -399,55 +412,39 @@ Return the type of FORM. Generally speaking it will not be possible to
 firmly determine a type locally for a code fragment, so the type
 returned may be general and make use of complex type specifiers that
 are resolved in the binders that introduce the variables.")
-  (:method ((form list))
-    (let ((fun (car form))
-	  (args (cdr form)))
-      (with-current-form form
-	(compute-type-sexp fun args)))))
+  (:schema fail-unknown-form)
+  (:queue typing)
 
+  (:post (lambda (form ty)
+	   ;; ensure the top-pevel type is a module
+	   (ensure-subtype ty 'module)
 
-(defgeneric compute-type-sexp (fun args)
-  (:documentation "Compute the type of the application of FUN to ARGS.")
-  (:method (fun args)
-    (error 'unknown-form :form `(,fun ,args))))
+	   ;; save this type for later use
+	   (setq *last-module-type* ty)
 
-
-(defun typecheck (form)
-  "Perform a typechecking pass over FORM.
-
-This is a synthestic pass that extracts types and applies any
-constraints needed to infer the types of variables."
-  (let ((ty (compute-type form)))
-    ;; check any remaining constraints after inference
-    (apply-type-constraints form)
-
-    ty))
+	   ;; return the original form
+	   form)))
 
 
 ;;; ---------- Generalised places ----------
 
-(defgeneric generalised-place-p (form)
+(defpass generalised-place-p (form)
   (:documentation "Test whether FORM is a generalised place.
 
 Generalised places can appear as the target of SETF forms. (In other
 languages they are sometimes referred to as *lvalues*.) This is
 separate, but related to, their type: a generalised place has a type,
 but is also SETF-able.")
+  (:schema constant-form nil)
+
   (:method (form)
-    nil)
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (generalised-place-sexp-p fun args))))
-
-
-(defgeneric generalised-place-sexp-p (selector selectorargs)
-  (:documentation "Test whether SELECTOR applied to SELECTORARGS identifies a generalised place.
-
-Methods on this function should identify those forms that are generalised places.
-Usually this will only involve examining SELECTOR.")
-  (:method (selector selectorargs)
     nil))
+
+
+(defun ensure-generalised-place (form)
+  "Ensure FORM is a generalised place."
+  (unless (generalised-place-p form)
+    (error 'not-synthesisable :hint "Make sure the target of the assignment is a generalised, SETF-able, place")))
 
 
 ;;; ---------- Simple expressions ----------
@@ -458,29 +455,19 @@ Usually this will only involve examining SELECTOR.")
 ;;; to transform more complex (but legal) Lisp to take the complicated
 ;;; bits out of the expressions.
 
-(defgeneric simple-expression-form-p (form)
-  (:documentation "Test whether FORM is a simle expression.")
+(defpass simple-expression-form-p (form)
+  (:documentation "Test whether FORM is a simple expression.")
+  (:schema constant-form nil)
+
   (:method ((n integer))
     t)
   (:method ((s symbol))
-    (variable-declared-p s))
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (simple-expression-form-p-sexp fun args))))
-
-
-(defgeneric simple-expression-form-p-sexp (fun args)
-  (:documentation "Test whether FORM applied to ARGS is a simple expression.
-
-The default returns NIL.")
-  (:method (fun args)
-    nil))
+    (variable-declared-p s)))
 
 
 ;;; ---------- Representation inference ----------
 
-(defgeneric infer-representation (form)
+(defpass infer-representation (form)
   (:documentation "Infer the representations of variables in FORM.
 
 This function usually applies only to binders, and makes use of
@@ -488,39 +475,49 @@ dependency and access information to determine the correct
 representation for each variable. This may also be influenced by
 explicit DECLARE declarations, which should be checked for
 consistency with the representation implied by the code.")
+  (:schema over-arguments)
+  (:queue expanding)
+
+  ;; return the original form (environments updated in place)
+  (:post (lambda (form res)
+	   (declare (ignore res))
+
+	   form))
+
   (:method (form)
-    nil)
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (infer-representation-sexp fun args))))
-
-
-(defgeneric infer-representation-sexp (fun args)
-  (:documentation "Infer the representations of variables in FUN applied to ARGS.
-
-Methods on this function should annotate the variables with
-appropriate representations (the AS property). This will generally
-only happen in binders.")
-  (:method (fun args)
-    (mapc #'infer-representation args)))
-
+    nil))
 
 
 ;;; ---------- Let block coalescence ----------
 
-(defgeneric float-let-blocks (form)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (define-recursion-schema into-arguments-float-merge (fun args pass-name)
+    "A recursion scheme to float LET and LET* blocks."
+    `(destructuring-bind (fargs fenv)
+	 (float-merge ,args)
+       (list (cons ,fun fargs) fenv))))
+
+
+(defpass float-let-blocks (form)
   (:documentation "Float nested LET blocks in FORM to the outermost level.
 
 Functions on this method should remove any LET blocks in FORM and
 return them to be re-applied at a higher level.
 
-Return a list consisting of the new form and an environment
-including all the variables locally declared.")
-  (:method ((form list))
-    (let ((fun (car form))
-	  (args (cdr form)))
-      (float-let-blocks-sexp fun args))))
+The pass should return a list consisting of the new form and an
+environment including all the variables locally declared. When run in
+a pass queue, the environment will be discarded.")
+  (:queue transforming)
+  (:schema into-arguments-float-merge)
+
+  ;; return the final re-written form, applying the environment
+  ;; and then discarding it
+  (:post (lambda (form res)
+	   (declare (ignore form))
+
+	   (destructuring-bind (f env)
+	       res
+	     (float-apply f env)))))
 
 
 (defun float-merge (forms)
@@ -532,6 +529,7 @@ Return the re-written FORMS and a merged environment."
 	       old
 	     (destructuring-bind (newbody newenv)
 		 (float-let-blocks form)
+
 	       (if (null newbody)
 		   ;; body was removed, skip
 		   old
@@ -547,22 +545,44 @@ Return the re-written FORMS and a merged environment."
     (foldr #'pairwise-append forms (list '() (make-frame)))))
 
 
-(defgeneric float-let-blocks-sexp (fun args)
-  (:documentation "Float nested LET blocks in FUN applied to ARGS.
+(defun float-apply (body env)
+  "Apply declarations in ENV around BODY.
 
-The default recurses into each element of ARGS and reconstructs
-the form with re-written versions of ARGS.
+The decls are always applied as LET* regardless of the underlying
+block structure, which is safe as long as we've uniquified all
+variable names."
+  (if (and env
+	   (not (null (get-environment-names env))))
 
-Return a list consisting of the new form and any declarations floated.")
-  (:method (fun args)
-    (destructuring-bind (fargs fenv)
-	  (float-merge args)
-	`((,fun ,@fargs) ,fenv))))
+      ;; there are variables to apply
+      ;; declare the floated declarations around the body
+      (let ((newdecls (mapcar (lambda (np)
+				(destructuring-bind (n props)
+				    np
+				  (list n
+					(get-environment-property n 'initial-value env))))
+			      (decls env))))
+
+	;; add the new decls as a local frame
+	(setq newdecls (add-local-frame-to-decls newdecls))
+	(with-local-frame newdecls
+	  (compute-let-local-frame newdecls)
+
+	  ;; copy properties across from environment
+	  (dolist (n (get-frame-names (current-frame)))
+	    (set-variable-properties n (copy-list (get-environment-properties n env)))))
+
+	;; always a LET*, never a LET
+	`(let* ,newdecls
+	   ,body))
+
+      ;; no variables to apply, return the body unchanged
+      body))
 
 
 ;;; ---------- PROGN coalescence ----------
 
-(defgeneric simplify-progn (form)
+(defpass simplify-progn (form)
   (:documentation "Collapse unnecessary PROGN forms in FORM.
 
 PROGN blocks can be introduced in a number of ways to group other
@@ -570,102 +590,24 @@ forms. Methods on this function should re-write PROGN forms that
 are unnecessarily complicated.
 
 Return the simplified form.")
-  (:method ((form list))
-    (let ((fun (car form))
-	  (args (cdr form)))
-      (simplify-progn-sexp fun args))))
-
-
-(defgeneric simplify-progn-sexp (fun args)
-  (:documentation "Simplify PROGN blocks in FUN applied to ARGS.")
-  (:method (fun args)
-    `(,fun ,@(mapcar #'simplify-progn args))))
-
-
-;;; ---------- Macro expansion ----------
-
-(defun expand-macros-in-environment (form &optional (f *global-environment*))
-  "Recursively expand all macros in FORM in an environment.
-
-Thos pass expands all macros to convert FORM into Core Verilisp.
-Macros are taken from the global environment unless a specific
-frame F is provided.
-
-Return the expanded form."
-  (in-frame f
-    (expand-macros form)))
-
-
-(defgeneric expand-macros (form)
-  (:documentation "Expand macros in FORM.")
-  (:method (form)
-    form)
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (expand-macros-sexp fun args))))
-
-
-(defun expand-descend (fun args)
-  "Expand macros in ARGS when FUN applied."
-  `(,fun ,@(remove-nulls (mapcar (lambda (arg)
-				   (unless (null arg)
-				     (expand-macros arg)))
-				 args))))
-
-
-(defgeneric expand-macros-sexp (fun args)
-  (:documentation "Expand macros in FUN applied to ARGS.
-
-The macros available are taken from the current environment.
-Use EXPAND-MACROS-IN-ENVIRONMENT to select a specific environment.")
-  (:method (fun args)
-    (declare (optimize debug))
-
-    (if (macro-declared-p fun)
-	;; macro is expandable
-	(let ((realfun (variable-property fun 'initial-value)))
-
-	  ;; expand the macro in a nested environment that will contain
-	  ;; any locally-declared macros
-	  (with-new-frame
-	    (let ((expansion (apply realfun args)))
-
-	      ;; expand the expansion
-	      (expand-macros expansion))))
-
-	;; macro is not expandable, descend into the form
-	(expand-descend fun args))))
+  (:schema into-arguments)
+  (:queue transforming))
 
 
 ;;; ---------- Elaborating state machines ----------
 
-(defgeneric elaborate-state-machines (form)
+(defpass elaborate-state-machines (form)
   (:documentation "Expand TAGBODY-based state machines into CASE- and IF-based machines.")
+  (:schema into-arguments)
+  (:queue transforming)
+
   (:method (form)
-    form)
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (with-current-form form
-	(elaborate-state-machines-sexp fun args)))))
-
-
-(defgeneric elaborate-state-machines-sexp (fun args)
-  (:documentation "Transform FUN applied to ARGS.
-
-The only methods on this function work on TAGBODY and GO forms, or
-change the ways in whcih the recursion schema works for particular forms
-like LET, LET*, and MODULE.
-
-The default recurses into ARGS.")
-  (:method (fun args)
-    `(,fun ,@(mapcar #'elaborate-state-machines args))))
+    form))
 
 
 ;;; ---------- Synthesis ----------
 
-(defgeneric synthesise (form)
+(defpass synthesise (form)
   (:documentation "Synthesise the Verilog for FORM.
 
 FORM will be fully elaborated Core Verilisp with fully populated
@@ -673,41 +615,16 @@ environments.
 
 The Verilog synthesised should be send to *STANDARD-OUTPUT*: this
 may be redirected by higher-level functions.")
-  (:method ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (with-current-form form
-	(synthesise-sexp fun args)
-	t))))
-
-
-(defgeneric synthesise-sexp (fun args)
-  (:documentation "Write the synthesised Verilog of FUN called with ARGS in the current environment.")
-  (:method (fun args)
-    (error 'unknown-form :form `(,fun ,args))))
+  (:schema fail-unknown-form)
+  (:queue synthesising))
 
 
 ;;; ---------- Lispification ----------
 
-(defgeneric lispify (form)
+(defpass lispify (form)
   (:documentation "Convert FORM to a Lisp expression.")
-  (:method ((form list))
-    (let ((fun (car form))
-	  (args (cdr form)))
+  (:schema into-arguments)
 
-      (if (eql fun 'quote)
-	  ;; leave quoted lisp expressions alone
-	  `(,fun ,@args)
-
-	  ;; otherwise reduce
-	  (lispify-sexp fun args)))))
-
-
-(defgeneric lispify-sexp (fun args)
-  (:documentation "Convert FUN applied to ARGS to Lisp.
-
-The default leaves the expression unchanged, i.e., assumes that
-this Verilisp fragment is valid Lisp.")
-  (:method (fun args)
-    (let ((lispargs (mapcar #'lispify args)))
-      `(,fun ,@lispargs))))
+  (:method (quote &rest args)
+    ;; leave quoted lisp expressions alone
+    `(quote ,@args)))

@@ -1,32 +1,39 @@
-;; Iteration
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Iteration
+;;;;
+;;;; Copyright (C) 2024--2025 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-;; Most macros to be re-implemented to ensure that they adhere to what
-;; Verilisp needs, as the expansions done by built-in definitions are
-;; not constrained and so tend to be implementation-dependent.
-
+;;;; Most macros to be re-implemented to ensure that they adhere to what
+;;;; Verilisp needs, as the expansions done by built-in definitions are
+;;;; not constrained and so tend to be implementation-dependent.
 
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
+;;; Verilisp has no iteration constructs built-in to the core: all
+;;; iteration happens through state machines. We build iteration using
+;;; macros, both the general DO form and some more structured and
+;;; easily-readable forms for common patterns.
+;;;
+;;; The macros all end up in the core environment and so are always
+;;; available.
 
-;; ---------- General iteration ----------
+
+;;; ---------- General DO loop iteration ----------
 
 (defun generate-do-var (vds var)
   "Generate a declaration and stepper for VAR."
@@ -119,7 +126,7 @@ the increments to the variables being executed every time."
 	      loop-body))))))
 
 
-;; ---------- Structured iteration ----------
+;;; ---------- Structured iteration ----------
 
 (defcoremacro/vl while (condition &body body)
   "Run the BODY forms as long as CONDITION is true.

@@ -31,7 +31,7 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
       (error 'not-synthesisable :hint (format nil "Operator needs exactly ~a arguments" n))))
 
 
-;;; ---------- Maths ----------
+;;; ---------- Addition-like operators ----------
 
 (defun compute-type-addition (args)
   "Compute the type of an addition or subtraction of ARGS."
@@ -49,30 +49,27 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
       (ensure-fixed-width ty))))
 
 
-(defmethod compute-type-sexp ((fun (eql '+)) args)
+;;; +
+
+(defpassmethod compute-type (+ &rest args)
   (compute-type-addition args))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql '+)) args)
+(defpassmethod apply-type-constraints (+ &rest args)
   (apply-type-constraints-addition args))
 
 
-(defmethod simple-expression-form-p-sexp ((fun (eql '+)) args)
+(defpassmethod simple-expression-form-p (+ &rest args)
   (every #'simple-expression-form-p args))
 
 
-(defmethod synthesise-sexp ((fun (eql '+)) args)
+(defpassmethod synthesise (+ &rest args)
   (as-infix '+ args))
 
 
-(defmethod lispify-sexp ((fun (eql '+)) args)
-  (let ((vals (mapcar (lambda (arg)
-			(lispify arg))
-		      args)))
-    `(+ ,@vals)))
+;;; -
 
-
-(defmethod compute-type-sexp ((fun (eql '-)) args)
+(defpassmethod compute-type (- &rest args)
   (if (= (length args) 1)
       ;; unary negation
       (let ((ty (compute-type (car args))))
@@ -84,15 +81,15 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 	`(signed-byte (bitwidth ',ty)))))
 
 
-(defmethod apply-type-constraints-sexp ((fun (eql '-)) args)
-  (apply-type-constraints-addition args))
+(defpassmethod apply-type-constraints (- &rest args)
+  (:same-as +))
 
 
-(defmethod simple-expression-form-p-sexp ((fun (eql '-)) args)
-  (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-form-p (- &rest args)
+  (:same-as +))
 
 
-(defmethod synthesise-sexp ((fun (eql '-)) args)
+(defpassmethod synthesise (- &rest args)
   (if (= (length args) 1)
       ;;;; unary minus
       (progn
@@ -104,15 +101,21 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
       (as-infix '- args)))
 
 
-(defmethod synthesise-sexp ((fun (eql '*)) args)
+;;; *
+
+(defpassmethod compute-type (* &rest args)
+  (:same-as +))
+
+(defpassmethod apply-type-constraints (* &rest args)
+  (:same-as +))
+
+
+(defpassmethod simple-expression-form-p (* &rest args)
+  (:same-as +))
+
+
+(defpassmethod synthesise (* &rest args)
   (as-infix '* args))
-
-
-(defmethod lispify-sexp ((fun (eql '-)) args)
-  (let ((vals (mapcar (lambda (arg)
-			(lispify arg))
-		      args)))
-    `(- ,@vals)))
 
 
 ;;; ---------- Shifts ----------
@@ -128,67 +131,63 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 ;;; means that Verilog's >>> (arithmetic shoft right) is generated implicitly
 ;;; by type, rather than being provided explicitly.
 
-(defmethod compute-type-sexp ((fun (eql '<<)) args)
+;;; <<
+
+(defpassmethod compute-type (<< val offset)
   (declare (optimize debug))
 
-  (ensure-number-of-arguments fun args 2)
+  (let ((tyval (compute-type val))
+	(tyoffset (compute-type offset)))
 
-  (destructuring-bind (val offset)
-      args
-    (let ((tyval (compute-type val))
-	  (tyoffset (compute-type offset)))
-
-      ;; the width is the width of the value plus the
-      ;; maximum number that can be in the offset
-      `(and ,tyval (unsigned-byte (bitwidth ',tyoffset))))))
+    ;; the width is the width of the value plus the
+    ;; maximum number that can be in the offset
+    `(and ,tyval (unsigned-byte (bitwidth ',tyoffset)))))
 
 
-(defmethod simple-expression-form-p-sexp ((fun (eql '<<)) args)
+(defpassmethod simple-expression-form-p (<< &rest args)
   (every #'simple-expression-form-p args))
 
 
-(defmethod synthesise-sexp ((fun (eql '<<)) args)
+(defpassmethod synthesise (<< &rest args)
   (as-infix '<< args))
 
 
-(defmethod lispify-sexp ((fun (eql '<<)) args)
+;;; TODO: Should we be able to pass an option to the into-auguments schema
+;;; to change the function tag?
+
+(defpassmethod lispify (<< args)
   (let ((vals (mapcar (lambda (arg)
 			(lispify arg))
 		      args)))
     `(ash ,@vals)))
 
 
-(defmethod compute-type-sexp ((fun (eql '>>)) args)
-  (ensure-number-of-arguments fun args 2)
+;;; >>
 
-  (destructuring-bind (val offset)
-      args
-    (let ((tyval (compute-type val))
-	  (tyoffset (compute-type offset)))
+(defpassmethod compute-type (>> val offset)
+  (let ((tyval (compute-type val))
+	(tyoffset (compute-type offset)))
 
-      ;; type is the same as the value, since
-      ;; shifting right can only make it smaller
-      tyval)))
+    ;; type is the same as the value, since
+    ;; shifting right can only make it smaller
+    tyval))
 
 
-(defmethod simple-expression-form-p-sexp ((fun (eql '>>)) args)
-  (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-form-p (>> &rest args)
+  (:same-as <<))
 
 
-(defmethod synthesise-sexp ((fun (eql '>>)) args)
-  (destructuring-bind (val offset)
-      args
+(defpassmethod synthesise (>> val offset)
+  (let ((ty (compute-type val)))
+    (if (signed-byte-p ty)
+	;; value is signed, do arithmetic shift
+	(as-infix '>>> (list val offset))
 
-    (let ((ty (compute-type val)))
-      (if (signed-byte-p ty)
-	  ;; value is signed, do arithmetic shift
-	  (as-infix '>>> args)
-
-	  ;; value is unsigned, do logical shift
-	  (as-infix '>> args)))))
+	;; value is unsigned, do logical shift
+	(as-infix '>> (list val offset)))))
 
 
-(defmethod lispify-sexp ((fun (eql '>>)) args)
+(defpassmethod lispify (>> &rest args)
   (let ((vals (mapcar (lambda (arg)
 			(lispify arg))
 		      args)))
@@ -197,136 +196,149 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 
 ;;; ---------- Bitwise operators ----------
 
-(defmacro define-fixed-width-binary-bitwise-operator (symbol &optional verilog-operator)
-  "Declare the necessary functions for SYMBOL.
+;; LOGAND is the prototype
 
-Use VERILOG-OPERATOR if provided for synthesis; otherwise use SYMBOL."
-  (unless verilog-operator
-    (setq verilog-operator symbol))
-
-  `(progn
-     (defmethod compute-type-sexp ((fun (eql ',symbol)) args)
-       '(unsigned-byte 1))
+(defpassmethod compute-type (logand l r)
+  '(unsigned-byte 1))
 
 
-     (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
-       (destructuring-bind (l r)
-	   args
-	 (ensure-fixed-width (compute-type l))
-	 (ensure-fixed-width (compute-type r))))
+(defpassmethod apply-type-constraints (logand l r)
+  (ensure-fixed-width (compute-type l))
+  (ensure-fixed-width (compute-type r)))
 
 
-     (defmethod simple-expression-form-p-sexp ((fun (eql ',symbol)) args)
-       (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-form-p (logand &rest args)
+  (every #'simple-expression-form-p args))
 
 
-     (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
-       (destructuring-bind (l r)
-	   args
-	 (as-literal "(")
-	 (synthesise l)
-	 (as-literal ,(format nil " ~a " verilog-operator))
-	 (synthesise r)
-	 (as-literal ")")))))
-
-(define-fixed-width-binary-bitwise-operator logand "&")
-(define-fixed-width-binary-bitwise-operator logior "|")
-(define-fixed-width-binary-bitwise-operator logxor "^")
+(defpassmethod synthesise (logand l r)
+  (as-literal "(")
+  (synthesise l)
+  (as-literal "&")
+  (synthesise r)
+  (as-literal ")"))
 
 
-(defmacro define-fixed-width-unary-bitwise-operator (symbol &optional verilog-operator)
-  "Declare the necessary functions for SYMBOL.
+; LOGIOR
 
-Use VERILOG-OPERATOR if provided for synthesis; otherwise use SYMBOL."
-  (unless verilog-operator
-    (setq verilog-operator symbol))
-
-  `(progn
-     (defmethod compute-type-sexp ((fun (eql ',symbol)) args)
-       '(unsigned-byte 1))
+(defpassmethod compute-type (logior l r)
+  '(unsigned-byte 1))
 
 
-     (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
-       (destructuring-bind (l)
-	   args
-	 (ensure-fixed-width (compute-type l))))
+(defpassmethod apply-type-constraints (logior l r)
+  (:same-as logand))
 
 
-     (defmethod simple-expression-form-p-sexp ((fun (eql ',symbol)) args)
-       (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-form-p (logior &rest args)
+  (:same-as logand))
 
 
-      (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
-	(destructuring-bind (l)
-	    args
-	  (as-literal "(")
-	  (as-literal ,(format nil "~a " verilog-operator))
-	  (synthesise l)
-	  (as-literal ")")))))
+(defpassmethod synthesise (logior l r)
+  (as-literal "(")
+  (synthesise l)
+  (as-literal "|")
+  (synthesise r)
+  (as-literal ")"))
 
-(define-fixed-width-unary-bitwise-operator lognot "~")
+
+;; LOGXOR
+
+(defpassmethod compute-type (logxor l r)
+  '(unsigned-byte 1))
+
+
+(defpassmethod apply-type-constraints (logxor l r)
+  (:same-as logand))
+
+
+(defpassmethod simple-expression-form-p (logxor &rest args)
+  (:same-as logand))
+
+
+(defpassmethod synthesise (logxor l r)
+  (as-literal "(")
+  (synthesise l)
+  (as-literal "^")
+  (synthesise r)
+  (as-literal ")"))
+
+
+(defpassmethod compute-type (lognot v)
+  '(unsigned-byte 1))
+
+
+(defpassmethod apply-type-constraints (lognot v)
+  (ensure-fixed-width (compute-type v)))
+
+
+(defpassmethod simple-expression-form-p (lognot v)
+  (simple-expression-form-p v))
+
+
+(defpassmethod synthesise (lognot v)
+  (as-literal "(")
+  (as-literal "~")
+  (synthesise v)
+  (as-literal ")"))
 
 
 ;;; ---------- Logical ----------
 
-(defmacro define-fixed-width-nary-logical-operator (symbol &optional verilog-operator)
-  "Declare the necessary functions for SYMBOL.
+;;; AND
 
-Use VERILOG-OPERATOR if provided for synthesis; otherwise use SYMBOL."
-  (unless verilog-operator
-    (setq verilog-operator symbol))
-
-  `(progn
-     (defmethod compute-type-sexp ((fun (eql ',symbol)) args)
-       '(unsigned-byte 1))
+(defpassmethod compute-type (and &rest args)
+  '(unsigned-byte 1))
 
 
-     (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
-       (dolist (a args)
-	 (ensure-boolean (compute-type a))))
+(defpassmethod apply-type-constraints (and &rest args)
+  (dolist (a args)
+    (ensure-boolean (compute-type a))))
 
 
-     (defmethod simple-expression-form-p-sexp ((fun (eql ',symbol)) args)
-       (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-form-p (and &rest args)
+  (every #'simple-expression-form-p args))
 
 
-     (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
-       (as-infix ,verilog-operator args))))
-
-(define-fixed-width-nary-logical-operator and "&&")
-(define-fixed-width-nary-logical-operator or "||")
+(defpassmethod synthesise (and &rest args)
+  (as-infix "&&" args))
 
 
-(defmacro define-fixed-width-unary-logical-operator (symbol &optional verilog-operator)
-  "Declare the necessary functions for SYMBOL.
+;;; OR
 
-Use VERILOG-OPERATOR if provided for synthesis."
-  (unless verilog-operator
-    (setq verilog-operator symbol))
-
-  `(progn
-     (defmethod compute-type-sexp ((fun (eql ',symbol)) args)
-       '(unsigned-byte 1))
+(defpassmethod compute-type (or &rest args)
+  '(unsigned-byte 1))
 
 
-     (defmethod apply-type-constraints-sexp ((fun (eql ',symbol)) args)
-       (destructuring-bind (v)
-	   args
-	 (ensure-boolean (compute-type v))))
+(defpassmethod apply-type-constraints (or &rest args)
+  (:same-as and))
 
 
-     (defmethod simple-expression-form-p-sexp ((fun (eql ',symbol)) args)
-       (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-form-p (or &rest args)
+  (:same-as and))
 
 
-     (defmethod synthesise-sexp ((fun (eql ',symbol)) args)
-       (destructuring-bind (v)
-	   args
-	 (as-literal "(")
-	 (as-literal ,(format nil " ~a" verilog-operator))
-	 (as-literal "(")
-	 (synthesise v)
-	 (as-literal ")")
-	 (as-literal ")")))))
+(defpassmethod synthesise (or &rest args)
+  (as-infix "||" args))
 
-(define-fixed-width-unary-logical-operator not "!")
+
+;;; NOT
+
+(defpassmethod compute-type (not v)
+  '(unsigned-byte 1))
+
+
+(defpassmethod apply-type-constraints (not v)
+  (ensure-boolean (compute-type v)))
+
+
+(defpassmethod simple-expression-form-p (not v)
+  (simple-expression-form-p v))
+
+
+(defpassmethod synthesise (not v)
+  (as-literal "(")
+  (as-literal "~")
+  (as-literal "(")
+  (synthesise v)
+  (as-literal ")")
+  (as-literal ")"))

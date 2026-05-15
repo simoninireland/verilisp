@@ -113,7 +113,7 @@
 				    (setf x (+ x b) :sync t)))))))
 
     (vl::typecheck p)
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 (test test-synthesise-module-late-init
@@ -133,7 +133,7 @@
 				(setf x (aref a 4))))))))
 
     (vl::typecheck p)
-    (is (vl::synthesise p))
+    (is (vl::synthesise/vl p))
 
     ;; make sure synthesis cleared the late intialisation queue
     (is (not (vl::module-late-initialisation-p)))))
@@ -157,7 +157,7 @@
       (@ (posedge clk)
 	 (setf x (aref a 4)))))
 
-  (is (vl::synthesise (vl::get-module 'test/998)))
+  (is (vl::synthesise/vl (vl::get-module 'test/998)))
 
   ;; make sure synthesis cleared the late intiialisation queue
   (is (not (vl::module-late-initialisation-p))))
@@ -224,7 +224,7 @@
 
     (vl::typecheck p)
     (setq p (vl::simplify-progn (car (vl::float-let-blocks p))))
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 (test test-module-instanciate-with-bitfields
@@ -264,7 +264,7 @@
     (vl::typecheck p)
     (setq p (car (vl::float-let-blocks p)))
     (setq p (vl::simplify-progn p))
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 (test test-synthesise-module-instanciation
@@ -284,7 +284,7 @@
 			     (setq c 1))))))
 
     (vl::typecheck p)
-    (is (vl::synthesise p)))
+    (is (vl::synthesise/vl p)))
 
   (let ((p (vl::expand/vl '(let ((c 0)
 				(d 0))
@@ -292,7 +292,7 @@
 			     (setq c 1))))))
 
     (vl::typecheck p)
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 (test test-module-dependencies
@@ -336,24 +336,25 @@
   (let ((p (vl::expand/vl '(module clockworks (clk-in reset-in
 					       clk reset
 					       &key (slow 0))
-			   (declare (type bit clk-in reset-in clk reset)
-			    (direction in clk-in reset-in)
-			    (direction out clk reset))
+			    (declare (type bit clk-in reset-in clk reset)
+			     (direction in clk-in reset-in)
+			     (direction out clk reset))
 
-			   ;; clock divider
-			   (let ((slow-clk 0))
-			     (declare (type (unsigned-byte (1+ slow)) slow-clk))
+			    ;; clock divider
+			    (let ((slow-clk 0))
+			      (declare (type (unsigned-byte (1+ slow)) slow-clk))
 
-			     (@ (posedge clk-in)
-				(incf slow-clk))
-			     (setf clk (bref slow-clk slow)))
+			      (@ (posedge clk-in)
+				 (incf slow-clk))
+			      (setf clk (bref slow-clk slow)))
 
-			   ;; reset (always active-high)
-			   (setq reset reset-in)))))
+			    ;; reset (always active-high)
+			    (setq reset reset-in)))))
 
+    (vl::typecheck p)
     (vl::with-new-frame
-      (let ((m (vl::elaborate/vl p)))
-	(is (vl::synthesise m))))))
+      (let ((m (vl::transform/vl p)))
+	(is (vl::synthesise/vl m))))))
 
 
 (test test-module-real-instanciate
@@ -389,7 +390,7 @@
 					:slow 9)))
       (setf reset 1)))
 
-  (is (vl::synthesise (vl::get-module 'soc))))
+  (is (vl::synthesise/vl (vl::get-module 'soc))))
 
 
 (test test-module-array-size-param
@@ -409,7 +410,7 @@
 
     (is (vl::subtype-p (vl::typecheck p)
 		       'module))
-    (is (vl::synthesise p))))
+    (is (vl::synthesise/vl p))))
 
 
 (test test-module-in-error-handler
@@ -547,7 +548,7 @@
 
   (flet ((instanciate (x)
 	   (let ((p (vl::expand/vl `(let (clk-in clk reset-in reset
-					  (b #2r100))
+						 (b #2r100))
 				      (let ((cw1 (make-instance 'clockworks
 								:clk-in clk-in
 								:clk ,x
@@ -557,7 +558,7 @@
 	     (vl:typecheck/vl p))))
 
     ;; variables are OK
-    (is (instanciate 'b))
+    (instanciate 'b)
 
     ;; bits in a number are OK
     (is (instanciate '(bref b 2)))

@@ -183,7 +183,7 @@
 
     (let ((p (vl::expand/vl (copy-tree x))))
       (vl::typecheck p)
-      (is (vl::synthesise p)))))
+      (is (vl::synthesise/vl p)))))
 
 
 (test test-synthesise-binders-not-simple
@@ -195,25 +195,25 @@
 
     (let ((p (vl::expand/vl '(let ((a (+ 10 (- 9 b)))) a))))
       (vl::typecheck p)
-      (is (vl::synthesise p))))
+      (is (vl::synthesise/vl p))))
 
   ;; nested if expression RHS
   (let ((p (vl::expand/vl '(let ((a (+ 10 (if (> 1 2) 1 2)))) a))))
     (vl::typecheck p)
-    (is (vl::synthesise p)))
+    (is (vl::synthesise/vl p)))
 
   ;; RHS that accesses an array
   (let ((p (vl::expand/vl '(let ((a (make-array (10) :element-type (unsigned-byte 8))))
 			    (let ((b (aref a 5)))
 			      b)))))
     (vl::typecheck p)
-    (is (vl::synthesise p)))
+    (is (vl::synthesise/vl p)))
 
   ;; nested if that's got a complicated body
   (let ((p (vl::expand/vl '(let* (a (b (+ 10 (if (< 1 2) 1 (setf a 27))))) a))))
     (vl::typecheck p)
     (signals not-synthesisable
-      (is (vl::synthesise p)))))
+      (is (vl::synthesise/vl p)))))
 
 
 (test test-let-width

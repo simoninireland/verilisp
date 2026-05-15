@@ -28,7 +28,7 @@ The compilation process is conducted by three top-level passes.
 
 .. cl:function:: typecheck/vl
 
-.. cl:function:: elaborate/vl
+.. cl:function:: transform/vl
 
 Once compiled, Verilisp code is synthesised to Verilog using another
 pass.
