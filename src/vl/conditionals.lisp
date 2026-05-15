@@ -20,7 +20,7 @@
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
-;;; The main conditions. IF and CASE and core language; COND is a macro.
+;;; The main conditional. IF and CASE and core language; COND is a macro.
 ;;;
 ;;; CASE follows Common Lisp in not evaluating the values in the arms.
 ;;; However, we do allow those values to be constant variables, which is
@@ -238,8 +238,9 @@ Each test element must be testable against TY."
 (defpassmethod simple-expression-form-p (case condition &rest clauses)
   (and (simple-expression-form-p condition)
        (every (lambda (clause)
-		(and (= (length (cdr clause) 1))
-		     (simple-expression-form-p (cadr clause)))))))
+		(and (= (length (cdr clause)) 1)
+		     (simple-expression-form-p (cadr clause))))
+	      clauses)))
 
 
 (defpassmethod synthesise (case condition &rest clauses)
