@@ -120,9 +120,13 @@
   (:documentation "Transform a COERCE form into bitfields.
 
 The main use of COERCE is change the widths and/or signs of variables.
-We do this directly using MAKE-BITFIELDS, which works becase all the
-elements need to be statically constant.")
+We do this directly using MAKE-BITFIELDS, which works because all the
+elements need to be statically constant.
+
+This pass needs to happen early in the TRANSFORMING pass, certainly
+before FLOAT-LET-BLOCKS.")
   (:queue transforming)
+  (:queue-position :prepend)
   (:schema into-arguments)
 
   (:method (form)

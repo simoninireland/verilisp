@@ -488,6 +488,17 @@ consistency with the representation implied by the code.")
     nil))
 
 
+;;; ---------- Elaborating state machines ----------
+
+(defpass elaborate-state-machines (form)
+  (:documentation "Expand TAGBODY-based state machines into CASE- and IF-based machines.")
+  (:schema into-arguments)
+  (:queue transforming)
+
+  (:method (form)
+    form))
+
+
 ;;; ---------- Let block coalescence ----------
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -592,17 +603,6 @@ are unnecessarily complicated.
 Return the simplified form.")
   (:schema into-arguments)
   (:queue transforming))
-
-
-;;; ---------- Elaborating state machines ----------
-
-(defpass elaborate-state-machines (form)
-  (:documentation "Expand TAGBODY-based state machines into CASE- and IF-based machines.")
-  (:schema into-arguments)
-  (:queue transforming)
-
-  (:method (form)
-    form))
 
 
 ;;; ---------- Synthesis ----------
