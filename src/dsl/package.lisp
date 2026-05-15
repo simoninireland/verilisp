@@ -52,10 +52,20 @@
 
    ;; pass queues
    #:define-pass-queue
+   #:pass-queue-names
+   #:pass-queue-p
+   #:ensure-pass-queue
+   #:run-pass-queue
 
    ;; recursion schemata
    #:define-recursion-schema
+   #:recursion-schemata
+   #:recursion-schema-p
+   #:ensure-recursion-schema
+
+   ;; standard schemata
    #:fail-unknown-form
+   #:constant-form
    #:into-arguments
    #:over-arguments
    #:into-function-and-arguments
@@ -65,6 +75,13 @@
    ;; pass definition macros
    #:defpass
    #:defpassmethod
+   #:pass-names
+   #:pass-p
+   #:ensure-pass
+
+   ;; recovery
+   #:with-recover-on-error
+   #:recover
 
    ;; conditions
    #:dsl-error

@@ -38,9 +38,7 @@
     :initform (current-form)
     :reader form))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Unknown form ~a"
-					       (form c))
-				       c str)))
+	     (format str "Unknown form ~a" (form c))))
   (:documentation "Condition signalled when an unknown form is encountered.
 
 This usually means that a pass has encountered a form that shouldn't be

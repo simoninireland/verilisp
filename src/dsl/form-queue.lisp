@@ -118,3 +118,37 @@ Returns the first matching form, or NIL."
 
       ;; if we get here, we've not found a matching form
       nil)))
+
+
+;;; ---------- Continuing passes after an error ----------
+
+(defun recover-on-error-report (str)
+  "Report the recovery action to STR."
+  (format str "Recover from ~a" (current-form)))
+
+
+(defmacro with-recover-on-error (recovery &body body)
+  "Run the BODY forms, offering a restart that runs the RECOVERY form on error.
+
+The recovery action is triggered by calling RECOVER, which invokes
+the RECOVER restart installed by this macro.
+
+The recovery form should do whatever is necessary to best continue
+compilation. The handler may decide not to synthesise code after such
+an error has been signalled; alternatively it may treat some such
+errors as warnings and still synthesise code."
+  `(restart-case
+       (progn
+	 ,@body)
+
+     ;; offer the recovery restart
+     (recover ()
+       :report recover-on-error-report
+       ,recovery)))
+
+
+(defmacro recover ()
+  "Run the recovery action.
+
+A RECOVER restart must be available in the current dynamic environment."
+  `(invoke-restart 'recover))

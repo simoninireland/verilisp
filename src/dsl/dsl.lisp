@@ -26,193 +26,17 @@
 ;;; sequence.
 
 
-;;; ---------- Pass queues ----------
-
-(defclass pass-queue ()
-  ((queue
-    :documentation "The passes."
-    :initform nil
-    :accessor pass-queue-queue))
-  (:documentation "A queue of compiler nanopasses.
-
-The queue can be updated as passes are added, with new passes being
-appended (default) or prepended (if required). The queue can be run
-in one operation, with the program being passed along as modified."))
-
-
-(defun add-pass-to-queue (pass-name queue &key prepend)
-  "Add PASS-NAME to QUEUE.
-
-If :PREPEND is non-NIL then the pass is added to the front of the
-queue; otherwise it is added to the back."
-  (if prepend
-      (setf (pass-queue-queue queue) (cons pass-name (pass-queue-queue queue)))
-      (appendf (pass-queue-queue queue) (list pass-name))))
-
-
-(defun clear-pass-queue (queue)
-  "Clear all passes from QUEUE."
-  (setf (pass-queue-queue queue) nil))
-
-
-(defun run-pass-queue (queue form)
-  "Run the passes of QUEUE in order against FORM.
-
-The return value of each pass is used as the input to the next."
-  (let ((f form))
-    (dolist (pass (pass-queue-queue queue))
-      (setq f (funcall pass f)))
-
-    ;; return the result of the last pass
-    f))
-
-
-;;; Defining pass queues
-
-(defparameter *pass-queue-tags* nil
-  "Alist from tags used in DEFPASS to pass queues.")
-
-
-(defun pass-queue-p (tag)
-  "Test whether TAG is the name of a defined pass queue."
-  (assoc tag *pass-queue-tags*))
-
-
-(defun ensure-pass-queue (tag)
-  "Ensure TAG is the name of a defined pass queue."
-  (unless (pass-queue-p tag)
-      (error 'dsl-error :hint (format nil "No pass queue ~s defined" tag))))
-
-
-(defun get-pass-queue (tag)
-  "Return the pass queue named TAG."
-  (if-let ((a (assoc tag *pass-queue-tags*)))
-    (cadr a)
-    (error 'dsl-error :hint (format nil "No pass queue ~s defined" tag))))
-
-
-(defmacro define-pass-queue (tag)
-  "Define and install a new pass queue with TAG.
-
-TAG is used when defining passes to select the appropriate queue."
-  `(let ((queue (make-instance 'pass-queue)))
-     (appendf *pass-queue-tags* (list (list ',tag queue)))))
-
-
-;;; ---------- Recursion schemata ----------
-
-;;; These are used to flesh-out the bodies of form-level functions.
-;;; They actually don't have to be recursive at all: they'll be used
-;;; to build the structurally recursive pass functions.
-;;;
-;;; The name of the schema is used in the :SCHEMA option to
-;;; DEFPASS and DEFPASSMETHOD to choose the schema when
-;;; no body is provided.
-
-(defparameter *recursion-schemata* nil
-  "A list of recursion scheme function names.")
-
-
-(defmacro define-recursion-schema (schema-name schema-args &body body)
-  "Define a new recursion schema.
-
-The schema should take three arguments which will contain the name of
-the variable holding the form head, the name of the variable holding
-the form arguments, and the name of the pass. It should return the
-code to be inserted into the form-level function, as a macro would."
-  ;; check the schema prototype is correct
-  (unless (= (length schema-args) 3)
-    (error 'dsl-error :hint (format nil "Recursion schemata take three arguments (not ~s)" schema-args)))
-
-  (let ((docstring "A recursion schema"))
-    (when (stringp (car body))
-      (setq docstring (car body))
-      (setq body (cdr body)))
-
-    `(progn
-       ;; wrap the schema up in a function
-       (defun ,schema-name ,schema-args
-	 ,docstring
-	 ,@body)
-
-       ;; install the function as a valid schema
-       (appendf *recursion-schemata* (list ',schema-name)))))
-
-
-(defun recursion-schema-p (schema-name)
-  "Test whether SCHEMA-NAME names a recursion schema."
-  (member schema-name *recursion-schemata*))
-
-
-(defun ensure-recursion-schema (schema-name)
-  "Ensure that SCHEMA-NAME names a recursion schema."
-  (unless (recursion-schema-p schema-name)
-      (error 'dsl-error :hint (format nil "No recursion schema ~s defined" schema-name))))
-
-
-;;; Standard schemata
-
-(define-recursion-schema fail-unknown-form (fun args pass-name)
-  "Any call to this schema fails with an UNKNOWN-FORM error."
-  `(error 'unknown-form :form (cons ,fun ,args)
-			:hint (format nil "Define an entry for ~s handling ~s"
-				      ',pass-name ,fun)))
-
-
-(define-recursion-schema into-arguments (fun args pass-name)
-  "A recursion schema that recurses into ARGS.
-
-The form returned is a list of the form (FUN . VARGS) where VARGS
-are the results of the recursive calls. If the results are irrelevant
-use the OVER-ARGUMENTS schema."
-  (with-gensyms (vals)
-    `(let ((,vals (mapcar #',pass-name ,args)))
-       (cons ,fun ,vals))))
-
-
-(define-recursion-schema over-arguments (fun args pass-name)
-  "A recursion schema that maps the pass over the arguments.
-
-The results of the map-over are discarded: to get the result,
-use the INTO-ARGUMENTS schema."
-  `(mapc #',pass-name ,args))
-
-
-(define-recursion-schema into-function-and-arguments (fun args pass-name)
-  "A recursion schema that recurses into both FUN and ARGS.
-
-The form returned is a list of the form (VFUN . VARGS) where VFUN and
-VARGS are the results of the recursive calls."
-  (with-gensyms (vfun vals)
-    `(let ((,vfun (,pass-name ,fun))
-	   (,vals (mapcar #',pass-name ,args)))
-       (cons ,vfun ,vals))))
-
-
-(define-recursion-schema into-arguments-all-non-nil (fun args pass-name)
-  "A recursion schema that recurses into all arguments and checks they're all non-NIL.
-
-This is usually used for predicates over code."
-  `(every #',pass-name ,args))
-
-
-(define-recursion-schema into-arguments-union (fun args pass-name)
-  "A recursion schema that recurses into all arguments and unions the results."
-  `(foldr #'union (mapcar #',pass-name ,args) '()))
-
-
-;;; ---------- Pass-defining macros ----------
-
-;;; Pass function name generation
+;;; ---------- Pass function name generation ----------
 
 (defun pass-top-level-function-name (pass-name)
   "Return the top-level function name for PASS."
   (intern (upcase (symbol-name pass-name))))
 
 
-(defun top-level-function-method-p (args)
-  "Test whether ARGS are for a top-level generic function."
-  (= (length args) 1))
+(defun pass-wrap-level-function-name (pass-name)
+  "Return the wrapper-level function name for PASS."
+  (intern (upcase (concat (symbol-name (pass-top-level-function-name pass-name))
+			  "/wrapper"))))
 
 
 (defun pass-form-level-function-name (pass-name)
@@ -223,38 +47,92 @@ The default is the pass name followed by a suffix."
 			  "/form"))))
 
 
+(defun top-level-function-method-p (args)
+  "Test whether ARGS are for a top-level generic function."
+  (= (length args) 1))
+
+
 (defun form-level-function-method-p (args)
   "Test whether ARGS are for a form-level generic function."
   (> (length args) 1))
 
 
-;;; Define a pass
+;;; ---------- Defining a pass ----------
 
-(defmacro defpass (pass-name extra-args &rest opts)
+(defparameter *pass-extra-arguments* nil
+  "An alist from pass names to their extra recursion arguments.")
+
+
+(defun pass-p (pass-name)
+  "Test whether PASS-NAME is defined as a pass."
+  (assoc pass-name *pass-extra-arguments*))
+
+
+(defun ensure-pass (pass-name)
+  "Ensure that PASS-NAME is declared as a pass."
+  (unless (pass-p pass-name)
+    (error 'dsl-error :hint (format nil  "No pass ~s defined" pass-name))))
+
+
+(defun add-pass (pass-name extra-args)
+  "Add a pass called PASS-NAME that takes EXTRA-ARGS in addition to the form it works over.
+
+If PASS-NAME exists already it is overridden."
+  (if-let ((a (assoc pass-name *pass-extra-arguments*)))
+    (setf (cdr a) extra-args)
+
+    (appendf *pass-extra-arguments* (list (cons pass-name extra-args)))))
+
+
+(defun get-pass-extra-args (pass-name)
+  "Return the extra arguments passed to PASS-NAME."
+  (if-let ((a (assoc pass-name *pass-extra-arguments*)))
+    (cdr a)))
+
+
+(defmacro defpass (pass-name form-arg &rest opts)
   "Define a compiler nanopass called PASS-NAME.
 
-EXTRA-ARGS are ignored at the moment, and should be NIL.
+FORM-ARG should be a list of a single argument that names the
+form being operated on.
 
-The macros follows the same form as DEFGENERIC: a name and lambda list
+The macro follows the same form as DEFGENERIC: a name and lambda list
 followed by a (possibly empty) alist of options for the construction
-of ther pass. The options are:
+of the pass. The options are:
 
 - (:DOCUMENTATION \"docstring\"): install DOCSTRING
 - (:QUEUE queue-name): install the pass onto QUEUE-NAME
 - (:QUEUE-POSITION pos): install pass at POS, which can be :APPEND or :PREPEND
 - (:SCHEMA schema): use SCHEMA as the default recursion scheme for forms
 - (:METHOD (lambda-list) body): install a method with the given form
+- (:PRE fun): run FUN before running the pass
+- (:POST fun): run FUN after running the pass, returning its value
+
+FOr :PRE and :POST, FUN should be a function designator. The function
+for :PRE is passed FORM, and its result is used as the initial form
+for the pass. The function for :POST is passed the modified FORM as
+retruned by :PRE (if present) and the result of the pass, and the pass
+overall returns its value.
 
 By default the pass is not added to a queue. The default recuursion
-schema is FAIL-UNKNOWN-FORM."
+schema is FAIL-UNKNOWN-FORM. Some schemata accept an extra argument,
+as described in DEFINE-RECURSION-SCHEMA."
   (declare (optimize debug))
 
+  (unless (>= (length form-arg) 1)
+    (error 'dsl-error "Passes take a single argument"))
+
   (let ((docstring "A compiler nanopass.")
+	(form (car form-arg))
+	(extra-args (cdr form-arg))   ; will be removed at some point
 	queue-tag
 	(queue-position :append)
 	(schema 'fail-unknown-form)
+	schema-options
 	atom-methods
-	form-methods)
+	form-methods
+	preprocessing
+	postprocessing)
 
     ;; fill in the options over the defaults
     (dolist (opt opts)
@@ -273,9 +151,16 @@ schema is FAIL-UNKNOWN-FORM."
 	     (error 'dsl-error :hint (format nil "Queue position must be :APPEND or :PREPEND (not ~s)" (car value))))
 	   (setq queue-position (car value)))
 
+	  ;; TODO: SHould we allow function designators here, so that
+	  ;; schemata can be added as code directly?
+
 	  (:schema
-	   (ensure-recursion-schema (car value))
-	   (setq schema (car value)))
+	   (unless (recursion-schema-p (safe-car schema))
+	     (error 'dsl-error :hint (format nil "Unrecogised recursion schema ~s" (safe-car schema))))
+	   (setq schema (safe-car value))
+	   (when (> (length (safe-cdr value)) 1)
+	     (error 'dsl-error :hint "Recursion scheme can accept at most one argument"))
+	   (setq schema-options (safe-cadr value)))
 
 	  (:method
 	      (destructuring-bind (args &rest body)
@@ -285,25 +170,42 @@ schema is FAIL-UNKNOWN-FORM."
 		    (appendf atom-methods (list value))
 
 		    ;; form method, installed onto form-level generic function
-		    (appendf form-methods (list value))))))))
+		    (appendf form-methods (list value)))))
+
+	  (:pre
+	   (setq preprocessing (safe-car value)))
+
+	  (:post
+	   (setq postprocessing (safe-car value)))
+
+	  (t
+	   (error 'dsl-error :hint (format nil "Unrecognised pass option ~s" name))))))
+
+    ;; sanity checks
+    (if (and (or preprocessing postprocessing)
+	     (not queue-tag))
+	(error 'dsl-error :hint ":PRE and :POST only make sense for passes on a pass queue"))
 
     (let ((top-level-f (pass-top-level-function-name pass-name))
-	  (form-level-f (pass-form-level-function-name pass-name)))
+	  (form-level-f (pass-form-level-function-name pass-name))
+	  (wrap-level-f (pass-wrap-level-function-name pass-name)))
 
-      (with-gensyms (form fun args)
+      ;; store the extra-args names
+      (add-pass pass-name extra-args)
+
+      (with-gensyms (fun args res)
 
 	`(progn
-	   ,@(when queue-tag
-	       ;; store the pass name in the correct queue if one is given
-	       (list `(add-pass-to-queue ',top-level-f
-					 (cadr (assoc ',queue-tag *pass-queue-tags*))
-					 :prepend ,(eql queue-position :prepend))))
-
 	   ;; define the top-level generic function
 	   (defgeneric ,top-level-f (,form ,@extra-args)
 	     (:documentation ,docstring)
+
+	     ;; add the explicit methods for atoms forms
 	     ,@(mapcar (lambda (m)
-			 `(:method ,@m))
+			 (destructuring-bind (margs &rest mbody)
+			     m
+			   `(:method ,(append margs extra-args)
+			      ,@mbody)))
 		       atom-methods)
 
 	     ;; call form-level function for non-atom forms
@@ -315,22 +217,45 @@ schema is FAIL-UNKNOWN-FORM."
 
 	   ;; define the form-level function
 	   (defgeneric ,form-level-f (,fun ,args ,@extra-args)
-	     (:documentation ,(concat "Form-level handler for " (symbol-name pass-name)))
+	     (:documentation ,(format nil "Pass form-level handler for ~s" pass-name))
 
 	     ;; default schema
 	     (:method (,fun ,args ,@extra-args)
-	       ,(funcall schema fun args pass-name))
+	       ,(apply schema (append (list fun args pass-name)
+				      (list :option schema-options)
+				      (list :extra extra-args))))
 
-	     ;; explicit methods
+	     ;; explicit methods for forms
 	     ,@(mapcar (lambda (m)
 			 (let ((mfun (caar m))
 			       (margs (cdar m))
 			       (body (cdr m)))
-			   `(:method ((,fun (eql ',mfun)) ,args)
+			   `(:method ((,fun (eql ',mfun)) ,args ,@extra-args)
 			      (destructuring-bind ,margs
 				  ,args
 				,@body))))
-		       form-methods)))))))
+		       form-methods))
+
+	   ;; define the wrapper function
+	   (defun ,wrap-level-f (,form ,@extra-args)
+	     ,(format nil "Pass wrapper function for ~s" pass-name)
+
+	     ;; pre-process
+	     ,@(when preprocessing
+		 `((setq ,form (funcall ,preprocessing ,form))))
+
+	     ;; call pass
+	     (let ((,res (,top-level-f ,form ,@extra-args)))
+
+	       ;; post-process
+	       ,@(if postprocessing
+		   `((funcall ,postprocessing ,form ,res))
+		   `(,res))))
+
+	   ,@(when queue-tag
+	       ;; store the pass name in the correct queue if one is given
+	       `((add-pass-to-queue ',pass-name ',queue-tag
+				    :prepend ,(eql queue-position :prepend)))))))))
 
 
 (defmacro defpassmethod (pass-name form &body body)
@@ -346,6 +271,10 @@ options are:
 If there is no :SCHEMA option then the rest of BODY is treated as the
 body of the method."
   (declare (optimize debug))
+
+  ;; unlike ordinary methods, we need a pass to add to
+  (ensure-pass pass-name)
+
   (let ((docstring (format nil "Method for ~s in pass ~s." form pass-name))
 	schema
 	same-as)
@@ -356,7 +285,7 @@ body of the method."
 		 (if (stringp opt)
 		     (progn
 		       (setq docstring opt)
-			(consume-options (cdr b)))
+		       (consume-options (cdr b)))
 		     (if (listp opt)
 			 (case (car opt)
 			   (:documentation
@@ -394,32 +323,64 @@ body of the method."
 
     ;; synthesise the method
     (let ((top-level-f (pass-top-level-function-name pass-name))
-	  (form-level-f (pass-form-level-function-name pass-name)))
+	  (form-level-f (pass-form-level-function-name pass-name))
+	  (extra-args (get-pass-extra-args pass-name)))
 
-      (with-gensyms (fun args)
+	  (with-gensyms (fun args)
 
-	(if same-as
-	    ;; method is the same as another
-	    (destructuring-bind (mfun &rest margs)
-		form
-	      `(defmethod ,form-level-f ((,fun (eql ',mfun)) ,args)
-		 ,docstring
-		 (,form-level-f ',same-as ,args)))
-
-	    (if (top-level-function-method-p form)
-		;; method is for an atom
-		`(defmethod ,top-level-f ,form
-		   ,docstring
-		   ,@body)
-
-		;; method is for a structured form
+	    (if same-as
+		;; method is the same as another
 		(destructuring-bind (mfun &rest margs)
 		    form
-
-		  `(defmethod ,form-level-f ((,fun (eql ',mfun)) ,args)
+		  `(defmethod ,form-level-f ((,fun (eql ',mfun)) ,@(append (list args)
+								    extra-args))
 		     ,docstring
-		     (destructuring-bind ,margs
-			 ,args
-		       ,@(if schema
-			     (list (funcall schema fun args pass-name))
-			     body))))))))))
+
+		     (,form-level-f ',same-as ,args)))
+
+		;; method has a body
+		(if (top-level-function-method-p form)
+		    ;; method is for an atom
+		    `(defmethod ,top-level-f ,form
+		       ,docstring
+		       ,@body)
+
+		    ;; method is for a structured form
+		    (destructuring-bind (mfun &rest margs)
+			form
+
+		      `(defmethod ,form-level-f ((,fun (eql ',mfun)) ,@(append (list args)
+									extra-args))
+			 ,docstring
+
+			 ;; TODO: Need better lambda-list handling for other cases too
+			 ,(if (eql (car margs) '&rest)
+			      ;; capturing all the arguments
+			      `(let ((,(cadr margs) ,args))
+				 ,@(if schema
+				       (list (funcall schema fun args pass-name))
+				       body))
+
+			      ;; "proper" arguments
+			      `(destructuring-bind ,margs
+				   ,args
+				 ,@(if schema
+				       (list (funcall schema fun args pass-name))
+				       body)))))))))))
+
+
+;;; ---------- Debugging helpers ----------
+
+(defun pass-names ()
+  "Return a list of pass names."
+  (alist-keys *pass-extra-arguments*))
+
+
+(defun pass-queue-names ()
+  "Return a list of pass queue names."
+  (alist-keys *pass-queues*))
+
+
+(defun recursion-schemata ()
+  "Return a list of all recursion schemata tags."
+  (alist-keys *recursion-schemata*))
