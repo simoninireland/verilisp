@@ -32,8 +32,10 @@ Comparison shortcuts
 Increment/decrement
 -------------------
 
-- ``(incf place)`` -- increment the value at place
-- ``(decf place)`` -- decrement the value at place
+- ``(incf place &optional value)`` -- increment the value at place
+- ``(decf place &optional value)`` -- decrement the value at place
+
+``value`` defaults to 1 for each macro.
 
 
 .. _core-psetq:
