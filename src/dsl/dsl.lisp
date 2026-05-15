@@ -254,8 +254,9 @@ as described in DEFINE-RECURSION-SCHEMA."
 
 	   ,@(when queue-tag
 	       ;; store the pass name in the correct queue if one is given
-	       `((add-pass-to-queue ',pass-name ',queue-tag
-				    :prepend ,(eql queue-position :prepend)))))))))
+	       `((eval-when (:compile-toplevel :load-toplevel :execute)
+		   (add-pass-to-queue ',pass-name ',queue-tag
+				      :prepend ,(eql queue-position :prepend))))))))))
 
 
 (defmacro defpassmethod (pass-name form &body body)
