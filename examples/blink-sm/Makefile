@@ -1,6 +1,6 @@
 # Makefile for blink in Verilisp
 #
-# Copyright (C) 2024--2025, Simon Dobson
+# Copyright (C) 2024--2026, Simon Dobson
 #
 # This is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this software. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-include ../icestick.mk
+VERILISP_ROOT = ../..
 
 
 # ---------- Target code ----------
@@ -33,7 +33,7 @@ OBJECT = blink.v
 # ---------- Tools ----------
 
 # Tools
-RM = rm -fr
+include $(VERILISP_ROOT)/examples/icestick.mk
 
 
 # ---------- Top-level targets ----------

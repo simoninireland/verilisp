@@ -1,6 +1,6 @@
 # Makefile for blink in Verilisp
 #
-# Copyright (C) 2024--2025, Simon Dobson
+# Copyright (C) 2024--2026, Simon Dobson
 #
 # This is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -26,15 +26,15 @@ TARGET = blink.bin
 
 # Sources
 SOURCES = blink.lisp
-#CONFIG = blink.pcf
-CONFIG = blink.xdf
+CONFIG = blink.pcf
+#CONFIG = blink.xdf
 OBJECT = blink.v
 
 
 # ---------- Tools ----------
 
-#include $(VERILISP_ROOT)/examples/icestick.mk
-include $(VERILISP_ROOT)/examples/digilent-cmod-a7.mk
+include $(VERILISP_ROOT)/examples/icestick.mk
+#include $(VERILISP_ROOT)/examples/digilent-cmod-a7.mk
 
 
 # ---------- Top-level targets ----------
