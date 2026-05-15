@@ -80,15 +80,21 @@
     (is (vl::synthesise/vl `(,op 1 2)))))
 
 
+(test test-shifts-wrong-arguments
+  "Test we catch the wrong arguments to >>."
+  (signals (error)
+    (vl::typecheck/vl '(>> 1 2 3))))
+
+
 ;;; ---------- Bitwise operators ----------
 
 (test test-typecheck-logop
   "Test we can typecheck the logical operators."
   (is (vl::subtype-p (vl::typecheck '(logand #2r10110 #2r11110))
-		    '(unsigned-byte 5)))
+		     '(unsigned-byte 5)))
 
   (is (vl::subtype-p (vl::typecheck '(logand #2r10110 #2r1111110))
-		    '(unsigned-byte 7))))
+		     '(unsigned-byte 7))))
 
 ;;; ---------- Variable access ----------
 
