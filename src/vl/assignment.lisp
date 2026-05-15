@@ -51,7 +51,7 @@ isn't declared."
 
 ;;; ---------- setq ----------
 
-(defpassmethod compute-type (setq n v &key sync)
+(defpassmethod compute-type (setq n v)
   (let ((ty (compute-type v)))
     ;; constraint the variable directly
     (add-type-constraint n ty)
@@ -59,20 +59,20 @@ isn't declared."
     ty))
 
 
-(defpassmethod apply-type-constraints (setq n v &key sync)
+(defpassmethod apply-type-constraints (setq n v)
   (ensure-writeable n)
-  (apply-type-constraints `(setf ,n ,v :sync ,sync)))
+  (apply-type-constraints `(setf ,n ,v)))
 
 
 (defpassmethod read-variables (setq &rest args)
   (:same-as setf))
 
 
-(defpassmethod read-variables-setf (setq n v &key sync)
+(defpassmethod read-variables-setf (setq n v)
   (:same-as setf))
 
 
-(defpassmethod compute-dependencies (setq n v &key sync)
+(defpassmethod compute-dependencies (setq n v)
   (declare (optimize debug))
 
   ;; catch the common mistake of using SETQ when we need SETF
@@ -137,7 +137,7 @@ generalised places."
 
 ;;; ---------- setf (generalised places) ----------
 
-(defpassmethod read-variables (setf place val &key sync)
+(defpassmethod read-variables (setf place val)
   (declare (optimize debug))
 
   (if (listp place)
@@ -148,12 +148,12 @@ generalised places."
       (read-variables val)))
 
 
-(defpassmethod read-variables-setf (setf place val &key sync)
+(defpassmethod read-variables-setf (setf place val)
   (union (read-variables place
 	 (read-variables val))))
 
 
-(defpassmethod compute-dependencies (setf place val &key sync)
+(defpassmethod compute-dependencies (setf place val)
   (declare (optimize debug))
 
   (if (listp place)
@@ -166,15 +166,15 @@ generalised places."
 	  (set-variable-property n 'written t)))
 
       ;; a SETF applied to a variable is just a SETQ
-      (compute-dependencies `(setq ,place ,val :sync ,sync))))
+      (compute-dependencies `(setq ,place ,val))))
 
 
-(defpassmethod compute-type (setf place val &key sync)
+(defpassmethod compute-type (setf place val)
   (compute-type place)
   (compute-type val))
 
 
-(defpassmethod apply-type-constraints (setf place val &key sync)
+(defpassmethod apply-type-constraints (setf place val)
   ;; ensure we can do the assignment
   (ensure-generalised-place place)
 
@@ -187,7 +187,7 @@ generalised places."
   (apply-type-constraints val))
 
 
-(defpassmethod synthesise (setf var val &key sync)
+(defpassmethod synthesise (setf var val)
   (if (in-module-context-p)
       ;; outermost in a module
       (progn
@@ -199,8 +199,7 @@ generalised places."
       ;; elsewhere (in a block)
       (progn
 	(synthesise var)
-	(if (and (in-synchronous-block-context-p)
-		 (not sync))
+	(if (in-synchronous-block-context-p)
 	    ;; use non-blocking assignment
 	    (as-literal " <= ")
 
