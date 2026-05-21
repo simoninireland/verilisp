@@ -1,6 +1,6 @@
 ;;;; An LED-blinking state machine
 ;;;;
-;;;; Copyright (C) 2024--2027 Simon Dobson
+;;;; Copyright (C) 2024--2026 Simon Dobson
 ;;;;
 ;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;;;
