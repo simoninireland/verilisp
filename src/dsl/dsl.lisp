@@ -107,7 +107,7 @@ of the pass. The options are:
 - (:QUEUE queue-name): install the pass onto QUEUE-NAME
 - (:QUEUE-POSITION pos): install pass at POS, which can be :APPEND or :PREPEND
 - (:SCHEMA schema): use SCHEMA as the default recursion scheme for forms
-- (:METHOD (lambda-list) body): install a method with the given form
+- (:PASSMETHOD (lambda-list) body): install a method with the given form
 - (:PRE fun): run FUN before running the pass
 - (:POST fun): run FUN after running the pass, returning its value
 
@@ -163,7 +163,7 @@ as described in DEFINE-RECURSION-SCHEMA."
 	     (setq schema (safe-car value))
 	     (setq schema-options (cdr value)))
 
-	    (:method
+	    (:passmethod
 		(destructuring-bind (args &rest body)
 		    value
 		  (if (top-level-function-method-p args)

@@ -101,7 +101,7 @@ Return the set of variables as a list."))
   (:queue expanding)
   (:schema into-arguments-macros)
 
-  (:method (form)
+  (:passmethod (form)
     form))
 
 
@@ -146,7 +146,7 @@ will then be used by, and extended by, other passes.")
   (:schema into-arguments)
   (:queue expanding)
 
-  (:method (form)
+  (:passmethod (form)
     form))
 
 
@@ -241,9 +241,9 @@ MARK-VARIABLE-AS-READ and MARK-VARIABLE-AS-WRITTEN.")
 
 	   form))
 
-  (:method (form))
+  (:passmethod (form))
 
-  (:method ((form list))
+  (:passmethod ((form list))
     (destructuring-bind (fun &rest args)
 	form
 
@@ -333,10 +333,10 @@ forms, which may not be variables at all. Methods should only
 rewrite free occurrances, not those that appear under binders.")
   (:schema into-arguments)
 
-  (:method ((form integer))
+  (:passmethod ((form integer))
     form)
 
-  (:method ((form symbol))
+  (:passmethod ((form symbol))
     (if-let ((a (assoc form rewrite
 		       :key #'symbol-name
 		       :test #'string-equal)))
@@ -364,10 +364,10 @@ signal warnings or errors appropriately.")
   (:post (lambda (form res)
 	   form))
 
-  (:method (form)
+  (:passmethod (form)
     nil)
 
-  (:method ((form list))
+  (:passmethod ((form list))
     (destructuring-bind (fun &rest args)
 	form
       (with-current-form form
@@ -419,7 +419,7 @@ separate, but related to, their type: a generalised place has a type,
 but is also SETF-able.")
   (:schema constant-form nil)
 
-  (:method (form)
+  (:passmethod (form)
     nil))
 
 
@@ -441,9 +441,9 @@ but is also SETF-able.")
   (:documentation "Test whether FORM is a simple expression.")
   (:schema constant-form nil)
 
-  (:method ((n integer))
+  (:passmethod ((n integer))
     t)
-  (:method ((s symbol))
+  (:passmethod ((s symbol))
     (variable-declared-p s)))
 
 
@@ -466,7 +466,7 @@ consistency with the representation implied by the code.")
 
 	   form))
 
-  (:method (form)
+  (:passmethod (form)
     nil))
 
 
@@ -477,7 +477,7 @@ consistency with the representation implied by the code.")
   (:schema into-arguments)
   (:queue transforming)
 
-  (:method (form)
+  (:passmethod (form)
     form))
 
 
@@ -589,6 +589,6 @@ may be redirected by higher-level functions.")
   (:documentation "Convert FORM to a Lisp expression.")
   (:schema into-arguments)
 
-  (:method (quote &rest args)
+  (:passmethod (quote &rest args)
     ;; leave quoted lisp expressions alone
     `(quote ,@args)))

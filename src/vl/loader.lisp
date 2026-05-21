@@ -29,7 +29,7 @@
 
 ;;; Modules are all held in the global environment.
 
-(defparameter *last-module-type* nil
+(defvar *last-module-type* nil
   "Variable holding the type of the last module type-checked.
 
 This is filled-in by COMPUTE-TYPE as the result of the TYPECHECKING pass.")

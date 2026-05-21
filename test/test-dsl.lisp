@@ -173,9 +173,9 @@
   "Test we can add methods to the right generic functions from the pass definition."
   (with-no-passes
     (defpass one (form)
-      (:method ((n integer))
+      (:passmethod ((n integer))
 	(+ n 1))
-      (:method (+ a b)
+      (:passmethod (+ a b)
 	(+ (one a) (one b))))
 
     (is (= (one 5) 6))
@@ -195,7 +195,7 @@
   (with-no-passes
     (defpass into-args (form)
       (:schema into-arguments)
-      (:method (n)
+      (:passmethod (n)
 	(+ n 1)))
 
     (is (equal (into-args '(+ 1 2)) '(+ 2 3))))
@@ -225,7 +225,7 @@
   "Test we can set one method to be the same as another."
   (with-no-passes
     (defpass one (form)
-      (:method ((n integer))
+      (:passmethod ((n integer))
 	(+ n 1)))
 
     (defpassmethod one (+ a b)
@@ -242,7 +242,7 @@
   (with-no-passes
     (defpass extraargs (form arg1 arg2)
       (:schema into-arguments)
-      (:method (+ a b)
+      (:passmethod (+ a b)
 	(+ a b arg1 arg2)))
 
     (defpassmethod extraargs (* a b)

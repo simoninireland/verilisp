@@ -129,7 +129,7 @@ before FLOAT-LET-BLOCKS.")
   (:queue-position :prepend)
   (:schema into-arguments)
 
-  (:method (form)
+  (:passmethod (form)
     form))
 
 
