@@ -24,33 +24,6 @@
 ;;; with the rest of their behaviour being shared.
 
 
-;;; ---------- Recursion schema ----------
-
-;;; There is a common recursion schema for binders in which a pass cascades
-;;; into the declaration initial values and the body, but not into the names
-;;; of the variables being declared.
-
-;; TODO: Doesn't handle extra arguments yet
-
-(define-recursion-schema into-decls-and-body (fun args pass-name)
-  "A recursion schema that recurses into initial values and body.
-
-The declaration variables are left unchanged."
-  (with-gensyms (decls body vdecls decl vbody)
-    `(destructuring-bind (,decls &rest ,body)
-	 ,args
-       (let ((,vdecls (mapcar (lambda (,decl)
-				(if (listp ,decl])
-				    (list (car ,decl)
-					  (apply #',pass-name (cadr ,decl)))
-
-				    ,decl))
-			      ,decls))
-	     (,vbody (apply #'pass-name (with-implicit-progn ,body))))
-
-	 (,fun ,decls ,@vbody)))))
-
-
 ;;; ---------- Representationas----------
 
 (deftype representation ()
@@ -437,7 +410,7 @@ LET* adds bindings incrementally, so each can see those that went before."
       decl))
 
 
-(defun expand-let-macros (fun args)
+(defmethod into-arguments-macros ((fun (eql 'let)) args &key &allow-other-keys)
   (destructuring-bind (decls &rest body)
       args
     (let ((newdecls (mapcar #'expand-macros-decl decls))
@@ -447,14 +420,14 @@ LET* adds bindings incrementally, so each can see those that went before."
 	     ,@newbody))))
 
 
-;;; TODO: Should this be a recursion schema too?
+(defmethod into-arguments-macros ((fun (eql 'let*)) args &key &allow-other-keys)
+  (destructuring-bind (decls &rest body)
+      args
+    (let ((newdecls (mapcar #'expand-macros-decl decls))
+	  (newbody (mapcar #'expand-macros body)))
 
-(defpassmethod expand-macros (let &rest args)
-  (expand-let-macros `let args))
-
-
-(defpassmethod expand-macros (let* &rest args)
-  (expand-let-macros `let* args))
+      `(,fun ,newdecls
+	     ,@newbody))))
 
 
 ;;; ---------- Elaborating state machines ----------
@@ -462,9 +435,7 @@ LET* adds bindings incrementally, so each can see those that went before."
 ;;; LET and LET* elaborate state machines the same way, but need to
 ;;; retain their function tag (or do they?)
 
-(defun elaborate-let-state-machines (fun args)
-  (declare (optimize debug))
-
+(defmethod into-arguments ((fun (eql 'let)) args &key &allow-other-keys)
   (destructuring-bind (f &rest body)
       args
 
@@ -474,12 +445,14 @@ LET* adds bindings incrementally, so each can see those that went before."
 	     ,@newbody))))
 
 
-(defpassmethod elaborate-state-machines (let &rest args)
-  (elaborate-let-state-machines 'let args))
+(defmethod into-arguments ((fun (eql 'let*)) args &key &allow-other-keys)
+  (destructuring-bind (f &rest body)
+      args
 
-
-(defpassmethod elaborate-state-machines (let* &rest args)
-  (elaborate-let-state-machines 'let* args))
+    (let ((newbody (with-local-frame f
+		     (mapcar #'elaborate-state-machines body))))
+      `(,fun ,f
+	     ,@newbody))))
 
 
 ;;; ---------- Floating ----------

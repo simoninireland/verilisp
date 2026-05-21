@@ -198,7 +198,7 @@ Verilisp, but don't *require* it."
 
 
 (defpassmethod compute-dependencies (make-array &rest args)
-  (:schema constant-form nil))
+  (:schema constant-form))
 
 
 (defun rebuild-options (ns vs)

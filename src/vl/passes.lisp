@@ -78,32 +78,9 @@ Return the set of variables as a list."))
 ;;; ---------- Macro expansion ----------
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (define-recursion-schema into-arguments-macros (fun args pass-name)
-    "A recursion schema that expands a form as a macro.
-
-The schema simply calls EXPAND-IF-MACRO witrh the appropriate variables."
-    (declare (ignore pass-name))
-
-    `(expand-if-macro ,fun ,args)))
-
-
-(defpass expand-macros (form)
-  (:documentation "Expand macros in FORM.")
-  (:queue expanding)
-  (:schema into-arguments-macros)
-
-  (:method (form)
-    form))
-
-
-(defun expand-if-macro (fun args)
-  "Expand a form as a macro.
-
-If FUN is a macro, expand it and then re-expand the resulting
-substitution. If it is not a macro, descend into ARGS."
-  (declare (optimize debug))
-
-  (if (macro-declared-p fun)
+  (define-recursion-schema into-arguments-macros (fun args)
+    "A recursion schema that expands a form as a macro."
+    (if (macro-declared-p fun)
       ;; macro is expandable
       (let ((realfun (variable-property fun 'initial-value)))
 
@@ -116,7 +93,16 @@ substitution. If it is not a macro, descend into ARGS."
 	    (expand-macros expansion))))
 
       ;; macro is not expandable, descend into the form
-      (expand-descend fun args)))
+      (expand-descend fun args))))
+
+
+(defpass expand-macros (form)
+  (:documentation "Expand macros in FORM.")
+  (:queue expanding)
+  (:schema into-arguments-macros)
+
+  (:method (form)
+    form))
 
 
 (defun expand-descend (fun args)
@@ -130,7 +116,7 @@ substitution. If it is not a macro, descend into ARGS."
 (defun expand-macros-in-environment (form &optional (f *global-environment*))
   "Recursively expand all macros in FORM in an environment.
 
-Thos pass expands all macros to convert FORM into Core Verilisp.
+This function expands all macros to convert FORM into Core Verilisp.
 Macros are taken from the global environment unless a specific
 frame F is provided.
 
@@ -497,12 +483,11 @@ consistency with the representation implied by the code.")
 
 ;;; ---------- Let block coalescence ----------
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (define-recursion-schema into-arguments-float-merge (fun args pass-name)
-    "A recursion scheme to float LET and LET* blocks."
-    `(destructuring-bind (fargs fenv)
-	 (float-merge ,args)
-       (list (cons ,fun fargs) fenv))))
+(define-recursion-schema into-arguments-float-merge (fun args)
+  "A recursion scheme to float LET and LET* blocks."
+  (destructuring-bind (fargs fenv)
+      (float-merge args)
+    (list (cons fun fargs) fenv)))
 
 
 (defpass float-let-blocks (form)
