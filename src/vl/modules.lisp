@@ -23,7 +23,7 @@
 
 ;;; ---------- Module interfaces ----------
 
-(deftype module (required optional parameters frame)
+(deftype module (required optional parameters)
   "The type of module interfaces.
 
 Interfaces consist of three lists of arguments and the
@@ -31,7 +31,7 @@ frame they form.
 
 REQUIRED holds the names of the required arguments. OPTIONAL holds the
 names of optional arguments, as a list if they have a default. PARAMETERS
-similarly holds the keyword arguments. NEEDED can't be null, but either
+similarly holds the keyword arguments. REQUIRED can't be null, but either
 of the others can."
   t)
 
@@ -66,70 +66,6 @@ of the others can."
 (defun module-parameters (ty)
   "Return the list of parameter names to module interface TY."
   (elt ty 3))
-
-
-(defun module-frame (ty)
-  "Return the frame formed by the module interface."
-  (elt ty 4))
-
-
-(defun parse-module-lambda-list (decls)
-  "Parse DECLS as an ordinary lambda-list, returning the required, optional, and key parameters.
-
-NEEDED cannot be null. Each element of OPTIONAL and PARAMETERS will either be
-a symbol or a list of a symbol and an default value.
-
-This is not enough information to typecheck module instanciation, which is
-why the MODULE type also includes the environment created for these names."
-  (multiple-value-bind (req-names opts rest keys allow-p auxs key-p)
-      (handler-bind
-	  ((error (lambda (c)
-		    ;; map any underlying errors to syntax errors
-		    (error 'syntax-error :form decls
-					 :hint "Make sure lambda list is well-formed"))))
-
-	(parse-ordinary-lambda-list decls))
-
-    (let ((opt-names (mapcar #'safe-car opts))
-	  (key-names (mapcar #'safe-car keys)))
-
-      ;; sanity checks
-      (unless req-names
-	(error 'syntax-error :form decls
-			     :hint "Modules lambda lists need at least one variable"))
-      (when allow-p
-	(error 'syntax-error :form decls
-			     :hint "Module lambda lists can't include &allow-other-keys"))
-      (when auxs
-	(error 'syntax-error :form decls
-			     :hint "Module lambda lists can't include &aux parameters"))
-      (when rest
-	(error 'syntax-error :form decls
-			     :hint "Module lambda lists can't include a &rest parameter"))
-      (unless (and (set-p req-names)
-		   (set-p opt-names)
-		   (set-p key-names))
-	(error 'syntax-error :form decls
-			     :hint "Can't have duplicate variable names in a lambda list"))
-      (when (intersection req-names opt-names)
-	(error 'syntax-error :form decls
-			     :hint "Can't have optional and required parameters with the same names"))
-      (when (intersection (union req-names opt-names) key-names)
-	(error 'syntax-error :form decls
-			     :hint "Can't have keyword and non-keyword parameters with the same names"))
-
-      ;; structure into a consistent form
-      (list req-names
-	    (mapcar (lambda (opt)
-		      (if (null (cadr opt))
-			  (car opt)
-			  (list (car opt) (cadr opt))))
-		    opts)
-	    (mapcar (lambda (opt)
-		      (if (null (cadr opt))
-			  (cadar opt)
-			  (list (cadar opt) (cadr opt))))
-		    keys)))))
 
 
 ;;; ---------- Module late initialisation ----------
@@ -203,68 +139,179 @@ Signal VALUE-MISMATCH as an error if not."
   (eql (get-representation n) 'parameter))
 
 
-(defun compute-module-local-frame (decls)
-  "Populate the local frame of DECLS."
-  (with-local-frame decls
-    (destructuring-bind (reqs opts keys)
-	(parse-module-lambda-list decls)
+(defun parse-module-lambda-list (ll)
+  "Parse a module's lambda-list.
 
-      ;; add all the names
-      (dolist (args (list reqs opts keys))
-	(mapc #'add-decl-to-frame args))
+This uses the PARSE-ORDINARY-LAMBDA-LIST from Alexandria, and adds some
+extra consraints.
 
-      ;; set all the keyword arguments to be parameters
-      (dolist (n (mapcar #'safe-car keys))
-	(set-variable-property n 'as 'parameter)))))
+Return three lists of required, optional, and paraneter declarations. The
+latter two may contain defaault arguments."
+  (with-current-form ll
+
+    (multiple-value-bind (req-names opts rest keys allow-p auxs key-p)
+	(handler-case
+	    ;; use Alexndria's function to parse the lambda-list
+	    (parse-ordinary-lambda-list ll)
+
+	  (error (c)
+	    ;; map any underlying errors to syntax errors
+	    (error 'syntax-error :hint "Make sure lambda list is well-formed")))
+
+      (let ((opt-names (mapcar #'car opts))
+	    (key-names (mapcar (lambda (e)
+				 (cadr (car e)))
+			       keys)))
+
+	;; sanity checks
+	(unless req-names
+	  (error 'syntax-error :hint "Module lambda lists need at least one variable"))
+	(when allow-p
+	  (error 'syntax-error :hint "Module lambda lists can't include &allow-other-keys"))
+	(when auxs
+	  (error 'syntax-error :hint "Module lambda lists can't include &aux parameters"))
+	(when rest
+	  (error 'syntax-error :hint "Module lambda lists can't include a &rest parameter"))
+	(unless (and (set-p req-names)
+		     (set-p opt-names)
+		     (set-p key-names))
+	  (error 'syntax-error :hint "Can't have duplicate variable names in a lambda list"))
+	(if-let ((dups (intersection req-names opt-names)))
+	  (error 'syntax-error :hint (format nil "Can't have optional and required parameters with the same names (~s)" dups)))
+	(if-let ((dups (intersection (union req-names opt-names) key-names)))
+	  (error 'syntax-error :hint (format nil "Can't have keyword and non-keyword parameters with the same names (~s)" dups)))
+
+	;; form into lists of decls
+	(list req-names
+	      (mapcar (lambda (e)
+			(if-let ((v (cadr e)))
+			  (list (car e)
+				v)
+			  (car e)))
+		      opts)
+	      (mapcar (lambda (e)
+			(if-let ((v (cadr e)))
+			  (list (cadr (car e))
+				v)
+			  (cadr (car e))))
+		      keys))))))
 
 
-(defun compute-module-interface-type (decls)
-  "Return the module interface implied by DECLS."
-  (destructuring-bind (reqs opts keys)
-      (parse-module-lambda-list decls)
+(defun build-frame-from-lambda-list (ll)
+  "Parse LL as an ordinary lambda-list.
 
-    `(module ,reqs ,opts ,keys ,(current-frame))))
+Each parameter is annotated with whether it is required, optional, or
+keyword. This allows the dfull lambda list to be reconstructed when
+required.
+
+Return the frame containing the parameters."
+  (declare (optimize debug))
+
+  (destructuring-bind (req-names opts keys)
+      (parse-module-lambda-list ll)
+
+    ;; structure into a frame
+    (let ((f (make-frame)))
+      (dolist (n req-names)
+	;; reequired parameters have no initial value
+	(declare-environment-variable n '((required t)) f))
+
+      (dolist (nv opts)
+	;; optonal parameters may have initial values
+	(if (listp nv)
+	    (destructuring-bind (n v)
+		nv
+	      (declare-environment-variable n `((initial-value ,v)
+						(required nil))
+					    f))
+
+	    (declare-environment-variable nv `((required nil)) f)))
+
+      (dolist (nv keys)
+	;; key parameters may have initial values
+	(if (listp nv)
+	    (destructuring-bind (n v)
+		nv
+	      (declare-environment-variable n `((initial-value ,v)
+						(as parameter))
+					    f))
+
+	    (declare-environment-variable nv `((as parameter)) f)))
+
+      ;; return the frame
+      f)))
+
+
+(defun build-module-interface-decls-from-frame (f)
+  "Extract the decls for the required, optional, and parameters to a module.
+
+F should be the module's local frame."
+  (let (reqs opts parms)
+    (dolist (n (get-frame-names f))
+      (if (eql (get-frame-property n 'as f :default nil) 'parameter)
+	  ;; name is a parameter (which may have initial values)
+	  (if-let ((v (get-frame-property n 'initial-value f :default nil)))
+	    (appendf parms (list (list n v)))
+	    (appendf parms (list n)))
+
+	  (if (get-frame-property n 'required f :default nil)
+	      ;; name is a required argument (which never have initial values)
+	      (appendf reqs (list n))
+
+	      ;; name is an optional argument (which may have initial values)
+	      (if-let ((v (get-frame-property n 'initial-value f :default nil)))
+		(appendf opts (list (list n v)))
+		(appendf opts (list n))))))
+
+    (list reqs opts parms)))
+
+
+(defun build-module-interface-type-from-frame (f)
+  "Return the module interface implied by F."
+  (destructuring-bind (reqs opts parms)
+      (build-module-interface-decls-from-frame f)
+
+    `(module ,reqs
+	    ,(mapcar #'safe-car opts)
+	    ,(mapcar #'safe-car parms))))
 
 
 (defpassmethod add-frames (module modname decls &rest body)
   (declare (optimize debug))
 
-  (add-local-frame-to-decls decls)
-  (compute-module-local-frame decls)
+  (let ((local-frame (build-frame-from-lambda-list decls)))
+    ;; add frames to the body in this new environment
+    (with-local-frame local-frame
 
-  ;; return the form
-  `(module ,modname ,decls
-	   ,@(with-local-frame decls
-	       (mapcar #'add-frames body))))
-
-
-(defun compute-module-env (decls)
-  "Compute the types of the arguments and parameters."
-  (dolist (n (variables-declared-in-current-frame))
-    (let* ((ty (or (variable-property n 'type :default nil)
-		   '(unsigned-byte 1))))
-      (add-type-constraint n ty))))
+      ;; return the binder with the frame as its decls
+      (let ((fbody (mapcar #'add-frames body)))
+	`(module ,modname ,local-frame
+		 ,@fbody)))))
 
 
-(defpassmethod compute-type (module modname decls &rest body)
+(defpassmethod compute-type (module modname f &rest body)
   (declare (optimize debug))
 
-  (with-local-frame decls
-    (compute-module-env decls)
+  (with-local-frame f
+    ;; constraint interface variables
+    (dolist (n (variables-declared-in-current-frame))
+      (let* ((ty (or (variable-property n 'type :default nil)
+		     '(unsigned-byte 1))))
+	(add-type-constraint n ty)))
 
     ;; typecheck the body of the module in its environment
     (compute-type (with-implicit-progn body))
 
     ;; return the interface type
-    (compute-module-interface-type decls)))
+    (build-module-interface-type-from-frame f)))
 
 
-(defpassmethod apply-type-constraints (module modname decls &rest body)
+(defpassmethod apply-type-constraints (module modname f &rest body)
   (declare (optimize debug))
 
-  (with-local-frame decls
-    (let ((intf (compute-module-interface-type decls)))
-      (dolist (n (variables-declared-in-current-frame))
+  (with-local-frame f
+    (let ((intf (build-module-interface-type-from-frame f)))
+      (dolist (n (get-frame-names f))
 	(if (member n (module-arguments intf))
 	    ;; constrain the variable's type (which must be representable)
 	    (let* ((constraints (get-type-constraints n))
@@ -299,22 +346,23 @@ Signal VALUE-MISMATCH as an error if not."
   '())
 
 
-(defpassmethod compute-dependencies (module modname decls &rest body)
-  (with-local-frame decls
+(defpassmethod compute-dependencies (module modname f &rest body)
+  (with-local-frame f
     (compute-dependencies (with-implicit-progn body))))
 
 
-(defpassmethod infer-representation (module modname decls &rest body)
+(defpassmethod infer-representation (module modname f &rest body)
   (declare (optimize debug))
 
-  (with-local-frame decls
+  (with-local-frame f
     ;; do representation inference in body
     (infer-representation (with-implicit-progn body))
 
     ;; do direction inference on local variables (not parameters)
     (dolist (n (remove-if (lambda (n)
 			    (eql (get-representation n) 'parameter))
-			  (variables-declared-in-current-frame)))
+			  (get-frame-names f)))
+
       (let ((read (variable-property n 'read))
 	    (written (variable-property n 'written))
 	    (ignored (variable-property n 'ignore))
@@ -364,7 +412,7 @@ Signal VALUE-MISMATCH as an error if not."
 ;;; The top-level module grabs the floated LET blocks and coalesces them
 ;;; into a single block.
 
-(defpassmethod float-let-blocks (module modname decls &rest body)
+(defpassmethod float-let-blocks (module modname f &rest body)
   (declare (optimize debug))
 
   ;; extract any declarations
@@ -373,7 +421,7 @@ Signal VALUE-MISMATCH as an error if not."
 
     (list
      `(module ,modname
-	      ,decls
+	      ,f
 
 	      ,(float-apply newbody newenv))
 
@@ -381,14 +429,14 @@ Signal VALUE-MISMATCH as an error if not."
      (make-frame))))
 
 
-(defpassmethod simplify-progn (module modname decls &rest body)
+(defpassmethod simplify-progn (module modname f &rest body)
   (let ((newbody (mapcar #'simplify-progn body)))
-    `(module ,modname ,decls ,@(simplify-implied-progn newbody))))
+    `(module ,modname ,f ,@(simplify-implied-progn newbody))))
 
 
-(defpassmethod elaborate-state-machines (module modname decls &rest body)
-  `(module ,modname ,decls
-	   ,@(with-local-frame decls
+(defpassmethod elaborate-state-machines (module modname f &rest body)
+  `(module ,modname ,f
+	   ,@(with-local-frame f
 	       (mapcar #'elaborate-state-machines body))))
 
 
@@ -427,15 +475,15 @@ Signal VALUE-MISMATCH as an error if not."
       (synthesise n))))
 
 
-(defpassmethod synthesise (module modname decls &rest body)
+(defpassmethod synthesise (module modname f &rest body)
   (declare (optimize debug))
   (when (not (in-top-level-context-p))
     (error 'not-synthesisable :hint "Nested modules don't make sense"))
 
-  (with-local-frame decls
+  (with-local-frame f
 
     (destructuring-bind (reqs opts keys)
-	(parse-module-lambda-list decls)
+	(build-module-interface-decls-from-frame f)
 
       (as-literal "module ")
       (synthesise modname)
@@ -487,9 +535,9 @@ Signal VALUE-MISMATCH as an error if not."
   (unquote modname)
 
   ;; add type constraints for all variables in the interface
-  (let* ((intf (get-module-interface modname))
-	 (modargs (adjacent-pairs initargs))
-	 (f (module-frame intf)))
+  (let ((intf (get-module-interface modname))
+	(modargs (adjacent-pairs initargs))
+	(f (get-module-frame modname)))
 
     (dolist (n (module-arguments intf))
       (let ((v (cadr (assoc (module-argument-name-to-keyword n) modargs))))
@@ -507,9 +555,9 @@ Signal VALUE-MISMATCH as an error if not."
   ;; for compatability with Common Lisp usage
   (unquote modname)
 
-  (let* ((intf (get-module-interface modname))
-	 (modargs (adjacent-pairs initargs))
-	 (f (module-frame intf)))
+  (let ((intf (get-module-interface modname))
+	(modargs (adjacent-pairs initargs))
+	(f (get-module-frame modname)))
 
     ;; convert directions into read/written constraints
     (dolist (n (module-arguments intf))
@@ -529,33 +577,34 @@ Signal VALUE-MISMATCH as an error if not."
   "Ensure that INITARGS match the reqirements of INTF of MODNAME."
   (declare (optimize debug))
 
-  (with-frame (module-frame intf)
-    (let* ((kv (adjacent-pairs initargs))
-	   (ks (alist-keys kv)))
+  (let ((f (get-module-frame modname)))
+    (with-frame f
+      (let* ((kv (adjacent-pairs initargs))
+	     (ks (alist-keys kv)))
 
-      ;; make sure there are no duplicate arguments
-      (unless (set-p ks)
-	(let ((ns (duplicates ks)))
-	  (error 'not-importable :module modname
-				 :arg ns
-				 :hint "Check for duplicate arguments")))
+	;; make sure there are no duplicate arguments
+	(unless (set-p ks)
+	  (let ((ns (duplicates ks)))
+	    (error 'not-importable :module modname
+				   :arg ns
+				   :hint "Check for duplicate arguments")))
 
-      ;; make sure all required arguments are present
-      (dolist (n (module-required-arguments intf))
-	(let ((k (module-argument-name-to-keyword n)))
-	  (unless (member k ks)
+	;; make sure all required arguments are present
+	(dolist (n (module-required-arguments intf))
+	  (let ((k (module-argument-name-to-keyword n)))
+	    (unless (member k ks)
+	      (error 'not-importable :module modname
+				     :arg k
+				     :hint "Make sure all required arguments are provided"))))
+
+	;; make sure all arguments are in the interface
+	(dolist (k ks)
+	  (unless (member k (mapcar (compose #'module-argument-name-to-keyword #'safe-car)
+				    (union (module-arguments intf)
+					   (module-parameters intf))))
 	    (error 'not-importable :module modname
 				   :arg k
-				   :hint "Make sure all required arguments are provided"))))
-
-      ;; make sure all arguments are in the interface
-      (dolist (k ks)
-	(unless (member k (mapcar (compose #'module-argument-name-to-keyword #'safe-car)
-				  (union (module-arguments intf)
-					 (module-parameters intf))))
-	  (error 'not-importable :module modname
-				 :arg k
-				 :hint "Make sure all arguments provided are declared in the interface"))))))
+				   :hint "Make sure all arguments provided are declared in the interface")))))))
 
 
 (defpassmethod apply-type-constraints (make-instance modname &rest initargs)
@@ -566,14 +615,16 @@ Signal VALUE-MISMATCH as an error if not."
   (unquote modname)
 
   ;; check arguments
-  (let ((intf (get-module-interface modname)))
+  (let ((intf (get-module-interface modname))
+	(f (get-module-frame modname)))
+
     (ensure-module-arguments-match-interface modname initargs intf)
 
     (let ((kv (adjacent-pairs initargs)))
       ;; required arguments
       (dolist (n (module-required-arguments intf))
 	(let ((v (cadr (assoc (module-argument-name-to-keyword n) kv)))
-	      (ty (with-frame (module-frame intf)
+	      (ty (with-frame f
 		    (get-type n))))
 	  (ensure-subtype (compute-type v) ty)))
 
@@ -581,12 +632,12 @@ Signal VALUE-MISMATCH as an error if not."
       (dolist (n (module-required-arguments intf))
 	(if-let ((m (assoc (module-argument-name-to-keyword n) kv)))
 	  (let ((v (cadr m))
-		(ty (with-frame (module-frame intf)
+		(ty (with-frame f
 		      (get-type n))))
 	    (ensure-subtype (compute-type v) ty))))
 
       ;; if an argument is written to, it must be a generalised place
-      (let ((written-args (with-frame (module-frame intf)
+      (let ((written-args (with-frame f
 			    (remove-if-not #'variable-written-p (module-arguments intf)))))
 	(dolist (n written-args)
 	  (let* ((k (module-argument-name-to-keyword n))

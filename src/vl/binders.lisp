@@ -74,31 +74,8 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 
 ;;; ---------- Local frames ----------
 
-(defun add-decl-to-frame (decl)
-  "Add DECL to the local frame.
-
-The declarations appear in the environment in the same order as
-they do in DECLS."
-  (declare (optimize debug))
-
-  (if (listp decl)
-      ;; declare name and initial value
-       (destructuring-bind (n v)
-	   decl
-	 (declare-variable n `((initial-value ,v))))
-
-       ;; declare just name
-       (declare-variable decl '())))
-
-
-(defun compute-let-local-frame (decls)
-  "Populate the local frame of DECLS.
-
-The declarations appear in the environment in the same order as
-they do in DECLS."
-  (unless (null decls)
-    (mapc #'add-decl-to-frame decls)))
-
+;;; We change a LET or LET* of the form (LET (decls) body ...) into one that
+;;; has an environment as its only decl entry
 
 (defun add-let-local-frame (fun args)
   (declare (optimize debug))
@@ -106,20 +83,13 @@ they do in DECLS."
   (destructuring-bind (decls &rest body)
       args
 
-    ;; (let ((decls (add-local-frame-to-decls decls)))
-    ;;   (break)
-    ;;   (compute-let-local-frame decls)
+    (let ((local-frame (build-frame-from-decls decls)))
+      ;; add frames to the body in this new environment
+      (with-local-frame local-frame
 
-    ;;   ;; return the form
-    ;;   `(,fun ,decls
-    ;;	     ,@(with-local-frame decls
-    ;;		 (mapcar #'add-frames body))))
-    (let ((local-decls (add-local-frame-to-decls decls)))
-      (with-local-frame local-decls
-	(compute-let-local-frame local-decls)
-
+	;; return the binder with the frame as its decls
 	(let ((fbody (mapcar #'add-frames body)))
-	  `(,fun ,decls
+	  `(,fun ,local-frame
 		 ,@fbody))))))
 
 
@@ -138,14 +108,12 @@ they do in DECLS."
 (defun compute-let-dependencies (decls)
   "Compute the dependencies of all variables in the current frame."
   (dolist (n (variables-declared-in-current-frame))
-    (let ((decl (assoc-decls n decls)))
-      (with-current-form decl
-	(with-recover-on-error
-	    ;; leave dependencies alone on error
-	    t
+    (with-recover-on-error
+	;; leave dependencies alone on error
+	t
 
-	  (if-let ((v (get-initial-value n)))
-	    (add-dependencies n (read-variables v))))))))
+      (if-let ((v (get-initial-value n)))
+	(add-dependencies n (read-variables v))))))
 
 
 (defpassmethod compute-dependencies (let decls &rest body)
@@ -497,12 +465,12 @@ LET* adds bindings incrementally, so each can see those that went before."
 (defun elaborate-let-state-machines (fun args)
   (declare (optimize debug))
 
-  (destructuring-bind (decls &rest body)
+  (destructuring-bind (f &rest body)
       args
 
-    (let ((newbody (with-local-frame decls
+    (let ((newbody (with-local-frame f
 		     (mapcar #'elaborate-state-machines body))))
-      `(,fun ,decls
+      `(,fun ,f
 	     ,@newbody))))
 
 
@@ -735,15 +703,16 @@ Valid RHSs are either null, array or object constructors, or simple expressions.
 	   (synthesise-register n)))))))
 
 
-(defpassmethod synthesise (let decls &rest body)
+(defpassmethod synthesise (let f &rest body)
   (declare (optimize debug))
 
-  (with-local-frame decls
+  (with-local-frame f
     ;; synthesise the constants and registers
-    (as-block-forms decls :process #'synthesise-decl)
+    (let ((decls (build-decls-from-frame f)))
+      (as-block-forms decls :process #'synthesise-decl)
 
-    (if (> (length decls) 0)
-	(as-blank-line))
+      (if (> (length decls) 0)
+	  (as-blank-line)))
 
     ;; synthesise the body
     (as-block-forms body)))

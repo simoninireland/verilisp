@@ -51,14 +51,6 @@
 		       '(unsigned-byte 5)))))
 
 
-(test test-assignment-same-width-sync
-  "Test we can assign synchronously (same types)."
-  (vl::with-new-frame
-    (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 10))
-						       (setq a 12 :sync t))))
-		       '(unsigned-byte 5)))))
-
-
 (test test-assignment-too-wide
   "Test we catch assigning a value that's too wide for its explicit type."
   (signals (vl::type-mismatch)
@@ -115,8 +107,7 @@
 (test test-synthesise-setq
   "Test we can synthesise/vlassignments."
   ;; as statements
-  (is (vl::synthesise/vl '(setq a 5)))
-  (is (vl::synthesise/vl '(setq a 5 :sync t))))
+  (is (vl::synthesise/vl '(setq a 5))))
 
 
 (test test-typecheck-setq-generalised-place

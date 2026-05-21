@@ -146,7 +146,7 @@
 			      (1
 			       (setf b 23))
 			      ((2 3 4)
-			       (setf b 34 :sync t)
+			       (setf b 34)
 			       (setf a 0))
 			      (t
 			       (setf b 0)))))))

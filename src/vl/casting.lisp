@@ -179,7 +179,7 @@ before FLOAT-LET-BLOCKS.")
        (cond ((or (null tyw)
 		  (= vtyw tyw))
 	      ;; types have equal width, leave unchanged
-	      (synthesise val))
+	      val)
 
 	     ((> vtyw tyw)
 	      ;; value is wider, shrink it by using the same
@@ -249,29 +249,17 @@ before FLOAT-LET-BLOCKS.")
   (destructuring-bind (decls &rest body)
       args
 
-    ;; grab the decls ahead of being rebound
     (with-local-frame decls
-      ;; rewrite body and initial values (in decls and env)
-      (let ((tdecls (mapcar (lambda (decl)
-			      (if (or (atom decl)
-				      (null (cadr decl)))
-				  ;; naked value remains the same
-				  decl
+      ;; rewrite all initial values
+      (mapc (lambda (n)
+	      (if-let ((v (get-frame-property n 'initial-value decls :default nil)))
+		;; we have an initial value, re-write it
+		(let ((tv (transform-coerce-to-bitfields v)))
+		  (set-frame-property n 'initial-value tv decls))))
+	    (get-frame-names decls))
 
-				  ;; initial value is recursed into
-				  (destructuring-bind (n v)
-				      decl
-				    (let ((tv (transform-coerce-to-bitfields v)))
-				      ;; change the initial value in the environment
-				      (set-variable-property n 'initial-value tv)
-
-				      ;; return the new decl
-				      (list n tv)))))
-			    decls))
-	    (tbody (mapcar #'transform-coerce-to-bitfields body)))
-
-	;; re-write to the use the new decls, frane, and body
-	(appendf decls (list (list 'local-frame (current-frame))))
+      ;; rewrrite the body and return the rebuilt construct
+      (let ((tbody (mapcar #'transform-coerce-to-bitfields body)))
 	`(,fun ,decls
 	       ,@tbody)))))
 

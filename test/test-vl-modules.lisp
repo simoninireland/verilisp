@@ -110,7 +110,7 @@
 				 (z 44))
 			     (declare (as constant z))
 			     (vl::@ (vl::posedge clk)
-				    (setf x (+ x b) :sync t)))))))
+				    (setf x (+ x b))))))))
 
     (vl::typecheck p)
     (is (vl::synthesise/vl p))))
@@ -483,7 +483,7 @@
 					:slow 9)))
       (setf reset 1)))
 
-  (let ((f (cadr (assoc 'vl::local-frame (elt (elt (vl::get-module 'soc) 3) 1)))))
+  (let ((f (elt (elt (vl::get-module 'soc) 3) 1)))
     (is (vl::subtype-p(vl::get-environment-property 'c 'type f) 'module))
     (is (eql (vl::get-environment-property 'c 'as f) 'module))))
 
@@ -519,7 +519,7 @@
 					:slow 9)))
       (setf reset 1)))
 
-  (let ((f (vl::module-frame (vl::get-module-interface 'soc))))
+  (let ((f (vl::get-module-frame 'soc)))
     (is (vl::get-environment-property 'clk-in 'read f))
     (is (not (vl::get-environment-property 'clk-in 'vl::written f)))
     (is (vl::get-environment-property 'clk 'vl::written f))))

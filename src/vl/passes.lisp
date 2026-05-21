@@ -141,6 +141,14 @@ Return the expanded form."
 
 ;;; ---------- Applying and removing frames ----------
 
+;;; Lisp binders typically consist of a body with a set of declarations
+;;; (decls) that are brought into lexical scope. This is inconvenient for
+;;; processing, so we replace the decls list with a single frame that
+;;; holds all the same information in a more easily-processed form.
+;;;
+;;; We need to be able to reverse this transformation to re-produce
+;;; source code.
+
 (defpass add-frames (form)
   (:documentation "Add frames to FORM.
 
@@ -156,84 +164,72 @@ will then be used by, and extended by, other passes.")
     form))
 
 
-(defun add-local-frame-to-decls (decls &optional (f (make-frame)))
-  "Add a local frame F to DECLS.
-
-Lisp binders typically store declarations as an alist. This function
-exploits this commonality by adding a Verilisp frame to the alist
-that can then be attached and populated. The macro WITH-LOCAL-FRAME
-lets code access the 'real' declarations within an environment
-extended with this frame.
-
-A new, empty, frame is added if F is omitted.
-
-Return the new decls. If DECLS was originally NULL, this will be
-a new list containing just the frame; if not, then the frame will have
-been added to the end destructively."
-   (if (null decls)
-      ;; no decls, return a new list
-      (setf decls (list (list 'local-frame f)))
-
-      ;; existing decls, add frame as a new decl
-      (setf (cdr (last decls)) (list (list 'local-frame f))))
-
-  decls)
-
-
-(defun get-local-frame-and-decls (decls)
-  "Return a list consisting of the local frame and the remaining real decls from DECLS."
+(defun add-decl-to-frame (decl f)
+  "Add DECL to frame F."
   (declare (optimize debug))
 
-  (labels ((local-frame-p (decl)
-	     (and (listp decl)
-		  (eql (car decl) 'local-frame)))
+  (if (listp decl)
+      ;; declare name and initial value
+      (destructuring-bind (n v)
+	  decl
+	(declare-environment-variable n `((initial-value ,v)) f))
 
-	   (decl-p (decl)
-	     (not (local-frame-p decl))))
+      ;; declare just name
+      (declare-environment-variable decl '() f)))
 
-    (let ((f-decls (filter-by-predicates decls #'local-frame-p #'decl-p)))
-      (when (null (car f-decls))
-	(error 'no-local-frame))
 
-      ;; return local frame as a singleton, followed by the "real" decls
-      (let ((f (cadr (caar f-decls))))
-	(cons f (list (cadr f-decls)))))))
+(defun build-frame-from-decls (decls &optional (f (make-frame)))
+  "Populate frame F with all the variables declared in DECLS.
+
+If F is omitted, use a new empty frame.
+
+Return the populated frame."
+  (unless (null decls)
+    (mapc (rcurry #'add-decl-to-frame f) decls))
+
+  f)
+
+
+(defun build-decls-from-frame (f)
+  "Extract a list of decls from F."
+  (let (decls)
+    (dolist (n (get-frame-names f))
+      (if-let ((v (get-frame-property n 'initial-value f :default nil)))
+	(appendf decls `((,n ,v)))
+
+	(appendf decls `(,n))))
+
+    decls))
 
 
 (defun get-local-frame (decls)
-  "Retrieve the local frame from DECLS."
-  (if-let ((m (assoc 'local-frame decls)))
-    (cadr m)
+  "Retrieve the local frame from DECLS.
 
-    (error 'no-local-frame :hint "This is a compiler error.")))
+DECLS should be a frame: if not, then the frame-building operation
+has somehow been missed."
+  (if (typep decls 'frame)
+      decls
+
+      (error 'no-local-frame :hint "This is a compiler error.")))
 
 
 (defmacro with-local-frame (decls &body body)
   "Run BODY in a global environment including the locally-applied frame from DECLS.
 
-DECLS should be a variable holding the declarations, which is re-bound
-within BODY to hold only the 'real' declarations with the local frame
-removed and attached to the current environment. The original
-environment is restored on leaving BODY."
+DECLS should be a variable holding the declarations, which should be a frame.
+The frame is installed and used for BODY.
+
+It is an error to try this on a form that doesn't have DECLS as a frame."
 
   ;; ensure we get passed a variable name, not an expression
   (unless (symbolp decls)
     (error 'dsl-error :hint (format nil "Non-symbol ~a passed to WITH-LOCAL-FRAME" decls)))
 
-  ;; extract frame and decls, and run BODY in a suitable environment
-  (with-gensyms (real-decls local-frame)
-    `(destructuring-bind (,local-frame ,real-decls)
-	 (get-local-frame-and-decls ,decls)
+  ;; extract and install the local frame and run BODY in a suitable environment
+  `(with-frame (get-local-frame ,decls)
 
-       ;; attach local frame to environment
-       (with-frame ,local-frame
-
-	 ;; re-declare remaining DECLS (without local frame)
-	 (let ((,decls ,real-decls))
-	   (declare (ignorable ,decls))
-
-	   ;; run body with these decls
-	   ,@body)))))
+     ;; run the body in this environment
+     ,@body))
 
 
 ;;; ---------- Dependencies ----------
@@ -567,25 +563,8 @@ variable names."
 
       ;; there are variables to apply
       ;; declare the floated declarations around the body
-      (let ((newdecls (mapcar (lambda (np)
-				(destructuring-bind (n props)
-				    np
-				  (list n
-					(get-environment-property n 'initial-value env))))
-			      (decls env))))
-
-	;; add the new decls as a local frame
-	(setq newdecls (add-local-frame-to-decls newdecls))
-	(with-local-frame newdecls
-	  (compute-let-local-frame newdecls)
-
-	  ;; copy properties across from environment
-	  (dolist (n (get-frame-names (current-frame)))
-	    (set-variable-properties n (copy-list (get-environment-properties n env)))))
-
-	;; always a LET*, never a LET
-	`(let* ,newdecls
-	   ,body))
+      `(let* ,env
+	 ,body)
 
       ;; no variables to apply, return the body unchanged
       body))

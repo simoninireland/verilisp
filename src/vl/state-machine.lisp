@@ -588,14 +588,14 @@ Return LABEL if the the state is not merged."
 	(let* ((synth (synthesise-state-machine newargs))
 	       (p (if newenv
 		      ;; float the locally-declared varables around the state machine
-		      (let ((newdecls (add-local-frame-to-decls
-				       (mapcar (lambda (np)
-						 (destructuring-bind (n props)
-						     np
-						   (list n
-							 (get-environment-property n 'initial-value newenv :default 0))))
-					       (decls newenv))
-				       newenv)))
+		      (let* ((newdecls (build-frame-from-decls
+					(mapcar (lambda (np)
+						  (destructuring-bind (n props)
+						      np
+						    (list n
+							  (get-environment-property n 'initial-value newenv :default 0))))
+						(decls newenv))
+					newenv)))
 			`(let ,newdecls
 			   ,synth))
 

@@ -60,6 +60,9 @@
   nil)
 
 
+
+;;; TODO: Should this be its own pass?
+
 (defpassmethod add-frames (declare &rest args)
   (mapc (lambda (dec)
 	  (with-current-form dec
@@ -68,7 +71,7 @@
 	      (declare-annotation tag decargs))))
 	args)
 
-  ;;;; return form unaltered
+  ;; return form unaltered
   `(declare ,@args))
 
 

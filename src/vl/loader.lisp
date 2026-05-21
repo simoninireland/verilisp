@@ -36,7 +36,7 @@ This is filled-in by COMPUTE-TYPE as the result of the TYPECHECKING pass.")
 
 
 (defun declare-module (modname intf code)
-  "Declare a module MODNAME with the given INTF and CODE.
+  "Declare a module MODNAME with the given interface INTF and code CODE.
 
 The module is declared in *GLOBAL-ENVIRONMENT*. Modules can be
 re-defined, overwriting previous declarations and signalling
@@ -57,7 +57,7 @@ a DUPLICATE-MODULE warning."
 
 
 (defun declare-imported-module (modname intf)
-  "Declare an imported module MODNAME with the given INTF.
+  "Declare an imported module MODNAME with the given interface.
 
 The module is declared in *GLOBAL-ENVIRONMENT*. Modules can be
 re-defined, overwriting previous declarations and signalling
@@ -94,6 +94,20 @@ corresponding module body to be synthesised."
   (if (module-declared-p modname)
       (in-global-environment
 	(get-type modname))
+
+      (error 'unknown-module :module modname
+			     :hint "Make sure the module has been declared")))
+
+
+(defun get-module-frame (modname)
+  "Return the module frame for MODNAME.
+
+This will typically have been set by DEFMODULE/VL and so will have a
+corresponding module body to be synthesised."
+  (if (module-declared-p modname)
+      (in-global-environment
+	(let ((c (get-initial-value modname)))
+	  (caddr c)))
 
       (error 'unknown-module :module modname
 			     :hint "Make sure the module has been declared")))
@@ -209,6 +223,7 @@ Return the name of the newly-defined module."
   (with-gensyms (module expanded typed transformed)
     (let ((code `(module ,modname ,decls
 			 ,@body)))
+
       `(let* ((,module ',code)
 	      (,expanded (expand/vl ,module))
 	      (,typed (typecheck/vl ,expanded))
