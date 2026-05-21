@@ -35,7 +35,7 @@
 
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defparameter *recursion-schemata* nil
+  (defvar *recursion-schemata* nil
     "A list of recursion schemata function names."))
 
 

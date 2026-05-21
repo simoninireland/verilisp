@@ -20,7 +20,7 @@
 (in-package :verilisp/dsl)
 
 
-(defparameter *pass-queues* nil
+(defvar *pass-queues* nil
   "Alist from queue name tags used in DEFPASS :QUEUE options to pass queues.")
 
 
