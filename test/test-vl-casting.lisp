@@ -55,7 +55,7 @@
   ;; can't coerce anything not fixed-width
   (signals (vl::coercion-mismatch)
     (vl::typecheck (vl::expand/vl '(coerce (make-array '(10) :element-type (unsigned-byte 8))
-				  (signed-byte 58)))))
+				    (signed-byte 58)))))
 
   ;; can coerce elements though
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a (make-array '(10) :element-type (unsigned-byte 8))))

@@ -48,9 +48,9 @@ of TYTAG and TYARGS."
 
 ;;; ---------- Type algebra ----------
 
-;; The builtin SUBTYPEP is sometimes either too aggressive or too
-;; demanding in what it requires. So we provide a generic version
-;; that's minimally intrusive.
+;;; The builtin SUBTYPEP is sometimes either too aggressive or too
+;;; demanding in what it requires. So we provide a generic version
+;;; that's minimally intrusive.
 
 (defgeneric subtype-type (ty1tag ty1args ty2tag ty2args)
   (:documentation "Test whether one type is a sub-type of another.
@@ -72,10 +72,10 @@ By default there is no relationship between a pair of types.")
     (some (curry #'subtype-p (construct-type ty1tag ty1args)) ty2args))
 
   ;; intersection types
+  ;; TODO: These are wrong
   (:method ((ty1tag (eql 'and)) ty1args ty2tag ty2args)
-    ;; A and B < C if A < C or B < C
-    (every (rcurry #'subtype-p (construct-type ty2tag ty2args)) ty1args)
-    )
+    ;; A and B < C if A < C and B < C
+    (every (rcurry #'subtype-p (construct-type ty2tag ty2args)) ty1args))
   (:method (ty1tag ty1args (ty2tag (eql 'and)) ty2args)
     ;; C < A and B if C < A or C < B
     (some (rcurry #'subtype-p (construct-type ty2tag ty2args)) ty1args))
@@ -88,6 +88,7 @@ By default there is no relationship between a pair of types.")
       (subtype-p (get-frame-property n 'type f)
 		 (construct-type ty2tag ty2args))))
   (:method (ty1tag ty1args (ty2tag (eql 'type-of)) ty2args)
+    ;; A < type-of C if A < referent of C
     (destructuring-bind (n &optional (f (currrent-frame)))
 	ty2args
       (subtype-p (construct-type ty1tag ty1args)

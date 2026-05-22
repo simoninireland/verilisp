@@ -96,9 +96,7 @@
 
 	  ;; the ALU
 	  (let ((aluIn1 rs1)
-		(aluIn2 (if ALUreg-p
-			    rs2
-			    Iimm))
+		(aluIn2 rs2)
 		(shamt (if ALUreg-p
 			   (bref rs2 4 :end 0)
 			   (bref instr 24 :end 20)))

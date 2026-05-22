@@ -67,7 +67,6 @@
 		       ;; place is complex, recurse into it
 		       (read-variables place)))
 	(sel-rws (union-all (read-variables (remove-nulls (list start end width))))))
-
     (union place-rws sel-rws)))
 
 
@@ -97,7 +96,6 @@
   ;;		    (read-variables-setf psel val pselargs))))))
 
   (let* ((params (union-all (read-variables (remove-nulls (list start end width))))))
-
     (if (atom place)
 	params
 
@@ -201,7 +199,8 @@
 
 
 (defpassmethod simple-expression-form-p (bref place start &key end width)
-  (and (simple-expression-form-p start)
+  (and (simple-expression-form-p place)
+       (simple-expression-form-p start)
        (or (null end)
 	   (simple-expression-form-p end))
        (or (null width)

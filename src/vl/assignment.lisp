@@ -45,8 +45,8 @@ isn't declared."
     (error 'unknown-variable :variable n
 			     :hint "Make sure the variable is in scope"))
   (unless (writeable-p n)
-    (error 'not-synthesisable :variable n
-			      :hint "Ensure target is writeable")))
+    (error 'access-mismatch :variable n
+			    :hint "Ensure variable is writeable")))
 
 
 ;;; ---------- setq ----------
@@ -160,7 +160,6 @@ generalised places."
       (let ((written (written-variables-setf place))
 	    (read (union (read-variables-setf place)
 			 (read-variables val))))
-
 	(dolist (n written)
 	  (add-dependencies n read)
 	  (set-variable-property n 'written t)))
@@ -170,7 +169,10 @@ generalised places."
 
 
 (defpassmethod compute-type (setf place val)
+  (declare (optimize debug))
+
   (compute-type place)
+  (break)
   (compute-type val))
 
 

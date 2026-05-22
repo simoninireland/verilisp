@@ -52,6 +52,7 @@
 (defun synthesise-if-expression (form)
   "Synthesise FORM as a continued expansion of conditions."
   (declare (optimize debug))
+
   (if (listp form)
       (destructuring-bind (fun &rest args)
 	  form
@@ -84,7 +85,14 @@
 
   (if (in-expression-context-p)
       ;; in expression, synthesise as a conditional expression
-      (synthesise-if-expression `(if ,condition ,then ,@else))
+      (if (and (simple-expression-form-p condition)
+	       (simple-expression-form-p condition)
+	       (or (null else)
+		   (and (= (length else) 1)
+			(simple-expression-form-p (car else)))))
+	  (synthesise-if-expression `(if ,condition ,then ,@else))
+
+	  (error 'not-synthesisable :hint "Ensure all arms of the conditional are simple expressions"))
 
       ;; elsewhere, synthesise as a conditional statement
       (progn

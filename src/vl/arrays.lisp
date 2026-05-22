@@ -324,19 +324,37 @@ probably should, for those that are statically determined."
 
 (defun element-type-of-array (ty)
   "Extract the element type of array TY."
-  (cadr ty))
+  (unless (or (null ty)
+	      (eql ty 'array)
+	      (and (listp ty)
+		   (eql (car ty) 'array)))
+    (error 'type-mismatch :expected 'array :got ty :hint "Needs an array to get its elemnent type"))
+
+  (if (or (atomp ty)
+	  (= (length ty) 1)
+	  (eql (cadr ty) *))
+      ;; array has no specialiser
+      t
+
+      ;; array has a specialiser
+      (cadr ty)))
 
 
 (defpassmethod compute-type (aref place &rest indices)
+  (declare (optimize debug))
+
   (let ((ty (compute-type place)))
     ;; constrain the variable
     (add-type-constraint place `array)
-
+    (break)
     (element-type-of-array ty)))
 
 
 (defpassmethod apply-type-constraints (aref place &rest indices)
+  (declare (optimize debug))
+
   (let ((ty (compute-type place)))
+    (break)
     (ensure-subtype ty 'array)
     (mapc (compose #'ensure-fixed-width #'compute-type) indices)))
 
@@ -358,11 +376,10 @@ probably should, for those that are statically determined."
      (set-variable-property n 'read t)))
 
 
-(defpassmethod read-variables-setf (aref place indices)
+(defpassmethod read-variables-setf (aref place &rest indices)
   (declare (optimize debug))
 
   (let ((val-indices (union-all (mapcar #'read-variables (safe-list indices)))))
-
     (if (symbolp place)
 	;; place is just a symbol
 	val-indices
@@ -372,7 +389,7 @@ probably should, for those that are statically determined."
 	       (read-variables place)))))
 
 
-(defpassmethod written-variables-setf (aref place indices)
+(defpassmethod written-variables-setf (aref place &rest  indices)
   (declare (optimize debug))
 
   (if (symbolp place)

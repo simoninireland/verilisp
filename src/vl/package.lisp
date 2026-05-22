@@ -187,7 +187,9 @@
    #:not-importable
    #:not-static
    #:value-mismatch
+   #:access-mismatch
    #:shape-mismatch
+   #:coercion-mismatch
    #:no-local-frame
 
    ;; warnings
@@ -197,7 +199,6 @@
    #:duplicate-macro
    #:direction-mismatch
    #:type-mismatch
-   #:coercion-mismatch
    #:precision-mismatch
    #:bitfield-mismatch
    #:unreachable-code

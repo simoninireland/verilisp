@@ -151,18 +151,9 @@ other bindings."
 
 	;; constrain the variable with whatever information we have
 	(let ((ty (or (get-frame-property n 'type lenv :default nil)
-		      (if-let ((v (get-frame-property n 'initial-value lenv)))
+		      (if-let ((v (get-frame-property n 'initial-value lenv :default nil)))
 			(compute-type v))
 		      '(unsigned-byte 1))))
-
-	  ;; array and module types are known at construction, so don't need to be inferred
-	  (when (or (subtype-p ty 'array)
-		    (subtype-p ty 'module))
-	    (set-frame-property n 'type ty lenv)
-
-	    ;; modules also are their own representation
-	    (when (subtype-p ty 'module)
-	      (set-frame-property n 'as 'module lenv)))
 
 	  ;; constrain the variable
 	  (add-frame-type-constraint n ty lenv))))))
@@ -193,15 +184,6 @@ LET* adds bindings incrementally, so each can see those that went before."
 			    (compute-type v))
 			  '(unsigned-byte 1))))
 
-	      ;; array and module types are known at construction, so don't need to be inferred
-	      (when (or (subtype-p ty 'array)
-			(subtype-p ty 'module))
-		(set-frame-property n 'type ty lenv)
-
-		;; modules also are their own representation
-		(when (subtype-p ty 'module)
-		  (set-frame-property n 'as 'module lenv)))
-
 	      ;; constrain the variable
 	      (add-frame-type-constraint n ty lenv))
 
@@ -230,39 +212,52 @@ LET* adds bindings incrementally, so each can see those that went before."
     (compute-type (with-implicit-progn body))))
 
 
-(defpassmethod apply-type-constraints (let decls &rest body)
+(defpassmethod apply-type-constraints (let f &rest body)
   (declare (optimize debug))
 
-  (with-local-frame decls
-    (dolist (n (variables-declared-in-current-frame))
+  (with-local-frame f
+    (dolist (n (get-frame-names f))
       (with-recover-on-error
 	  ;; leave constraints alone on error
 	  t
 
 	;; constrain the variable's type (which must be representable)
 	(let* ((constraints (get-type-constraints n))
-	       (lubty (if constraints (apply #'lurb constraints))))
+	       (lubty (if constraints (apply #'lurb constraints)))
+	       (ty (get-type n)))
 
-	  (let ((ty (get-type n)))
-	    (if ty
-		;; check against provided type
-		(unless (subtype-p lubty ty)
-		  (warn 'type-mismatch :expected ty
-				       :got lubty
-				       :hint "Make sure explicit type matches usage"))
+	  (if ty
+	    (progn
+	      ;; check against provided type
+	      (unless (subtype-p lubty ty)
+		(warn 'type-mismatch :expected ty
+				     :got lubty
+				     :hint "Make sure explicit type matches usage"))
 
-		;; update the type with the constrained type
-		(progn
-		  (set-variable-property n 'type lubty)
-		  (setq ty lubty)))
+	      (if (or (subtype-p ty 'array)
+		      (subtype-p ty 'module))
 
-	    ;; ensure the initial value is a valid element
-	    (if-let ((v (get-initial-value n)))
-	      (progn
-		(ensure-subtype (compute-type v) ty)
+		  ;; array and module types are fully elaborated and
+		  ;; so don't need to be inferred
+		  (progn
+		    (set-variable-property n 'type ty)
 
-		;; cascade into any initial values
-		(apply-type-constraints v)))))))
+		    ;; modules also are their own representation
+		    (when (subtype-p ty 'module)
+		      (set-variable-property n 'as 'module)))))
+
+	    ;; update the type with the constrained type
+	    (progn
+	      (set-variable-property n 'type lubty)
+	      (setq ty lubty)))
+
+	  ;; ensure the initial value is a valid element
+	  (if-let ((v (get-initial-value n)))
+	    (progn
+	      (ensure-subtype (compute-type v) ty)
+
+	      ;; cascade into any initial values
+	      (apply-type-constraints v))))))
 
     ;; cascade into the body
     (apply-type-constraints (with-implicit-progn body))))
@@ -274,12 +269,12 @@ LET* adds bindings incrementally, so each can see those that went before."
 
 ;;; ---------- Representations ----------
 
-(defpassmethod infer-representation (let decls &rest body)
+(defpassmethod infer-representation (let f &rest body)
   (declare (optimize debug))
 
-  (with-local-frame decls
+  (with-local-frame f
     ;; do representation inference on initial values
-    (dolist (n (variables-declared-in-current-frame))
+    (dolist (n (get-frame-names f))
       (if-let ((v (variable-property n 'initial-value)))
 	(infer-representation v)))
 
@@ -287,7 +282,7 @@ LET* adds bindings incrementally, so each can see those that went before."
     (infer-representation (with-implicit-progn body))
 
     ;; do representation inference on local variables
-    (dolist (n (variables-declared-in-current-frame))
+    (dolist (n (get-frame-names f))
       (let ((read (variable-property n 'read))
 	    (written (variable-property n 'written))
 	    (ignored (variable-property n 'ignore))
@@ -302,6 +297,7 @@ LET* adds bindings incrementally, so each can see those that went before."
 			   (if-let ((v (get-initial-value n)))
 			     (cond ((make-array-form-p v)
 				    ;; arrays are always registers
+				    ;; TODO: Is this true?
 				    'register)
 
 				   ((static-p v)
@@ -609,14 +605,21 @@ by LET and MODULE forms."
 	      (if (static-constant-p v)
 		  (let ((iv (ensure-static v)))
 		    (unless (= iv 0)
-		      ;; initial value isn't statially zero, synthesise
+		      ;; initial value isn't statically zero, synthesise
 		      (as-literal " = ")
 		      (synthesise v)))
 
 		  ;; initial value is an expression, synthesise
 		  (progn
 		    (as-literal " = ")
-		    (synthesise v)))))
+		    ;; this is a bit of a hack, to ensure that the
+		    ;; value is synthesised in an expression context
+		    ;; to expand (and constrain) IF and CASE correctly
+		    ;;
+		    ;; TODO: It'd obviously be better if this was an
+		    ;; expresion context in its own right
+		    (with-current-form '(setf n v)
+		      (synthesise v))))))
       (as-literal";"))))
 
 

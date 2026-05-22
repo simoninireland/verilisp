@@ -95,6 +95,8 @@
 (defpassmethod apply-type-constraints (coerce val ty)
   (unquote ty)
 
+  (apply-type-constraints val)
+
   ;; check we can do the coercion
   (let ((vty (compute-type val)))
     (if (not (and (fixed-width-p ty)

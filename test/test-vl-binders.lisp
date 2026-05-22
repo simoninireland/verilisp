@@ -351,6 +351,26 @@
 	(is (vl::typecheck p))))))
 
 
+(test test-let-extract-types
+  "Test we extract type constraints correctly."
+  (declare (optimize debug))
+
+  (vl::with-new-frame
+    (let ((p (vl::expand/vl '(let ((rs1 0)
+				   (rs2 16)
+				   (ALUreg-p 1))
+			      (let ((aluIn1 rs1)
+				    (aluIn2 (if ALUreg-p rs1 rs2)))
+				aluIn2)))))
+      (vl::typecheck p)
+      (let ((env1 (cadr p))
+	    (env2 (cadr (caddr p))))
+	(is (vl::subtype-p (vl::get-frame-property 'aluIn1 'type env2)
+			   '(unsigned-byte 1)))
+	(is (vl::subtype-p (vl::get-frame-property 'aluIn2 'type env2)
+			   '(unsigned-byte 5)))))))
+
+
 ;;; ---------- Variable accesses ----------
 
 (test test-let-accesses

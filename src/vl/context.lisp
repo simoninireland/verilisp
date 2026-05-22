@@ -22,21 +22,21 @@
 
 ;;; ---------- Environment ----------
 
-(defparameter *core-environment* (empty-environment)
+(defvar *core-environment* (empty-environment)
   "The core environment for the compiler.
 
 This frame contains all the core elements of Verilisp such as the
 core macros. It shouldn't change after the system is loaded.")
 
 
-(defparameter *global-environment* (attach-frame (make-frame) *core-environment*)
+(defvar *global-environment* (attach-frame (make-frame) *core-environment*)
   "The global environment for the compiler.
 
 This frame contains everything added to Verilisp in the current session,
 including macros and modules.")
 
 
-(defparameter *current-frame* (attach-frame (make-frame) *global-environment*)
+(defvar *current-frame* (attach-frame (make-frame) *global-environment*)
   "The current environment for the compiler.
 
 This frame holds the shallowest definitions currently in scope,

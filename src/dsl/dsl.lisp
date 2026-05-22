@@ -59,9 +59,8 @@ The default is the pass name followed by a suffix."
 
 ;;; ---------- Defining a pass ----------
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defvar *pass-extra-arguments* nil
-    "An alist from pass names to their extra recursion arguments."))
+(defvar *pass-extra-arguments* nil
+  "An alist from pass names to their extra recursion arguments.")
 
 
 (defun pass-p (pass-name)

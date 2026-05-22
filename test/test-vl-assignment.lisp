@@ -30,7 +30,7 @@
 						       (setq a 9))))
 		       '(unsigned-byte 8)))
 
-    (signals (vl::not-synthesisable)
+    (signals (vl::access-mismatch)
       (vl::typecheck (vl::expand/vl '(let ((a 12))
 				      (declare (as constant a))
 				      (setq a 9)))))))
@@ -97,7 +97,7 @@
 
 (test test-assignment-constant
   "Test we can't assign to a constant variable."
-  (signals (vl::not-synthesisable)
+  (signals (vl::access-mismatch)
     (vl::with-new-frame
       (vl::typecheck (vl::expand/vl '(let ((a 10))
 				      (declare (as constant a))
@@ -158,7 +158,7 @@
 
 
 (test test-synthesise-setf-conditional
-  "Test we can synthesise/vlSETF with a conditional value."
+  "Test we can synthesise/ SETF with a conditional value."
   (vl::with-new-frame
     (let ((p (vl::expand/vl '(let ((a 12)
 				   (b 2))
@@ -167,6 +167,21 @@
 					  (+ a 1)))))))
       (vl::typecheck p)
       (is (vl::synthesise/vl p)))))
+
+
+(test test-synthesise-setf-conditional-not-simple
+  "Test we can't synthesise SETF with a non-simple expression."
+  (vl::with-new-frame
+    (let ((p (vl::expand/vl '(let ((a 12)
+				   (b 2)
+				   (c 0))
+			      (setf a (if (= b 1)
+					  a
+					  (setf c 1)
+					  (+ a 1)))))))
+      (vl::typecheck p)
+      (signals not-synthesisable
+	(is (vl::synthesise/vl p))))))
 
 
 ;; Tests of the actual generalised place forms appear in their

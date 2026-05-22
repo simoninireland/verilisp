@@ -401,6 +401,20 @@ This happens when a value is coerced to a type with too few bits to represent
 it faithfully."))
 
 
+(define-condition access-mismatch (vl-warning)
+  ((variable
+    :documentation "The variablebeing accessed."
+    :initarg :variable
+    :reader accessed-variable))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Access mis-match on ~s"
+					       (accessed-variable c))
+				       c str)))
+  (:documentation "Condition signalled when a variale can't be accessed as required.
+
+This typically happens when trying to assign a value to a constant."))
+
+
 (define-condition bitfield-mismatch (vl-warning)
   ((pattern
     :documentation "The bitfield pattern."
