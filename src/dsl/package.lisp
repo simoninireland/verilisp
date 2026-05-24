@@ -82,6 +82,8 @@
    #:ensure-pass
 
    ;; type algebra functions and macros
+   #:deconstruct-type
+   #:construct-tyoe
    #:&type
    #:subtype-p
    #:lub
