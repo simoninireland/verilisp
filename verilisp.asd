@@ -26,6 +26,7 @@
   :license "GPL3"
   :depends-on ("alexandria"
 	       "str"
+	       "trivia"
 	       "cl-ppcre"
 	       "closer-mop"
 	       "slot-extra-options"
@@ -45,6 +46,7 @@
 			     (:file "pass-queue")
 			     (:file "recursion-schemata")
 			     (:file "dsl")
+			     (:file "types")
 			     (:file "conditions")))
 
 	       ;; core language

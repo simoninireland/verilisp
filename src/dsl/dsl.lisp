@@ -1,4 +1,4 @@
-;;;; Helper macros for the Verilisp DSL
+;;;; Helper macros for building passes in the Verilisp DSL
 ;;;;
 ;;;; Copyright (C) 2024--2026 Simon Dobson
 ;;;;

@@ -38,6 +38,8 @@
   (:import-from :str
 		#:concat
 		#:upcase)
+  (:import-from :trivia
+		#:match)
 
   (:export
    ;; form queue
@@ -78,6 +80,13 @@
    #:pass-names
    #:pass-p
    #:ensure-pass
+
+   ;; type algebra functions and macros
+   #:&type
+   #:subtype-p
+   #:lub
+   #:defsubtype
+   #:deflub
 
    ;; recovery
    #:with-recover-on-error
