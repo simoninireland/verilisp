@@ -33,21 +33,16 @@
 		#:containsp
 		#:shorten
 		#:words)
+  (:import-from :trivia
+		#:match)
 
   (:export
    ;; types
    #:bitwidth
-   #:construct-type
-   #:deconstruct-type
-   #:subtype-p
-   #:subtype-type
    #:representable-type-p
    #:fixed-width-p
    #:unsigned-byte-p
    #:signed-byte-p
-   #:lub
-   #:lurb
-   #:lub-type
 
    ;; environments
    #:*global-environment*
