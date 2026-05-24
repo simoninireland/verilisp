@@ -128,7 +128,7 @@
 			    (setf (vl::bref (aref a 8) 3 :end 0)
 			     (vl::bref (aref a 0) 3 :end 0))))))
 
-    (is (vl:subtype-p (vl::typecheck p)
+    (is (vl::subtype-p (vl::typecheck p)
 		      '(unsigned-byte 4)))))
 
 
@@ -172,7 +172,7 @@
 
     (let ((decls (elt p 1)))
       (with-local-frame decls
-	(is (vl:subtype-p (vl::get-type 'a)
+	(is (vl::subtype-p (vl::get-type 'a)
 			  '(array (unsigned-byte 8))))))))
 
 
