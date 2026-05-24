@@ -43,6 +43,21 @@
 		    '(unsigned-byte 2))))
 
 
+(test test-let-infer-width-and-update
+  "Test we update the type in the environment corectly when inferring."
+  (let ((p (vl::expand/vl '(let ((a 1))
+			    (+ 1 a)))))
+    (vl::typecheck p)
+
+    (let ((env (cadr p)))
+      (vl::get-frame-properties 'a env)
+
+      )
+
+
+    )
+  )
+
 (test test-let-double
   "Test we can typecheck an expression with two variables."
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 1)
@@ -50,7 +65,7 @@
 						     (declare (width 8 a)
 						      (width 12 b))
 						     (+ a b))))
-		    '(unsigned-byte 13))))
+		     '(unsigned-byte 13))))
 
 
 (test test-let-too-narrow
