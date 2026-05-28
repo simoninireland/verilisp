@@ -83,7 +83,7 @@
 
    ;; type algebra functions and macros
    #:deconstruct-type
-   #:construct-tyoe
+   #:construct-type
    #:&type
    #:subtype-p
    #:lub

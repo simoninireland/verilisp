@@ -54,27 +54,6 @@ Return the set of variables as a list.")
   (:schema into-arguments-union))
 
 
-(defpass read-variables-setf (form)
-  (:documentation "Return all variables that are read in an assignment.
-
-This function needs a method for each generalised place, to determine
-which variables are read in computing an assignment to this place. The
-methods should not return variables that are updated: this is
-provided by WRITTEN-VARIABLES-SETF.
-
-Return the set of variables as a list."))
-
-
-(defpass written-variables-setf (form)
-  (:documentation "Return all variables that are written in an assignment.
-
-This function needs a method per generalised place, to determine
-which variables are written to during an assignment. The methods
-should not return variables that are only read and not updated.
-
-Return the set of variables as a list."))
-
-
 ;;; ---------- Macro expansion ----------
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -349,51 +328,22 @@ rewrite free occurrances, not those that appear under binders.")
 
 ;;; ---------- Type checking and inference ----------
 
-(defpass apply-type-constraints (form)
-  (:documentation "Evaluate type constraints to constraining variables in FORM.
-
-This pass is called after type-checking and inference, meaning that
-the environment will be populated with explicit and inferred types
-and other information. Functions on this method should check this
-information to decide whether necessary constraints are met, and
-signal warnings or errors appropriately.")
-  (:schema over-arguments)
-  (:queue typing)
-
-  ;; return the original form overall from the pass
-  (:post (lambda (form res)
-	   form))
-
-  (:passmethod (form)
-    nil)
-
-  (:passmethod ((form list))
-    (destructuring-bind (fun &rest args)
-	form
-      (with-current-form form
-	(with-recover-on-error
-	    ;; leave the constraints alone on error
-	    t
-
-	  (apply-type-constraints/form fun args))))))
-
-
 (defpass compute-type (form)
    (:documentation "Compute the type of FORM.
 
-Methods on this function should add type constraints to the
-environment for the variables they use. ADD-TYPE-CONSTRAINTS adds the
-constraint to the environment. Methods for binders should solve
-(if possible) these constraints for the locally-declared variables.
-Later passes can then assume that the type returned by GET-TYPE
-reflects the actual type determined by the type-checker. In
-particuler, these types are used by APPLY-TYPE-CONSTRAINTS to ensure
-that code it type-correct.
+Verilisp uses a constraint-based type system, meaning that a form
+constrains -- but doe not structly determine -- its type based in the
+types of its sub-terms, whose types may themselves not be fully resolved at the
+time of checking.
 
-Return the type of FORM. Generally speaking it will not be possible to
-firmly determine a type locally for a code fragment, so the type
-returned may be general and make use of complex type specifiers that
-are resolved in the binders that introduce the variables.")
+Methods on this function should work out the type of FORM as a type
+expression. They may also apply constraints to any variables, which will
+be resolved when typing that variable's binder.
+
+The disadvantage of this approach is that type errors are caught where the
+variable is declared, not at the proximate cause of the error.
+
+Returns a type expression.")
   (:schema fail-unknown-form)
   (:queue typing)
 
@@ -410,6 +360,10 @@ are resolved in the binders that introduce the variables.")
 
 ;;; ---------- Generalised places ----------
 
+;;; Generalised places are Lisp's version of lvalues: things that can be
+;;; assigned to. They usually appear in the same way as they are
+;;; accessed, but as the first element of a SETF.
+
 (defpass generalised-place-p (form)
   (:documentation "Test whether FORM is a generalised place.
 
@@ -420,13 +374,26 @@ but is also SETF-able.")
   (:schema constant-form nil)
 
   (:passmethod (form)
-    nil))
+	       nil))
 
 
 (defun ensure-generalised-place (form)
   "Ensure FORM is a generalised place."
   (unless (generalised-place-p form)
     (error 'not-synthesisable :hint "Make sure the target of the assignment is a generalised, SETF-able, place")))
+
+
+(defpass read-written-variables (form)
+  (:documentation "Return all variables that are read and written in an assignment.
+
+This function needs a method per generalised place, to determine which
+variables are read during as assignment, and which are written to
+during an assignment.
+
+For generalised places in non-assignment positions, use READ-VARIABLES. to
+extract the variables accessed.
+
+Return the two sets of variables as a list."))
 
 
 ;;; ---------- Simple expressions ----------
@@ -437,14 +404,14 @@ but is also SETF-able.")
 ;;; to transform more complex (but legal) Lisp to take the complicated
 ;;; bits out of the expressions.
 
-(defpass simple-expression-form-p (form)
+(defpass simple-expression-p (form)
   (:documentation "Test whether FORM is a simple expression.")
   (:schema constant-form nil)
 
   (:passmethod ((n integer))
-    t)
+	       t)
   (:passmethod ((s symbol))
-    (variable-declared-p s)))
+	       (variable-declared-p s)))
 
 
 ;;; ---------- Representation inference ----------
@@ -467,7 +434,7 @@ consistency with the representation implied by the code.")
 	   form))
 
   (:passmethod (form)
-    nil))
+    form))
 
 
 ;;; ---------- Elaborating state machines ----------

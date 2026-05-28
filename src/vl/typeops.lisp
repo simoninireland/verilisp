@@ -26,50 +26,6 @@
 
 ;;; ---------- Type algebra ----------
 
-;;; Fixed-width types
-
-(defsubtype ((unsigned-byte a) (unsigned-byte b))
-  (if (eql b '*)
-      (or (null a)
-	  (eql a '*))
-
-      (<= a b)))
-
-(defsubtype ((signed-byte a) (signed-byte b))
-  (if (eql b '*)
-      (or (null a)
-	  (eql a '*))
-
-      (<= a b)))
-
-(defsubtype (unsigned-byte signed-byte)
-  t)
-
-(defsubtype ((unsigned-byte a) (signed-byte b))
-  (<= a (1+ b)))
-
-(deflub (unsigned-byte unsigned-byte)
-	'unsigned-byte)
-
-
-;;; Abbreviations for fixed-width types
-
-(defsubtype (bit (&type ty))
-  (subtype-p '(unsigned-byte 1) ty))
-
-(defsubtype ((&type ty) bit)
-  (subtype-p ty '(unsigned-byte 1)))
-
-
-;;; Arrays
-
-;;; TODO: Should we check dimensions, since we can do so statically?
-
-(defsubtype ((array lty ldim) (array rty rdim))
-  "Arrays are covariant in their element type."
-  (subtype-p lty rty))
-
-
 ;;; Union types
 
 (defsubtype ((or &rest tys) (&type ty))
@@ -84,15 +40,26 @@
   (lub (foldr #'lub tys nil) ty))
 
 
+;;; There are no general intersection types (yet)
+
+
 ;; type-of types
 
-(defsubtype ((type-of a f) (&type ty))
-  (let ((ty1 (get-type a f)))
-    (subtype-p ty1 ty)))
+(defsubtype ((type-of a f) (&type ty2))
+  (let ((ty1 (get-frame-property a 'type f)))
+    (subtype-p ty1 ty2)))
 
-(defsubtype ((&type ty) (type-of a f))
-    (let ((ty2 (get-type a f)))
-      (subtype-p ty ty2)))
+(defsubtype ((&type ty1) (type-of a f))
+    (let ((ty2 (get-frame-property a 'type f)))
+      (subtype-p ty1 ty2)))
+
+(deflub ((type-of a f) (&type ty2))
+   (let ((ty1 (get-frame-property a 'type f)))
+     (lub ty1 ty2)))
+
+(deflub ((&type ty1) (type-of a f))
+   (let ((ty2 (get-frame-property a 'type f)))
+     (lub ty1 ty2)))
 
 
 ;;; ---------- Type checking ----------
@@ -108,14 +75,20 @@ can be ignored for systems not concerned with loss of precision."
 
 ;;; ---------- Bit widths ----------
 
-(defgeneric bitwidth-type (tytag tyargs)
-  (:documentation "Return the width need for values of a type.
+;;; TODO: Change this into a proper structure
 
-The type is tagged TYTAG with arguments TYARGS.
+(defun bitwidth (ty)
+  "Return the number of bits needed to represent type TY."
+  (destructuring-bind (tytag tyargs)
+      (deconstruct-type ty)
+    (bitwidth/form tytag tyargs)))
 
-The default width of a type is zero, meaning it won;t be representable.")
+
+(defgeneric bitwidth/form (tytag tyargs)
+  (:documentation "Return the number of bits required to represent (TYTAG . TYARGS).")
+
   (:method (tytag tyargs)
-    0)
+    (error 'not-representable :type (construct-type tytag tyargs)))
 
   ;; union types
   (:method ((tytag (eql 'or)) tyargs)
@@ -132,88 +105,23 @@ The default width of a type is zero, meaning it won;t be representable.")
       (bitwidth (get-frame-property n 'type f)))))
 
 
-(defun bitwidth (ty)
-  "Return the bits required to represent type TY."
-  (apply #'bitwidth-type (deconstruct-type ty)))
+;;; ---------- Rep[resentability ----------
+
+;;; A type is representable iff it has a known bitwidth
+
+(defun representable-type-p (ty)
+  "Test whether TY is representable."
+  (handler-case
+      (bitwidth ty)
+    (not-representable ()
+      nil)))
 
 
-;; ;;; ---------- Representability ----------
-
-;; (defun representable-type-p (ty)
-;;   "Tes that type TY can be represented."
-;;   (apply #'representable-type-sexp-p (deconstruct-type ty)))
-
-
-;; (defgeneric representable-type-sexp-p (tytag tyargs)
-;;   (:documentation "Test that a type can be represented.
-
-;; Methods on this function should test that there is a representation
-;; for the type, which generally means that it can be represented by a
-;; fixed number of bits.
-
-;; The default is that types are not representable.")
-;;   (:method (tytag tyargs)
-;;     nil)
-
-;;   (:method ((tytag (eql 'type-of)) tyargs)
-;;     (destructuring-bind (n &optional (f (current-frame)))
-;;	tyargs
-;;       (representable-type-p (get-frame-property n 'type f)))))
-
-
-;; ;;; ---------- Least upper-bounds ----------
-
-;; (defun lurb (ty &rest tys)
-;;   "Compute the least upper representable bound of TY and TYS.
-
-;; The representable bound includes only the representable types in determining the
-;; type to be used. Any unrepresentable types in the list are used to make sure
-;; that the computed type is an appropriate sub-type. The advantage of this is
-;; that an operation can require, for example, a SIGNED-BYTE argument without
-;; committing to a particular width, and have that width be inferred from other
-;; context.
-
-;; For example,
-
-;; (LUB '(UNSIGNED-BYTE 8) 'UNSIGNED-BYTE)
-
-;; is UNSIGNED-BYTE, the upper bound of the two types, while
-
-;; (LURB '(UNSIGNED-BYTE 8) 'UNSIGNED-BYTE)
-
-;; is (UNSIGNED-BYTE 8), which is a sub-type of UNSIGNED-BYTE and is the
-;; largest representable type that can be formed."
-;;   (declare (optimize debug))
-
-;;   (flet ((lurbtype (ty1 ty2)
-;;	   (let ((lubtype (lub ty1 ty2)))
-;;	     (if (representable-type-p lubtype)
-;;		 ;; LUB is representable, return it
-;;		 lubtype
-
-;;		 ;; otherwise, check what's stopping it
-;;		 (let* ((ety1 (eval-type ty1))
-;;			(ety2 (eval-type ty2))
-;;			(rep1 (representable-type-p ty1))
-;;			(rep2 (representable-type-p ty2)))
-
-;;		   (cond (rep1
-;;			  (ensure-subtype ety1 ety2)
-;;			  ety1)
-;;			 (rep2
-;;			  (ensure-subtype ety2 ety1)
-;;			  ety2)
-
-;;			 ;; neither type is representable
-;;			 (t
-;;			  nil)))))))
-
-;;     (if (null tys)
-;;	;; only one type, evaluate it against NIL
-;;	;; (otherwise FOLDR short-cuts and returns TY)
-;;	(lurbtype ty nil)
-
-;;	(foldr #'lurbtype tys ty))))
+(defun ensure-representable-type (ty)
+  "Ensure that TY is representable."
+  ;; this is just the calculation itself, which fails if
+  ;; the type has no representation
+  (bitwidth ty))
 
 
 ;;; ---------- Type constraints ----------

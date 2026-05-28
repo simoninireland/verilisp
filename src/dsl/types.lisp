@@ -21,11 +21,14 @@
 
 ;;; A type algebra lets us talk about the relationships between types.
 ;;; Common Lisp uses SUBTYPEP for this, indicating whether one type is
-;;; a sub-type of another. For DSLs we often need something different or
-;;; more flexible than the built-in operation.
+;;; a sub-type of another. For DSLs we often need something different
+;;; or more flexible than the built-in operation: we might want to
+;;; exclude some Lisp types from consideration, for example. FOr this
+;;; reason the DSL builder lets us define type algebras specific to a
+;;; given language.
 
 
-;;; ---------- Type manipulation ----------
+;;; ---------- Type normalisation ----------
 
 (defun deconstruct-type (ty)
   "Deconstruct the type specifier TY into tag and arguments.
@@ -47,7 +50,7 @@ of TYTAG and TYARGS."
       (cons tytag tyargs)))
 
 
-;;; ---------- Generic functions ----------
+;;; ---------- Subtypes and LUBs ----------
 
 (defgeneric subtype-p (l r)
   (:documentation "Test whether L is a sub-type of R.")

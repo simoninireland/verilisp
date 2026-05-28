@@ -350,8 +350,8 @@ almost certainly a logical error."))
     :reader received-type))
   (:report (lambda (c str)
 	     (format-condition-context (format nil "Expected a value of type ~a, got one of type ~a"
-					       (eval-type (expected-type c))
-					       (eval-type (received-type c)))
+					       (expected-type c)
+					       (received-type c))
 				       c str)))
   (:documentation "Condition signalled when types don't match.
 

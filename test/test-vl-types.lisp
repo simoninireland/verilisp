@@ -1,27 +1,30 @@
-;; Tests of synthesisable fragment passes and synthesis
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; Tests of synthesisable fragment passes and synthesis
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/test)
 (in-suite verilisp/vl)
 
 
-;; ---------- Fixed-width integers ----------
+
+;;; ---------- Fixed-width integers ----------
+
+;;; These really just check that Common Lisp behaves as it should
 
 (test test-unsigned-range
   "Test the range of an unsigned fixed-width integer."
@@ -46,7 +49,7 @@
   (is (not (typep -64 '(signed-byte 4)))))
 
 
-;; ---------- Widths ----------
+;;; ---------- Widths ----------
 
 (test test-bitwidths-integer-types
   "Test we can extract the widths of integer types."
@@ -66,7 +69,7 @@
   (is (= (vl::bits-for-integer -1) 2)))
 
 
-;; ---------- Sub-typing ----------
+;;; ---------- Sub-typing ----------
 
 (test test-subtype-fixed-width
   "Test the fixed-width types for sub-type relationships."
@@ -104,7 +107,7 @@
   (is (not (vl::subtype-p 'signed-byte 'unsigned-byte)))
 
   ;; bits
-  (is (vl::subtype-p 'bit 'unsigned-byte))q
+  (is (vl::subtype-p 'bit 'unsigned-byte))
   (is (vl::subtype-p 'bit '(unsigned-byte 1)))
   (is (vl::subtype-p 'bit '(unsigned-byte 8))))
 
@@ -168,11 +171,11 @@
   (is (not (vl::subtype-p '(or (unsigned-byte 12) (unsigned-byte 8)) 'bit)))
 
   ;; type-of types
-  ;TODO:
+  ;;TODO: Add type-of tests
   )
 
 
-;; ---------- Least upper-bounds of types ----------
+;;; ---------- Least upper-bounds of types ----------
 
 (test test-lub-fixed-width
   "Test we can form LUBs of fixed-with types."
