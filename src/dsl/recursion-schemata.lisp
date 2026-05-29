@@ -34,9 +34,20 @@
 ;;; DEFINE-RECURSION-SCHEMA, which installs the new schema for use.
 
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defvar *recursion-schemata* nil
-    "A list of recursion schemata function names."))
+(defun add-recursion-schema (schema-name)
+  "Add SCHEMA-NAME as a recursion schema."
+  (setf (get schema-name 'recursion-schema-p) t))
+
+
+(defun recursion-schema-p (schema-name)
+  "Test whether SCHEMA-NAME names a recursion schema."
+  (get schema-name 'recursion-schema-p nil))
+
+
+(defun ensure-recursion-schema (schema-name)
+  "Ensure that SCHEMA-NAME names a recursion schema."
+  (unless (recursion-schema-p schema-name)
+      (error 'dsl-error :hint (format nil "No recursion schema ~s defined" schema-name))))
 
 
 (defmacro define-recursion-schema (schema-name schema-args &body body)
@@ -48,11 +59,11 @@ variable holding the form arguments. It will implicitly be passed
 three keyword arguments:
 
 - :PASS-NAME containing the pass name
-- :OPTION containing the list of arguments passed along with the schema name in the :SCHEMA clause
-- :EXTRA containing the extra arguments of the pass.
+- :OPTION containing the rest of the list after the schema name in the :SCHEMA clause
+- :EXTRA containing the extra argument names of the pass.
 
-The body should return the code to be inserted into the form-level
-function, as a macro would."
+The body should perform the recursion (or whatever), probably
+composing PASS-NAME and EXTRA arguments with the SCHEMA-ARGS."
   ;; check the schema prototype is correct
   (when (/= (length schema-args) 2)
     (error 'dsl-error :hint (format nil "Recursion schemata take exactly two arguments (not ~s)" schema-args)))
@@ -63,7 +74,7 @@ function, as a macro would."
       (setq docstring (car body))
       (setq body (cdr body)))
 
-    `(eval-when (:compile-toplevel :load-toplevel :execute)
+    `(progn
        ;; wrap the schema up in a generic function
        (defgeneric ,schema-name ,(append schema-args '(&key pass-name option extra))
 	 (:documentation ,docstring)
@@ -74,18 +85,7 @@ function, as a macro would."
 	   ,@body))
 
        ;; install the function as a valid schema
-       (appendf *recursion-schemata* (list ',schema-name)))))
-
-
-(defun recursion-schema-p (schema-name)
-  "Test whether SCHEMA-NAME names a recursion schema."
-  (member schema-name *recursion-schemata*))
-
-
-(defun ensure-recursion-schema (schema-name)
-  "Ensure that SCHEMA-NAME names a recursion schema."
-  (unless (recursion-schema-p schema-name)
-      (error 'dsl-error :hint (format nil "No recursion schema ~s defined" schema-name))))
+       (add-recursion-schema ',schema-name))))
 
 
 ;;; ---------- Standard schemata ----------
@@ -125,23 +125,6 @@ use the OVER-ARGUMENTS schema."
 The results of the map-over are discarded: to get the result,
 use the INTO-ARGUMENTS schema."
   (mapc pass-name args))
-
-
-(define-recursion-schema into-function-and-arguments (fun args)
-  "A recursion schema that recurses into both FUN and ARGS.
-
-The form returned is a list of the form (VFUN . VARGS) where VFUN and
-VARGS are the results of the recursive calls."
-  (let ((vfun (apply pass-name fun))
-	(vargss (mapcar pass-name args)))
-    (cons vfun vargs)))
-
-
-(define-recursion-schema into-arguments-all-non-nil (fun args)
-  "A recursion schema that recurses into all arguments and checks they're all non-NIL.
-
-This is usually used for predicates over code."
-  (every pass-name args))
 
 
 (define-recursion-schema into-arguments-union (fun args)

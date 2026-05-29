@@ -22,7 +22,7 @@
 ;;; The DSL builder is a small set of data structures, functions, and macros
 ;;; to simplify the construction of DSLs: it's not specific to Verilisp.
 ;;;
-;;; The builder build passes, which process a program by structural
+;;; The builder builds passes, which process a program by structural
 ;;; induction. Each pass consists of generic functions that recursively
 ;;; process the code passed in. There are macros for creating passes,
 ;;; and some recursion schemata that capture the common recursive
@@ -30,7 +30,8 @@
 ;;; Passes can be structured into queues that can be run as chains.
 ;;;
 ;;; The builder maintains a queue of the forms being processed, letting
-;;; a pass method identify where it it in the larger scheme of the code.
+;;; a pass method identify where it is in the larger scheme of the code.
+
 
 (defpackage verilisp/dsl
   (:documentation "The Verilisp DSL builder")
@@ -54,14 +55,12 @@
 
    ;; pass queues
    #:define-pass-queue
-   #:pass-queue-names
    #:pass-queue-p
    #:ensure-pass-queue
    #:run-pass-queue
 
    ;; recursion schemata
    #:define-recursion-schema
-   #:recursion-schemata
    #:recursion-schema-p
    #:ensure-recursion-schema
 
@@ -70,14 +69,11 @@
    #:constant-form
    #:into-arguments
    #:over-arguments
-   #:into-function-and-arguments
-   #:into-arguments-all-non-nil
    #:into-arguments-union
 
    ;; pass definition macros
    #:defpass
    #:defpassmethod
-   #:pass-names
    #:pass-p
    #:ensure-pass
 
