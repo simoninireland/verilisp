@@ -59,6 +59,10 @@ The default is the pass name followed by a suffix."
 
 ;;; ---------- Defining a pass ----------
 
+;;; To make sure we only use passes where trhey're needed we add
+;;; properties to the main pass function symbols holding whether the
+;;; symbol's function value is a pss and what its extra arguments are.
+
 (defun add-pass (pass-name extra-args)
   "Add a pass called PASS-NAME that takes EXTRA-ARGS in addition to the form it works over.
 
@@ -69,7 +73,7 @@ If PASS-NAME exists already it is overridden."
 
 (defun pass-p (pass-name)
   "Test whether PASS-NAME is defined as a pass."
-  (get pass-name 'pass-p nil))
+  (get pass-name 'pass-p))
 
 
 (defun ensure-pass (pass-name)
@@ -81,7 +85,7 @@ If PASS-NAME exists already it is overridden."
 (defun get-pass-extra-args (pass-name)
   "Return the extra arguments passed to PASS-NAME."
   (ensure-pass pass-name)
-  (get pass-name 'pass-extra-args nil))
+  (get pass-name 'pass-extra-args))
 
 
 !(defmacro defpass (pass-name form-arg &rest opts)
@@ -258,6 +262,9 @@ as described in DEFINE-RECURSION-SCHEMA."
 		   (add-pass-to-queue ',pass-name ',queue-tag
 				      :prepend ,(eql queue-position :prepend))))))))))
 
+
+
+;;; TODO: Add IGNORABLE declarations for variables form
 
 (defmacro defpassmethod (pass-name form &body body)
   "Define a pass method.
