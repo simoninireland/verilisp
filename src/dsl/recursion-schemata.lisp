@@ -123,8 +123,11 @@ use the OVER-ARGUMENTS schema."
   "A recursion schema that maps the pass over the arguments.
 
 The results of the map-over are discarded: to get the result,
-use the INTO-ARGUMENTS schema."
-  (mapc pass-name args))
+use the INTO-ARGUMENTS schema.
+
+Return the (FUN . ARGS) form unchanged."
+  (mapc pass-name args)
+  (cons fun args))
 
 
 (define-recursion-schema into-arguments-union (fun args)
