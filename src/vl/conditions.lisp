@@ -91,6 +91,9 @@ Warnings can be ignored by simply returning from their handler."))
 
 (define-condition vl-error (vl-condition error)
   ()
+  (:report (lambda (c str)
+	     (format-condition-context "Compiler error"
+				       c str)))
   (:documentation "Base condition for errors.
 
 Errors cannot be ignored like warnings, However, they will typically be
@@ -98,6 +101,14 @@ signalled from a context that exports a RECOVER restart to re-start
 processing from a \"safe\" point. This lets processing continuue, but
 might still cause a cascade of further errors. use WITH-RECOVER-ON-ERROR
 to set up recovery actions."))
+
+
+(define-condition compiler-error (vl-error)
+  ()
+  (:documentation "Base condition for compiler errors.
+
+These conditions are signalled for things that shouldn't happen:
+compiler errors that can't be corrected by user action."))
 
 
 ;;; ---------- Synthesis ----------
@@ -360,6 +371,29 @@ variable that is too narrow to accommodate all its possible values.
 This is usually signalled as a warning, as there is a
 sometimes-acceptable default action to risk the loss of precision
 caused by the assignment."))
+
+
+(define-condition circular-type-dependencies (vl-error)
+  ((variable
+    :documentation "The variable being defined."
+    :initarg :variable
+    :reader declaring-variable)
+   (involved
+    :documentation "The types."
+    :initarg :involved
+    :reader involved-types))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Circular type dependencies encountered when defining ~a: ~a"
+					       (declaring-variable c)
+					       (involved-types c))
+				       c str)))
+  (:documentation "Condition signalled when circular type dependencies are encountered.
+
+This happens when the type inference algorithm can't find a solution
+to to the types implied by the uses of a variable. This can indicate
+an inconsistency in the variable's use, or (more likely) means that
+one or more of the variables involved need to have explicit types
+declared form them to short-circuit inference."))
 
 
 (define-condition coercion-mismatch (vl-warning)
