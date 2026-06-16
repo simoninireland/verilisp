@@ -398,7 +398,47 @@
 	     '(a 1)))
   (is (equal (assoc-decls 'b '((a 1) b (c 3)))
 	     'b))
-  (is (null (assoc-decls 'd '((a 1) b (c 3)))))
+  (is (null (assoc-decls 'd '((a 1) b (c 3))))))
 
 
-  )
+;;; ---------- Maths operations ----------
+
+(test test-bit-array-to-integer
+  "Test we can convert bit arrays to integers properly."
+  (let ((a (make-array '(8) :element-type 'bit)))
+    (is (= (bit-array-to-integer a) 0))
+
+    (setf (aref a 3) 1)
+    (is (= (bit-array-to-integer a) 8))
+
+    (setf (aref a 0) 1)
+    (is (= (bit-array-to-integer a) 9))
+
+    (setf (aref a 0) 0)
+    (is (= (bit-array-to-integer a) 8))))
+
+
+(test test-integer-to-bit-array
+  "Test we can convert integers to bit arrays."
+  ;; natural widths
+  (is (equal (integer-to-bit-array 0) #*0))
+  (is (equal (integer-to-bit-array 1) #*1))
+  (is (equal (integer-to-bit-array 10) #*0101))
+
+  ;; fixed widths
+  (is (equal (integer-to-bit-array 0 3) #*000))
+  (is (equal (integer-to-bit-array 1 3) #*100))
+  (is (equal (integer-to-bit-array 9 6) #*100100))
+
+  ;; precision
+  (is (equal (integer-to-bit-array 9 2) #*10)))
+
+
+(test tes-bit-array-integer-duality
+  "Test the coercions are reversible."
+  (is (equal (bit-array-to-integer (integer-to-bit-array 9)) 9))
+
+  (let ((a (make-array '(8) :element-type 'bit)))
+    (setf (aref a 1) 1)
+    (setf (aref a 3) 1)
+    (is (equal (integer-to-bit-array (bit-array-to-integer a) 8) a))))
