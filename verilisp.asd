@@ -37,26 +37,27 @@
 	       (:module "utils"
 		:components ((:file "package")
 			     (:file "list-utils")
-			     (:file "string-utils")))
+			     (:file "string-utils")
+			     (:file "maths-utils")))
 
 	       ;; DSL builder
 	       (:module "dsl"
 		:components ((:file "package")
+			     (:file "conditions")
 			     (:file "form-queue")
 			     (:file "pass-queue")
 			     (:file "recursion-schemata")
 			     (:file "dsl")
-			     (:file "types")
-			     (:file "conditions")))
+			     (:file "types")))
 
 	       ;; core language
 	       (:module "vl"
 		:components ((:file "package")
+			     (:file "conditions")
 			     (:file "env")
 			     (:file "context")
 			     (:file "macros")
 			     (:file "helpers")
-			     (:file "conditions")
 			     (:file "pretty-printer")
 			     (:file "passes")
 			     (:file "typeops")

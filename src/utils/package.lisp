@@ -65,4 +65,10 @@
    #:merge-alists
 
    ;; string functions
-   #:string-times))
+   #:string-times
+
+   ;; maths functions
+   #:bit-array-to-integer
+   #:bits-for-integer
+   #:integer-to-bit-array
+   ))

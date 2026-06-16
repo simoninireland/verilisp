@@ -1,4 +1,4 @@
-;;;; Helper functions and macros
+;;;; List helper functions and macros
 ;;;;
 ;;;; Copyright (C) 2024--2025 Simon Dobson
 ;;;;
