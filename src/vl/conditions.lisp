@@ -159,13 +159,9 @@ that should be declared in the architectural environment, such as a register."))
 
 
 (define-condition syntax-error (vl-error)
-  ((form
-    :documentation "The form."
-    :initarg :form
-    :reader form))
+  ()
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Syntax error in ~a"
-					       (form c))
+	     (format-condition-context "Syntax error"
 				       c str)))
   (:documentation "Condition signalled when a syntax error is encountered.
 

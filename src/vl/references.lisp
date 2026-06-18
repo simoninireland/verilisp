@@ -20,13 +20,32 @@
 (in-package :verilisp/core)
 
 
+(defpassmethod expand-macros ((form symbol))
+  (declare (optimize debug))
+
+  (if (symbol-macro-declared-p form)
+      ;; reference is a symbol macro, expand it
+      (let ((newform (variable-property form 'initial-value)))
+	(let ((p (apply newform (list form))))
+
+	  ;; recurse into the expanded form
+	  (expand-macros p)))
+
+      ;; symbol is a variable, leave unchanged
+      form))
+
+
 (defpassmethod compute-type ((form symbol))
   (if-let ((f (get-frame-declaring form (current-frame))))
     (or (get-frame-property form 'type f :default nil)
 	`(type-of ,form ,f))
 
-     ;; not declared
+    ;; not declared
     (error 'unknown-variable :variable form)))
+
+
+(defpassmethod compute-variable-types ((form symbol))
+  nil)
 
 
 (defpassmethod read-variables ((form (eql nil)))
@@ -37,12 +56,16 @@
   (list form))
 
 
-(defpassmethod compute-dependencies ((form symbol))
-  (set-variable-property form 'read t))
+(defpassmethod read-variables-setf ((form symbol))
+  nil)
+
+
+(defpassmethod written-variables-setf ((form symbol))
+  (list form))
 
 
 (defpassmethod generalised-place-p ((form symbol))
-  (writeable-p form))
+  t)
 
 
 (defpassmethod float-let-blocks ((form symbol))

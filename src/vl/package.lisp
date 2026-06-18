@@ -169,6 +169,7 @@
 
    ;; errors
    #:dsl-error
+   #:compiler-error
    #:not-synthesisable
    #:not-representable
    #:unknown-variable
@@ -179,6 +180,7 @@
    #:unknown-state
    #:duplicate-variable
    #:duplicate-state
+   #:circular-type-dependencies
    #:not-importable
    #:not-static
    #:value-mismatch

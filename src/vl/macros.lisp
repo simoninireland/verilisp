@@ -43,6 +43,18 @@
        (eql (get-representation m) 'macro)))
 
 
+(defun declare-symbol-macro (m f)
+  "Declare M as a symbol macro with body F in the current environment."
+  (declare-variable m `((name ,m)
+			(initial-value ,f) (as symbol-macro))))
+
+
+(defun symbol-macro-declared-p (m)
+  "Test whether M is declared as a symbol macro in the global environment."
+  (and (variable-declared-p m)
+       (eql (get-representation m) 'symbol-macro)))
+
+
 ;;; ---------- Declaration ----------
 
 (defun translate-lambda-list (l)
@@ -94,7 +106,9 @@ rise to an error, not a warning."
 				 ,@body))))))
 
 
-;;; TODO: We should do SYMBOL-MACROLET/VL as well
+
+;;; TODO: I think we can get rid of these and replace them with MACROLET and
+;;; SYMBOL-MACROLET in Verilisp code
 
 (defmacro macrolet/vl (decls &body body)
   "Declare the macros in DECLS within BODY.
@@ -118,3 +132,44 @@ A MACROLET/VL form should appear only within a DECLAREMACRO/VL form."
 
        ;; interpolate the body
        ,@body)))
+
+
+(defmacro symbol-macrolet/vl (decls &body body)
+  "Declare the symbol macros in DECLS within BODY.
+
+The symbol macros in DECLS are in scope for BODY, and nowhere else.
+
+A SYMBOL-MACROLET/VL form should appear only within a DECLAREMACRO/VL form."
+  (let ((dms (mapcar (lambda (m)
+		       (destructuring-bind (name form)
+			   m
+			 (with-gensyms (n)
+			   `(declare-symbol-macro ',name (lambda (,n)
+							   ,form)))))
+		     decls)))
+
+    `(progn
+       ;; declare embedded macros
+       ,@dms
+
+       ;; interpolate the body
+       ,@body)))
+
+
+;;; SYMBOL-MACROLET can appear within Verilisp code as well.
+
+(defmethod into-arguments-macros ((fun (eql 'symbol-macrolet)) args &key pass-name option extra)
+  (declare (optimize debug))
+
+  (destructuring-bind (decls &rest body)
+      args
+
+    (with-new-frame
+      (dolist (m decls)
+	(destructuring-bind (name form)
+	    m
+	  (declare-symbol-macro name (lambda (f)
+				       (declare (ignore f))
+				       form))))
+
+      (apply pass-name (cons (with-implicit-progn body) extra)))))

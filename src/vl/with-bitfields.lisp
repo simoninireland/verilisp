@@ -228,7 +228,8 @@ SETF will update the appropriate positons in ARG."
 			  (cdr body))))
 
     (with-gensyms (condition)
-      (let* ((runs (extract-bitfields pattern))
+      (let* ((w (length pattern))
+	     (runs (extract-bitfields pattern))
 	     (fixed-bit-runs (bitfield-fixed-bit-runs runs))
 	     (variable-runs (bitfield-variable-runs runs))
 
@@ -238,6 +239,7 @@ SETF will update the appropriate positons in ARG."
 			(mapcar (curry #'run-to-decl arg) variable-runs))))
 
 	(if tests
+	    ;; we have tests, form a conjunction if multiple
 	    (let ((test (if (= (length tests) 1)
 			    (car tests)
 			    `(and ,@tests))))
@@ -247,21 +249,30 @@ SETF will update the appropriate positons in ARG."
 		  (if else-branch
 		      ;; two-armed conditional
 		      `(let ((,condition ,arg))
+			 (declare (width ,w ,condition))
+
 			 (if ,test
-			     ,(rewrite-variables then-branch decls)
+			     (symbol-macrolet ,decls
+			       ,then-branch)
 
 			     (progn
-			       ,@(rewrite-variables else-branch decls))))
+			       (symbol-macrolet ,decls
+				 ,else-branch))))
 
 		      ;; one-armed conditional
 		      `(let ((,condition ,arg))
+			 (declare (width ,w ,condition))
+
 			 (if ,test
-			     ,(rewrite-variables then-branch decls))))
+			     (symbol-macrolet ,decls
+			       ,then-branch))))
 
 		  ;; tests, no decls
 		  (if else-branch
 		      ;; two-armed conditional
 		      `(let ((,condition ,arg))
+			 (declare (width ,w ,condition))
+
 			 (if ,test
 			     ,then-branch
 
@@ -270,8 +281,11 @@ SETF will update the appropriate positons in ARG."
 
 		      ;; one-armed conditional
 		      `(let ((,condition ,arg))
+			 (declare (width ,w ,condition))
+
 			 (if ,test
-			     ,(rewrite-variables then-branch decls))))))
+			     (symbol-macrolet ,decls
+			       ,then-branch))))))
 
 	    (if decls
 		;; decls, no tests
@@ -280,7 +294,10 @@ SETF will update the appropriate positons in ARG."
 		    (warn 'unreachable-code :hint "Should there be fixed bits to test?"))
 
 		  `(let ((,condition ,arg))
-		     ,(rewrite-variables then-branch decls)))
+		     (declare (width ,w ,condition))
+
+		     (symbol-macrolet ,decls
+		       ,then-branch)))
 
 		(progn
 		  ;; no decls or tests

@@ -81,9 +81,9 @@
 
 (test test-with-bitfields-simple
   "Test we can extract bitfields."
-  (let ((p (vl::expand/vl '(let ((a #2r1001011010))
+  (let ((p (vl::expand/vl '(let ((arr #2r1001011010))
 			    (vl::with-bitfields (a a a b b b c)
-				a
+				arr
 			      (setf a (+ b c)))))))
     (is (vl::subtype-p (vl::typecheck p)
 		       '(unsigned-byte 10)))))

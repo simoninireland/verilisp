@@ -58,6 +58,7 @@
    #:defmoduleinterface/vl
    #:defmacro/vl
    #:macrolet/vl
+   #:symbol-macrolet/vl
    #:synthesise/vl
    #:forget/vl
    #:clear-global-environment
