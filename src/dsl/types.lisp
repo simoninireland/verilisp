@@ -23,9 +23,12 @@
 ;;; Common Lisp uses SUBTYPEP for this, indicating whether one type is
 ;;; a sub-type of another. For DSLs we often need something different
 ;;; or more flexible than the built-in operation: we might want to
-;;; exclude some Lisp types from consideration, for example. FOr this
+;;; exclude some Lisp types from consideration, for example. For this
 ;;; reason the DSL builder lets us define type algebras specific to a
 ;;; given language.
+;;;
+;;; The algebra always has the "lattice" types of T and NIL defined,
+;;; but no others by default.
 
 
 ;;; ---------- Type normalisation ----------
@@ -100,7 +103,9 @@ Use the DEFSUBTYPE macro to define methods for this function.")
 (defun lub (&rest tys)
   "Return the least upper bound of types TYS.
 
-The most common form will be a pair of types."
+The most common form will be a pair of types, but multiple are
+acceptable -- as is one, in which case the type will be reduced
+to a normal form (if one exists according to the type rules)."
 
   (flet ((lub/pair (l r)
 	   ;; lattice types
@@ -124,19 +129,33 @@ The most common form will be a pair of types."
 
 		  (lub/form lfun largs rfun rargs)))))))
 
-    (foldr #'lub/pair tys nil)))
+    (let ((l (length tys)))
+      (cond ((= l 0)
+	     nil)
+
+	    ((= l 1)
+	     ;; for a single type we LUB it with nil /without/
+	     ;; triggering the shortcut above, so we reduce
+	     ;; any complex types
+	     (destructuring-bind (lfun largs)
+		 (deconstruct-type (car tys))
+	       (lub/form lfun largs nil nil)))
+
+	    (t (foldr #'lub/pair (cdr tys) (car tys)))))))
 
 
 (defgeneric lub/form (lfun largs rfun rargs)
   (:documentation "Form the least upper-bound of (LFUN . LARGS) and (RFUN . RARGS).")
 
-  ;; by default the LUB of two types is the larger, or t if they're
+  ;; by default the LUB of two types is the larger, or T if they're
   ;; incomparable under sub-typing
   ;;
   ;; It's slightly wasteful to re-construct a just-deconstructed type,
   ;; but we want the default to be here and not in LUB to allow the
-  ;; default to be overridden
+  ;; default to be overridden if needed.
   (:method (lfun largs rfun rargs)
+    (declare (optimize debug))
+
     (let ((l (construct-type lfun largs))
 	  (r (construct-type rfun rargs)))
 
@@ -153,6 +172,9 @@ The most common form will be a pair of types."
 ;;; ---------- Defining sub-type relationships ----------
 
 ;;; TODO: Add error checks on syntax of patterns
+
+;;; TODO: Add IGNORABLE declarations for variables in type patterns
+
 
 (defun parse-type-parameter-patterns (lform rform body)
   "Parse the type patterns LFORM and RFORM.
