@@ -46,7 +46,7 @@
 					   4)
 					  (t
 					   6))))
-			     (setq c (+ c 2)))))))
+			     (setq a (+ c 2)))))))
 
     (vl::typecheck p)
     (is (vl::synthesise/vl p))))

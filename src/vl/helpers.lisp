@@ -1,4 +1,4 @@
-;;;; Helper macros for writing DSL functions
+;;;; Helper functions and macros for writing DSL functions
 ;;;;
 ;;;; Copyright (C) 2024--2026 Simon Dobson
 ;;;;
@@ -27,22 +27,28 @@
 
 Non-error conditions are passed through; non-Verilisp-specific errors
 are reported as NOT-SYNTHESISABLE errors."
-  `(handler-bind ((vl-error (lambda (c)
-			      (error c)))
+  `(handler-case
+       ,@body
 
-		  (error (lambda (c)
-			   (error 'not-synthesisable :underlying-condition c))))
-
-     ,@body))
+     (vl-error (c)
+       (error c))
+     (error (c)
+       (error 'not-synthesisable :underlying-condition c))))
 
 
 ;;; ---------- Implicit forms ----------
 
-(defmacro with-implicit-progn (body)
+;;; We avoid adding extra layers of PROGN or TAGBODY unnecessarily.
+
+(defun with-implicit-progn (body)
   "Return the forms in BODY as an implicit PROGN form."
-  `(cons 'progn ,body))
+  (if (eql (car body) 'progn)
+      body
+      `(progn ,@body)))
 
 
-(defmacro with-implicit-tagbody (body)
+(defun with-implicit-tagbody (body)
   "Return the forms in BODY as an implicit TAGBODY form."
-  `(cons 'tagbody ,body))
+  (if (eql (car body) 'tagbody)
+      body
+      `(tagbody ,@body)))

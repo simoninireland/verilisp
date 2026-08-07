@@ -34,15 +34,11 @@ in many applications."
 ;;; ---------- Assertedness ----------
 
 (defpassmethod compute-type (asserted-p v)
-  '(unsigned-byte 1))
+  'bit)
 
 
-(defpassmethod apply-type-constraints (asserted-p v)
-  (ensure-fixed-width (compute-type v)))
-
-
-(defpassmethod simple-expression-form-p (asserted-p v)
-  (simple-expression-form-p v))
+(defpassmethod simple-expression-p (asserted-p v)
+  (simple-expression-p v))
 
 
 (defpassmethod synthesise (asserted-p v)
@@ -58,19 +54,15 @@ in many applications."
 
 ;;; TODO: Extend to handle arbitrary numbers of arguments like Common Lisp.
 
-;;; TODO: Capture more of the commonality, maybe with a surrounding macro?
-
 (defpassmethod compute-type (= l r)
-  '(unsigned-byte 1))
-
-
-(defpassmethod apply-type-constraints (= l r)
   (ensure-fixed-width (compute-type l))
-  (ensure-fixed-width (compute-type r)))
+  (ensure-fixed-width (compute-type r))
+
+  'bit)
 
 
-(defpassmethod simple-expression-form-p (= &rest args)
-  (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-p (= &rest args)
+  (every #'simple-expression-p args))
 
 
 (defpassmethod synthesise (= l r)
@@ -85,9 +77,7 @@ in many applications."
 
 (defpassmethod compute-type (/= l r)
   (:same-as =))
-(defpassmethod apply-type-constraints (/= l r)
-  (:same-as =))
-(defpassmethod simple-expression-form-p (/= l r)
+(defpassmethod simple-expression-p (/= l r)
   (:same-as =))
 
 (defpassmethod synthesise (/= l r)
@@ -101,9 +91,7 @@ in many applications."
 ;;; <
 (defpassmethod compute-type (< l r)
   (:same-as =))
-(defpassmethod apply-type-constraints (< l r)
-  (:same-as =))
-(defpassmethod simple-expression-form-p (< l r)
+(defpassmethod simple-expression-p (< l r)
   (:same-as =))
 
 (defpassmethod synthesise (< l r)
@@ -117,9 +105,7 @@ in many applications."
 ;;; <=
 (defpassmethod compute-type (<= l r)
   (:same-as =))
-(defpassmethod apply-type-constraints (<= l r)
-  (:same-as =))
-(defpassmethod simple-expression-form-p (<= l r)
+(defpassmethod simple-expression-p (<= l r)
   (:same-as =))
 
 (defpassmethod synthesise (<= l r)
@@ -133,9 +119,7 @@ in many applications."
 ;;; >
 (defpassmethod compute-type (> l r)
   (:same-as =))
-(defpassmethod apply-type-constraints (> l r)
-  (:same-as =))
-(defpassmethod simple-expression-form-p (> l r)
+(defpassmethod simple-expression-p (> l r)
   (:same-as =))
 
 (defpassmethod synthesise (> l r)
@@ -149,9 +133,7 @@ in many applications."
 ;;; >=
 (defpassmethod compute-type (>= l r)
   (:same-as =))
-(defpassmethod apply-type-constraints (>= l r)
-  (:same-as =))
-(defpassmethod simple-expression-form-p (>= l r)
+(defpassmethod simple-expression-p (>= l r)
   (:same-as =))
 
 (defpassmethod synthesise (>= l r)

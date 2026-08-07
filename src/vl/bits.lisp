@@ -57,68 +57,25 @@
 	  end)))
 
 
+(defpassmethod generalised-place-p (bref place start &key end width)
+  t)
+
+
 (defpassmethod read-variables (bref place start &key end width)
   (declare (optimize debug))
 
-  (let ((place-rws (if (symbolp place)
-		       ;; place targets a variable directly
-		       (list place)
-
-		       ;; place is complex, recurse into it
-		       (read-variables place)))
-	(sel-rws (union-all (read-variables (remove-nulls (list start end width))))))
-    (union place-rws sel-rws)))
-
-
-(defpassmethod compute-dependencies (bref &rest args)
-  (dolist (n (read-variables `(bref ,@args)))
-    (set-variable-property n 'read t)))
+  ;; include any variables read in PLACE, which might itself be a generalised place
+  ;; rather than being just a variable
+  (union-all (mapcar #'read-variables (remove-nulls (list place start end width)))))
 
 
 (defpassmethod read-variables-setf (bref place start &key end width)
-  (declare (optimize debug))
-
-  ;; (let* ((params (foldr #'union (read-variables (remove-nulls (list start end width))) '()))
-  ;;	 (vals (read-variables value))
-  ;;	 (val-width (union params vals)))
-
-  ;;   (cond ((symbolp place)
-  ;;	   val-width)
-
-  ;;	  ((integerp place)
-  ;;	   ;; legitimate to have a constant as the value
-  ;;	   params)
-
-  ;;	  (t
-  ;;	   (destructuring-bind (psel &rest pselargs)
-  ;;	       place
-  ;;	     (union val-width
-  ;;		    (read-variables-setf psel val pselargs))))))
-
-  (let* ((params (union-all (read-variables (remove-nulls (list start end width))))))
-    (if (atom place)
-	params
-
-	;; compound place, recurse
-	(union params (read-variables-setf place)))))
+  ;; do not include variables read in PLACE
+  (union-all (mapcar #'read-variables (remove-nulls (list start end width)))))
 
 
 (defpassmethod written-variables-setf (bref place start &key end width)
-  (cond ((symbolp place)
-	 ;; variable, written to
-	 (list place))
-
-	((integerp place)
-	 ;; constant, nowhere to write
-	 nil)
-
-	(t
-	 ;; complex place, recurse into it
-	 (written-variables-setf place))))
-
-
-(defpassmethod generalised-place-p (bref place start &key end width)
-  (generalised-place-p place))
+  (list place))
 
 
 (defpassmethod compute-type (bref place start &key end width)
@@ -127,8 +84,7 @@
   ;; check syntax
   (when (and (not (null width))
 	     (not (null end)))
-    (error 'syntax-error :form `(bref ,place ,start :width ,width :end ,end)
-			 :hint "Provide at most one of :END and :WIDTH)"))
+    (error 'syntax-error :hint "Provide at most one of :END and :WIDTH)"))
 
   ;; extract width
   (if (null width)
@@ -136,42 +92,16 @@
 	  ;; default to accessing the single START bit
 	  (setq width 1)
 
-	  (progn
-	    ;; start bit and end must be a constants
-	    (ensure-static start)
-	    (ensure-static end)
-
-	    ;; compute width from start and end
-	    (setq width `(1+ (- ,start ,end)))))
-
-      (progn
-	;; width must be constant
-	(let ((w (eval-in-static-environment width)))
-	  ;; if width is not 1, start must be constant
-	  (if (> w 1)
-	      (ensure-static start)))))
-
-  ;; recurse into the complex place
-  (compute-type place)
-
-  ;; type depends on the number of bits extracted
-  `(unsigned-byte ,width))
-
-
-(defpassmethod apply-type-constraints (bref place start &key end width)
-  (declare (optimize debug))
-
-  ;; we use the actual values in the constraints
-  (if (null width)
-      (if (null end)
-	  ;; default to accessing the single START bit
-	  (setq width 1)
-
 	  ;; compute width from start and end
-	  (setq width (1+ (- start (eval-in-static-environment end)))))
+	  (setq width (1+ (- (eval-in-static-environment start)
+			     (eval-in-static-environment end)))))
 
-      ;; compute width
-      (setq width (eval-in-static-environment width)))
+      ;; width must be constant
+      (let ((w (eval-in-static-environment width)))
+	;; if width is not 1, start must be constant
+	(if (> w 1)
+	    (ensure-static start))
+	(setq width w)))
 
   ;; sanity check bounds
   (when (< width 1)
@@ -179,32 +109,28 @@
     (error 'value-mismatch :expected "non-negative number"
 			   :got width
 			   :hint "Make sure width bits are positive"))
-  (when (static-p start)
-    ;; we have a static start bit so we can check width against it
-    (let ((s (eval-in-static-environment start)))
-      (when (> width (1+ s))
-	(error 'value-mismatch :expected (1+ s)
-			       :got width
-			       :hint "Make sure width bits can be extracted"))))
 
-  ;; check whether variable should be widened
-  (let ((ty (eval-type (compute-type place))))
-    (let ((vw (bitwidth ty)))
+  ;; recurse into the place
+  (compute-type place)
 
-      (when (> width vw)
-	;; signal to allow this to be picked up
-	(warn 'type-mismatch :expected vw
-			     :got width
-			     :hint "Width wider than base variable")))))
+  ;; type depends on the number of bits extracted
+  `(unsigned-byte ,width))
 
 
-(defpassmethod simple-expression-form-p (bref place start &key end width)
-  (and (simple-expression-form-p place)
-       (simple-expression-form-p start)
+(defpassmethod compute-dependencies (bref place start &key end width)
+  (let ((rs (union-all (mapcar #'read-variables (remove-nulls (list start end width))))))
+    (add-dependencies place rs)
+    (mark-variables-as-read rs)
+    (mark-variable-as-written place)))
+
+
+(defpassmethod simple-expression-p (bref place start &key end width)
+  (and (simple-expression-p place)
+       (simple-expression-p start)
        (or (null end)
-	   (simple-expression-form-p end))
+	   (simple-expression-p end))
        (or (null width)
-	   (simple-expression-form-p width))))
+	   (simple-expression-p width))))
 
 
 (defpassmethod synthesise (bref place start &key end width)
@@ -232,5 +158,4 @@
 
 
 (defpassmethod lispify (bref place start &key end width)
-  (let ((l (eval-in-static-environment `(+ 1 (- ,start ,end)))))
-    `(logand (ash ,(lispify place) (- ,end)) (1- (ash 1 ,l)))))
+  `(logand (ash ,(lispify place) (- ,end)) (1- (ash 1 ,(+ 1 (- start end))))))

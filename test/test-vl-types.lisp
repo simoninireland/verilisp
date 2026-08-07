@@ -259,3 +259,127 @@
 		     '(unsigned-byte 8)
 		     t)
 	     t)))
+
+
+;; TODO: Test signed as well
+
+(test test-lub-and
+  "Test we can form ANDs of fixed-width types."
+  (is (equal (vl::lub '(and (unsigned-byte 1) (unsigned-byte 2)) '(unsigned-byte 1))
+	     '(unsigned-byte 3))))
+
+
+;;; ---------- Solving type constraints ----------
+
+(test test-initial-value-constraints
+  "Test we get constraints for initial values."
+  (with-new-frame
+    (vl::declare-variable 'a '((initial-value 7)))
+
+    (vl::constrain-initial-value 'a (current-frame) (current-frame))
+    (vl::solve-type-constraints-and-declare 'a (current-frame))
+    (is (equal (vl::get-environment-property 'a 'type (current-frame))
+	       '(unsigned-byte 3)))))
+
+
+(test test-assignment-constraints
+  "Test we can constrain when we have a (simulated) assignment."
+  (with-new-frame
+    (vl::declare-variable 'a '((initial-value 7)))
+
+    ;; simulate assigning to the variable
+    (vl::add-type-constraint 'a '(unsigned-byte 8))
+
+    (vl::constrain-initial-value 'a (current-frame) (current-frame))
+    (vl::solve-type-constraints-and-declare 'a (current-frame))
+    (is (equal (vl::get-environment-property 'a 'type (current-frame))
+	       '(unsigned-byte 8))))
+
+    (with-new-frame
+      (vl::declare-variable 'a '((initial-value 7)))
+
+      ;; simulate two assignments
+      (vl::add-type-constraint 'a '(unsigned-byte 8))
+      (vl::add-type-constraint 'a '(unsigned-byte 16))
+
+      (vl::constrain-initial-value 'a (current-frame) (current-frame))
+      (vl::solve-type-constraints-and-declare 'a (current-frame))
+      (is (equal (vl::get-environment-property 'a 'type (current-frame))
+		 '(unsigned-byte 16))))
+
+    (with-new-frame
+      (vl::declare-variable 'a '((initial-value 7)))
+
+      ;; simulate assignment with a union type
+      (vl::add-type-constraint 'a '(or (unsigned-byte 8) (signed-byte 16)))
+
+      (vl::constrain-initial-value 'a (current-frame) (current-frame))
+      (vl::solve-type-constraints-and-declare 'a (current-frame))
+      (is (vl::get-environment-property 'a 'type (current-frame))
+	  '(signed-byte 16))))
+
+
+(test test-assignment-nested-constraints-down
+  "Test we can compute the types of variables referring to already-solved types."
+  (with-new-frame
+
+    (vl::declare-variable 'a '((initial-value 1)))
+    (let ((outer (current-frame)))
+      (with-new-frame
+
+	(vl::declare-variable 'b '((initial-value a)))
+	(let ((inner (current-frame)))
+
+	  ;; LET-style assignment
+	  (vl::constrain-initial-value 'a outer (empty-environment))
+	  (vl::constrain-initial-value 'b inner outer)
+
+	  (vl::solve-type-constraints-and-declare 'a outer)
+	  (vl::solve-type-constraints-and-declare 'b inner)
+	  (is (equal (vl::get-frame-property 'b 'type inner)
+		     '(unsigned-byte 1))))))))
+
+
+(test test-assignment-nested-constraints-up
+  "Test we can compute the types of variables referring to unsolved types."
+  (with-new-frame
+
+    (vl::declare-variable 'a '((initial-value 1)))
+    (let ((outer (current-frame)))
+      (with-new-frame
+
+	(vl::declare-variable 'b '((initial-value 3)))
+	(let ((inner (current-frame)))
+
+	  ;; LET-style assignment
+	  (vl::constrain-initial-value 'a outer (empty-environment))
+	  (vl::constrain-initial-value 'b inner outer)
+
+	  ;; simulate an assignment to A
+	  (vl::add-type-constraint 'a `(type-of b ,inner))
+
+	  (vl::solve-type-constraints-and-declare 'a outer)
+	  (vl::solve-type-constraints-and-declare 'b inner)
+	  (is (equal (vl::get-frame-property 'a 'type outer)
+		     '(unsigned-byte 2))))))))
+
+
+(test test-assignment-nested-constraints-circular
+  "Test we catch circular type dependencies."
+  (with-new-frame
+
+    (vl::declare-variable 'a '((initial-value 1)))
+    (let ((outer (current-frame)))
+      (with-new-frame
+
+	(vl::declare-variable 'b '((initial-value a)))
+	(let ((inner (current-frame)))
+	  ;; LET-style assignment
+	  (vl::constrain-initial-value 'a outer (empty-environment))
+	  (vl::constrain-initial-value 'b inner outer)
+
+	  ;; simulate an assignment to A
+	  (vl::add-type-constraint 'a `(type-of b ,inner))
+
+	  (signals vl::circular-type-dependencies
+	    (vl::solve-type-constraints-and-declare 'a outer)))))))

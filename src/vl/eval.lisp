@@ -52,14 +52,11 @@ CONSTANT-P and module parameters."
 
 
 (defun static-p (form)
-  "Test whether FORM is statically known.
+  "Test whether FORM is statically computable."
+  (declare (optimize debug))
 
-This just evaluates FORM and throws away the result."
-  (handler-case
-      (progn
-	(eval-in-static-environment form)
-	t)
-    (error () nil)))
+  (let ((rs (read-variables form)))
+    (every #'static-constant-p rs)))
 
 
 ;;; ---------- Environment closure ----------
@@ -90,7 +87,7 @@ The pairs can be used in LET blocks, or as an alist."
 			     (cons (list n v) rl))))))))
 
     (let ((decls (map-environment (lambda (n env)
-				    (list n (get-frame-property n 'initial-value env :default 0)))
+				    (list n (lispify (get-frame-property n 'initial-value env :default 0))))
 				  env)))
       (cadr (remove-seen '() decls)))))
 
@@ -110,8 +107,9 @@ first use LISPIFY to generate proper Lisp for evaluation."
       ;; expand the static enviroment and close over it
       (let* ((ext (make-environment-alist env))
 	     (ns (alist-keys ext)))
-	`(let ,ext
+	`(let* ,ext
 	   (declare (ignorable ,@ns)) ;; don't warn about un-used variables
+
 	   ,form))))
 
 

@@ -21,7 +21,62 @@
 (declaim (optimize debug))
 
 
-;;; ---------- Module interfaces ----------
+;;; ---------- Recursion schemata ----------
+
+(defmethod into-arguments ((fun (eql 'module)) args &key pass-name option extra)
+  (destructuring-bind (modname f &rest body)
+      args
+
+    ;; process initial values
+    (dolist (n (get-frame-names f))
+      ;; process initial values
+      (if-let ((iv (get-frame-property n 'initial-value f)))
+	(set-frame-property n 'initial-value
+			    (apply pass-name (cons iv extra)))))
+
+    ;; process body
+    (let ((newbody (with-local-frame f
+		     (apply pass-name (cons (with-implicit-progn body) extra)))))
+      `(module ,modname  ,f
+	 ,@newbody))))
+
+
+(defmethod over-arguments ((fun (eql 'module)) args &key pass-name option extra)
+  (destructuring-bind (modname f &rest body)
+      args
+
+    ;; process initial values
+    (dolist (n (get-frame-names f))
+      ;; process initial values
+      (if-let ((iv (get-frame-property n 'initial-value f)))
+	(apply pass-name (cons iv extra))))
+
+    ;; process body
+    (with-local-frame f
+      (apply pass-name (cons (with-implicit-progn body) extra)))))
+
+
+;;; This schema is specific to EXPAND-MACROS and will be applied
+;;; before the ADD-FRAMES pass, so needs to work on decls as lists, not
+;;; as frames
+
+(defmethod into-arguments-macros ((fun (eql 'module)) args &key pass-name option extra)
+  (destructuring-bind (modname decls &rest body)
+      args
+
+    (let ((newdecls (mapcar (lambda (decl)
+			      (if (listp decl)
+				  (list (car decl)
+					(apply pass-name (cons (cadr decl) extra)))
+				  decl))
+			    decls))
+	  (newbody (apply pass-name (cons (with-implicit-progn body) extra))))
+
+      `(module ,modname ,newdecls
+	 ,@newbody))))
+
+
+;;; ---------- Module types----------
 
 (deftype module (required optional parameters)
   "The type of module interfaces.
@@ -36,14 +91,9 @@ of the others can."
   t)
 
 
-;; No meaningful sub-type relationships at present
+;;; TODO: No meaningful sub-type relationships at present (but should there be?)
 
-(defmethod subtype-type ((ty1tag (eql 'module)) ty1args
-			 (ty2tag (eql 'module)) ty2args)
-  t)
-
-
-(defmethod representable-type-sexp-p ((tytag (eql 'module)) tyargs)
+(defsubtype (module module)
   t)
 
 
@@ -69,6 +119,8 @@ of the others can."
 
 
 ;;; ---------- Module late initialisation ----------
+
+;;; TODO: Should this be somewhere else?
 
 (defvar *module-late-initialisation* nil
   "List of functions that synthesise late intiialisation in modules.
@@ -306,40 +358,23 @@ F should be the module's local frame."
     (build-module-interface-type-from-frame f)))
 
 
-(defpassmethod apply-type-constraints (module modname f &rest body)
-  (declare (optimize debug))
-
+(defpassmethod compute-variable-types (module modname f &rest body)
   (with-local-frame f
-    (let ((intf (build-module-interface-type-from-frame f)))
-      (dolist (n (get-frame-names f))
-	(if (member n (module-arguments intf))
-	    ;; constrain the variable's type (which must be representable)
-	    (let* ((constraints (get-type-constraints n))
-		   (lubty (if constraints (apply #'lub constraints))))
+    (dolist (n (get-frame-names f))
+      ;; solve the type constraints
+      (solve-type-constraints-and-declare n f))
 
-	      (let ((ty (get-type n)))
-		(if ty
-		    ;; check against provided type
-		    (unless (subtype-p lubty ty)
-		      (warn 'type-mismatch :expected ty
-					   :got lubty
-					   :hint "Make sure explicit type matches usage"))
+    ;; solve in the body
+    (compute-variable-types (with-implicit-progn body))))
 
-		    ;; update the type with the constrained type
-		    (progn
-		      (set-variable-property n 'type lubty)
-		      (setq ty lubty)))
 
-		;; ensure the initial value is a valid element
-		(if-let ((v (get-initial-value n)))
-		  (progn
-		    (ensure-subtype (compute-type v) ty)
+(defpassmethod check-all-variables-typed (module modname f &rest body)
+  (with-local-frame f
+    (dolist (n (get-frame-names f))
+      (unless (get-frame-property n 'type f :default nil)
+	(error 'compiler-error :hint (format nil "Variable ~s has no type" n))))
 
-		    ;; cascade into any initial values
-		    (apply-type-constraints v))))))))
-
-    ;; cascade into the body
-    (apply-type-constraints (with-implicit-progn body))))
+    (check-all-variables-typed (with-implicit-progn body))))
 
 
 (defpassmethod read-variables (module &rest args)
@@ -355,9 +390,6 @@ F should be the module's local frame."
   (declare (optimize debug))
 
   (with-local-frame f
-    ;; do representation inference in body
-    (infer-representation (with-implicit-progn body))
-
     ;; do direction inference on local variables (not parameters)
     (dolist (n (remove-if (lambda (n)
 			    (eql (get-representation n) 'parameter))
@@ -406,7 +438,10 @@ F should be the module's local frame."
 					:hint "Make sure the explicitly-assigned direction is appropriate"))
 
 	    ;; update direction if none given
-	    (set-variable-property n 'direction dir)))))))
+	    (set-variable-property n 'direction dir)))))
+
+	;; do representation inference in body
+    (infer-representation (with-implicit-progn body))))
 
 
 ;;; The top-level module grabs the floated LET blocks and coalesces them
@@ -527,52 +562,6 @@ F should be the module's local frame."
   (make-keyword n))
 
 
-(defpassmethod compute-type (make-instance modname &rest initargs)
-  (declare (optimize debug))
-
-  ;; skip over leading quote of module name,
-  ;; for compatability with Common Lisp usage
-  (unquote modname)
-
-  ;; add type constraints for all variables in the interface
-  (let ((intf (get-module-interface modname))
-	(modargs (adjacent-pairs initargs))
-	(f (get-module-frame modname)))
-
-    (dolist (n (module-arguments intf))
-      (let ((v (cadr (assoc (module-argument-name-to-keyword n) modargs))))
-	(when (and (not (null v))
-		   (symbolp v))
-	  (add-type-constraint v (with-frame f (get-type n))))))
-
-    intf))
-
-
-(defpassmethod infer-representation (make-instance modname &rest initargs)
-  (declare (optimize debug))
-
-  ;; skip over leading quote of module name,
-  ;; for compatability with Common Lisp usage
-  (unquote modname)
-
-  (let ((intf (get-module-interface modname))
-	(modargs (adjacent-pairs initargs))
-	(f (get-module-frame modname)))
-
-    ;; convert directions into read/written constraints
-    (dolist (n (module-arguments intf))
-      (let* ((v (cadr (assoc (module-argument-name-to-keyword n) modargs)))
-	     (rs (read-variables v)))
-
-	(unless (null rs)
-	  (let ((dir (with-frame f (get-direction n))))
-
-	    (when (eql dir 'in)
-	      (mark-variables-as-read rs))
-	    (when (member dir '(out inout))
-	      (mark-variables-as-written rs))))))))
-
-
 (defun ensure-module-arguments-match-interface (modname initargs intf)
   "Ensure that INITARGS match the reqirements of INTF of MODNAME."
   (declare (optimize debug))
@@ -607,46 +596,68 @@ F should be the module's local frame."
 				   :hint "Make sure all arguments provided are declared in the interface")))))))
 
 
-(defpassmethod apply-type-constraints (make-instance modname &rest initargs)
+(defpassmethod compute-type (make-instance modname &rest initargs)
   (declare (optimize debug))
 
   ;; skip over leading quote of module name,
   ;; for compatability with Common Lisp usage
   (unquote modname)
 
-  ;; check arguments
   (let ((intf (get-module-interface modname))
+	(modargs (adjacent-pairs initargs))
 	(f (get-module-frame modname)))
 
     (ensure-module-arguments-match-interface modname initargs intf)
 
+    ;; add type constraints for all variables in the interface
     (let ((kv (adjacent-pairs initargs)))
       ;; required arguments
       (dolist (n (module-required-arguments intf))
-	(let ((v (cadr (assoc (module-argument-name-to-keyword n) kv)))
-	      (ty (with-frame f
-		    (get-type n))))
-	  (ensure-subtype (compute-type v) ty)))
+	(let* ((v (cadr (assoc (module-argument-name-to-keyword n) kv)))
+	       (ty (with-frame f
+		     (compute-type v))))
+	  (add-frame-type-constraint n ty f)))
 
       ;; optional arguments
       (dolist (n (module-required-arguments intf))
 	(if-let ((m (assoc (module-argument-name-to-keyword n) kv)))
-	  (let ((v (cadr m))
-		(ty (with-frame f
-		      (get-type n))))
-	    (ensure-subtype (compute-type v) ty))))
+	  (let* ((v (cadr m))
+		 (ty (with-frame f
+		       (compute-type v))))
+	    (add-frame-type-constraint n ty f)))
 
-      ;; if an argument is written to, it must be a generalised place
-      (let ((written-args (with-frame f
-			    (remove-if-not #'variable-written-p (module-arguments intf)))))
-	(dolist (n written-args)
-	  (let* ((k (module-argument-name-to-keyword n))
-		 (v (cadr (assoc k kv))))
+	;; if an argument is written to, it must be a generalised place
+	(let ((written-args (with-frame f
+			      (remove-if-not #'variable-written-p (module-arguments intf)))))
+	  (dolist (n written-args)
+	    (let* ((k (module-argument-name-to-keyword n))
+		   (v (cadr (assoc k kv))))
 
-	    (unless (generalised-place-p v)
-	      (error 'not-importable :module modname
-				     :arg k
-				     :hint "Argument must be a generalised place"))))))))
+	      (unless (generalised-place-p v)
+		(error 'not-importable :module modname
+				       :arg k
+				       :hint "Argument must be a generalised place")))))))
+
+    ;; convert directions into read/written constraints
+    (dolist (n (module-arguments intf))
+      (let* ((v (cadr (assoc (module-argument-name-to-keyword n) modargs)))
+	     (rs (read-variables v)))
+
+	(unless (null rs)
+	  (let ((dir (with-frame f (get-direction n))))
+
+	    (when (eql dir 'in)
+	      (mark-variables-as-read rs))
+	    (when (member dir '(out inout))
+	      (mark-variables-as-written rs))))))
+
+    intf))
+
+
+(defpassmethod compute-variable-types (make-instance modname &rest initargs)
+  (dolist (arg (adjacent-pairs initargs))
+    (let ((v (cadr arg)))
+      (compute-variable-types v))))
 
 
 (defpassmethod read-variables (make-instance modname &rest initargs)

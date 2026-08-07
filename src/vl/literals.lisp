@@ -29,6 +29,10 @@
 	`(unsigned-byte ,w))))
 
 
+(defpassmethod compute-variable-types ((form integer))
+  nil)
+
+
 (defpassmethod read-variables ((form integer))
   '())
 

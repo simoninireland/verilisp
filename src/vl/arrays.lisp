@@ -26,73 +26,20 @@
 
 ;;; ---------- Array type ----------
 
-(defmethod subtype-type ((ty1tag (eql 'array)) ty1args
-			 (ty2tag (eql 'array)) ty2args)
-  (declare (optimize debug))
+;;; For now we don't operate on the indices at type level -- although we
+;;; could, since they're known statically. At the very least we should
+;;; check the order of the arrays.
 
-  (cond ((null ty1args)
-	 (null ty2args))
-
-	((null ty2args)
-	 t)
-
-	(t
-	 (destructuring-bind (et1 &rest et1args)
-	     ty1args
-	   (destructuring-bind (et2 &rest et2args)
-	       ty2args
-
-	     ;; arrays match covariantly on element types, ignoring shapes
-	     (subtype-p et1 et2))))))
+(defsubtype ((array lty &optional indices) array)
+  t)
 
 
-(defmethod lub-type ((ty1tag (eql 'array)) ty1args
-		     (ty2tag (eql 'array)) ty2args)
-  (cond ((null ty1args)
-	 (if (null ty2args)
-	     'array
-	     (construct-type ty2tag ty2args)))
-
-	 ((null ty2args)
-	  (construct-type ty1tag ty1args))
-
-	 (t
-	  (destructuring-bind (ety1 &optional esh1)
-	      ty1args
-	    (destructuring-bind (ety2 &optional esh2)
-		ty2args
-
-	      (let ((evty1 (eval-type ety1))
-		    (evty2 (eval-type ety2))
-		    (sh (cond ((and (null esh1)
-				    (null esh2))
-			       '(0))
-
-			      ((null esh1)
-			       esh2)
-			      ((null esh2)
-
-			       esh1)
-
-			      (t
-			       ;; maximum of the two lengths
-			       ;; TODO: need to fix the shapes for multiple dimensions
-			       (list (max (car esh1) (car esh2)))))))
-
-		;; LUB has the LUB element type
-		`(array ,(lub evty1 evty2) ,sh)))))))
+(defsubtype ((array lty &optional li) (array rty &optional ri))
+  (subtype-p lty rty))
 
 
-(defmethod representable-type-sexp-p ((tytag (eql 'array)) tyargs)
-  (if (null tyargs)
-      ;; an unconstrained array type is not representable
-      nil
-
-      (destructuring-bind (ty &optional sh)
-	  tyargs
-
-	;; an array is representable if its element type is
-	(representable-type-p (lub ty)))))
+(deflub ((array lty &optional li) (array rty &optional ri))
+  `(array ,(lub lty rty)))
 
 
 ;;; ---------- Array initialisation data ----------
@@ -153,9 +100,29 @@ Verilisp, but don't *require* it."
     *default-register-width*))
 
 
-(defpassmethod compute-type (make-array shape &key (initial-element 0)
+(defpassmethod read-variables (make-array shape &key (initial-element 0)
+					  initial-contents
+					  element-type
+					  displaced-to
+					  displaced-index-offset
+					  conformal
+					  displaced-offset)
+  (unquote shape)
+
+  (union (union-all (mapcar #'read-variables shape))
+	 (read-variables initial-element)))
+
+
+(defpassmethod compute-type (make-array shape &key initial-element
 					initial-contents
-					element-type)
+					element-type
+					fill-pointer
+					displaced-to
+					displaced-index-offset
+					conformal
+					displaced-offset)
+  (declare (optimize debug))
+
   ;; skip an initial quotes, allowed for Lisp compatability
   (unquote shape)
   (unquote element-type)
@@ -164,41 +131,49 @@ Verilisp, but don't *require* it."
   ;; check shape
   (ensure-valid-array-shape shape)
 
-  ;; initialise type from the initial element unless an explicit element type is provided
-  (unless element-type
-    (setq element-type (compute-type initial-element)))
-
-  `(array ,element-type ,shape))
-
-
-(defpassmethod apply-type-constraints (make-array shape &key (initial-element 0)
-						  initial-contents
-						  element-type)
-  ;; skip an initial quotes, allowed for Lisp compatability
-  (unquote shape)
-  (unquote initial-contents)
-
   ;; initial contents must either match the size of the array
   ;; or identify a file
-  ;; TODO: We need to type-check the initial contents, which we can't
-  ;; at the moment as we don't know the inferred element type
   (if initial-contents
       (if (listp initial-contents)
 	  (cond ((eql (car initial-contents) :file)
 		 ;; nothing to do at the moment
-		 t)
+		 (unless element-type
+		   (error 'syntax-error :hont "Provide an explicit type for data in file")))
 
 		(t
 		 ;; check all elements of literal data
-		 (ensure-data-has-shape initial-contents shape))))))
+		 (let ((icty (apply #'lub (mapcar #'compute-type initial-contents))))
+		   (if element-type
+		       ;; if we have an explicit type, make sure the contents match
+		       (ensure-subtype icty element-type)
 
+		       ;; use the initial contents' type as the element type
+		       (setq element-type icty)))
 
-(defpassmethod read-variables (make-array &rest args)
-  '())
+		 ;; check shape
+		 (ensure-data-has-shape initial-contents shape)))
 
+	  (error 'syntax-error :hint "Make sure initial conmtents are an array")))
 
-(defpassmethod compute-dependencies (make-array &rest args)
-  (:schema constant-form))
+  ;; initialise type from the initial element unless an explicit element type is provided
+  (unless element-type
+    (when initial-element
+      (setq element-type (compute-type initial-element))))
+
+  ;; TODO: need to constrain the element types too
+  (when displaced-to
+    ;; if displaced, that needs to be an array too
+    (add-type-constraint displaced-to `(array ,element-type))
+
+    ;; TODO: Handle conformant displaced arrays too
+
+    ;; mustn't have initial values or element types
+    (when (or initial-element initial-contents)
+      (error 'syntax-error :hint "Displaced arrays can't be initialised"))
+    (when element-type
+      (error 'syntax-error :hint "Displaced arrays inherit their element type")))
+
+  `(array ,element-type ,shape))
 
 
 (defun rebuild-options (ns vs)
@@ -214,7 +189,7 @@ Verilisp, but don't *require* it."
 
 
 ;;; Only works for one-dimensional arrays at the moment
-;;; TODO: xpand constants
+;;; TODO: Expand constants
 
 (defun synthesise-array-init-from-data (n data shape)
   "Return the initialisation of N using DATA with the given SHAPE."
@@ -267,7 +242,11 @@ If the initial value is a list of the form (:FILE FN) the data is read from file
 Otheriwse it is read as a literal list."
   (destructuring-bind (shape &key
 			       initial-element initial-contents
-			       element-width element-type)
+			       element-width element-type
+			       displaced-to
+			       displaced-index-offset
+			       conformal
+			       displaced-offset)
       (cdr v)
     ;; skip an initial quote, allowed for Lisp compatability
     (unquote shape)
@@ -328,9 +307,9 @@ probably should, for those that are statically determined."
 	      (eql ty 'array)
 	      (and (listp ty)
 		   (eql (car ty) 'array)))
-    (error 'type-mismatch :expected 'array :got ty :hint "Needs an array to get its elemnent type"))
+    (error 'type-mismatch :expected 'array :got ty :hint "Needs an array to get its element type"))
 
-  (if (or (atomp ty)
+  (if (or (atom ty)
 	  (= (length ty) 1)
 	  (eql (cadr ty) *))
       ;; array has no specialiser
@@ -340,76 +319,87 @@ probably should, for those that are statically determined."
       (cadr ty)))
 
 
-(defpassmethod compute-type (aref place &rest indices)
+(defpassmethod generalised-place-p (aref place &rest indices)
+  t)
+
+
+;;; TODO: Assume place is simple (no indirect references)
+
+;;; TODO: Should this be a transform pass? (I don't think it can be...)
+
+(defun displaced-aref (place indices)
+  "Dereference through a displaced array PLACE, correcting INDICES.
+
+If PLACE is displaced, return the actual underlying array and corrected
+indiced; otherwise return the original place and indices unchanged. This
+may involve recursively checking for displacements.
+
+Return a list containing the final array and indices."
   (declare (optimize debug))
 
-  (let ((ty (compute-type place)))
-    ;; constrain the variable
-    (add-type-constraint place `array)
-    (break)
-    (element-type-of-array ty)))
+  ;; can only currently assign directly to variables (no indirect references)
+  (ensure-symbol place)
 
+  (let ((iv (get-initial-value place)))
+    (destructuring-bind (shape &key initial-element
+				 initial-contents
+				 element-type
+				 displaced-to
+				 (displaced-index-offset 0)
+				 conformal
+				 displaced-offset)
+	(cdr iv)
 
-(defpassmethod apply-type-constraints (aref place &rest indices)
-  (declare (optimize debug))
+      (if displaced-to
+	  ;; array is displaced into another, correct
+	  (let ((realindices (list (+ (car indices) displaced-index-offset))))
+	    ;; recurse in case the target is displaced as well
+	    (displaced-aref displaced-to realindices))
 
-  (let ((ty (compute-type place)))
-    (break)
-    (ensure-subtype ty 'array)
-    (mapc (compose #'ensure-fixed-width #'compute-type) indices)))
-
-
-(defpassmethod read-variables (aref place &rest indices)
-  (let ((place-rws (if (symbolp place)
-		       ;; place targets a variable directly
-		       (list place)
-
-		       ;; place is complex, recurse into it
-		       (read-variables place)))
-	(indices-rws (union-all (mapcar #'read-variables indices))))
-
-    (union place-rws indices-rws)))
-
-
-(defpassmethod compute-dependencies (aref &rest args)
-  (dolist (n (read-variables `(aref ,@args)))
-     (set-variable-property n 'read t)))
+	  ;; array is not displaced, return as-is
+	  (list place indices)))))
 
 
 (defpassmethod read-variables-setf (aref place &rest indices)
+  (union-all (mapcar #'read-variables indices)))
+
+
+(defpassmethod written-variables-setf (aref place &rest indices)
+  (destructuring-bind (dplace dindices)
+      (displaced-aref place indices)
+
+    (list dplace)))
+
+
+(defpassmethod compute-type (aref place &rest indices)
   (declare (optimize debug))
 
-  (let ((val-indices (union-all (mapcar #'read-variables (safe-list indices)))))
-    (if (symbolp place)
-	;; place is just a symbol
-	val-indices
+  (destructuring-bind (dplace dindices)
+      (displaced-aref place indices)
 
-	;; place is more than just a symbol, destructure again
-	(union val-indices
-	       (read-variables place)))))
-
-
-(defpassmethod written-variables-setf (aref place &rest  indices)
-  (declare (optimize debug))
-
-  (if (symbolp place)
-      ;; variable, this is written to
-      (list place)
-
-      ;; complex place, recurse into it
-      (written-variables-setf place)))
+    (mapc #'ensure-fixed-width dindices)
+    (add-type-constraint dplace `array) ; TODO: add bounds on indices?
+    (let ((ty (get-type dplace)))
+      (element-type-of-array ty))))
 
 
-(defpassmethod generalised-place-p (aref place &rest indices)
-  (generalised-place-p place))
+(defpassmethod compute-dependencies (aref place &rest indices)
+  (destructuring-bind (dplace dindices)
+      (displaced-aref place indices)
+
+    (let ((rs (union-all (mapcar #'read-variables dindices))))
+      (add-dependencies dplace rs))))
 
 
-(defpassmethod simple-expression-form-p  (aref &rest args)
-  (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-p  (aref &rest args)
+  (every #'simple-expression-p args))
 
 
 (defpassmethod synthesise (aref place &rest indices)
-   (synthesise place)
+  (destructuring-bind (realplace realindices)
+      (displaced-aref place indices)
+
+    (synthesise realplace)
     (as-literal "[ ")
-    (as-list indices)
-    (as-literal " ]"))
+    (as-list realindices)
+    (as-literal " ]")))

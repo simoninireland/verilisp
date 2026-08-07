@@ -101,7 +101,7 @@
   "Test we can generate the simplest infinite loop."
   (let ((p (vl::expand/vl '(let (out
 				 (counter 1))
-			    (declare (type (unsigned-byte 8) counter))
+			    (declare (type (unsigned-byte 8) out counter))
 			    (tagbody
 			     initial
 			       (go initial))))))
@@ -114,7 +114,7 @@
   "Test we can generate a loop manually."
   (let ((p (vl::expand/vl '(let (out
 				 (counter 1))
-			    (declare (type (unsigned-byte 8) counter))
+			    (declare (type (unsigned-byte 8) out counter))
 			    (tagbody
 			     count
 			       ;; wait while the counter increments around the counter
@@ -137,7 +137,7 @@
   "Test we can generate a loop using WHILE (a nested TAGBODY)."
   (let ((p (vl::expand/vl '(let (out
 				 (counter 1))
-			    (declare (type (unsigned-byte 8) counter))
+			    (declare (type (unsigned-byte 8) out counter))
 			    (tagbody
 			     looping
 			       (while (> counter 0)
@@ -156,7 +156,7 @@
   "Test we can generate a loop using FOREVER (a nested TAGBODY)."
   (let ((p (vl::expand/vl '(let (out
 				 (counter 1))
-			    (declare (type (unsigned-byte 8) counter))
+			    (declare (type (unsigned-byte 8) out counter))
 			    (tagbody
 			       (forever
 				(while (> counter 0)
@@ -202,6 +202,7 @@
 (test test-tagbody-nested-if
   "Test we can handle nested IFs."
   (let ((p (vl::expand/vl '(let (a b c)
+			    (declare (type (unsigned-byte 8) a b c))
 			    (tagbody
 			     rx-check-start
 			       (if (0= a)
@@ -232,6 +233,7 @@
   "Test we coalesce singleton-state branches of a conditional."
   (with-new-frame
     (let ((p (vl::expand/vl '(let (a b)
+			      (declare (type (unsigned-byte 8) a b))
 			      (tagbody
 			       initial-state
 				 (if a
@@ -257,6 +259,7 @@
   "Test we can compile a state machine within thethen arm of a cnditional."
   (with-new-frame
     (let ((p (vl::expand/vl '(let (a b)
+			      (declare (type (unsigned-byte 8) a b))
 			      (tagbody
 			       initial-state
 				 (if a
@@ -280,6 +283,7 @@
   "Test we can compile a state machine within the else arm of a cnditional."
   (with-new-frame
     (let ((p (vl::expand/vl '(let (a b)
+			      (declare (type (unsigned-byte 8) a b))
 			      (tagbody
 			       initial-state
 				 (if a

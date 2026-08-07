@@ -36,31 +36,24 @@
   (labels ((compute-type-forms (forms)
 	     (declare (optimize debug))
 
-	     (let ((ty (with-recover-on-error
-			   t
-			 (with-current-form (car forms)
-			   (compute-type (car forms))))))
+	     (destructuring-bind (form . rest)
+		 forms
 
-	       (if (null (cdr forms))
-		   ;; if we're the last form, return the type
-		   ty
+	       (let ((ty (with-current-form form
+			   (compute-type form))))
 
-		   ;; otherwise proceed to the next forms
-		   (compute-type-forms (cdr forms))))))
+		 (if (null rest)
+		     ;; if we're the last form, return the type
+		     ty
+
+		     ;; otherwise proceed to the next form
+		     (compute-type-forms rest))))))
 
     (if (= (length body) 0)
-	t
+	nil
 
+	;; the type of the form is the type of the last form in the body
 	(compute-type-forms body))))
-
-
-(defpassmethod apply-type-constraints (progn &rest body)
-  (dolist (form body)
-    (with-recover-on-error
-	;; ignore any errors
-	t
-
-      (apply-type-constraints form))))
 
 
 (defun simplify-progn-body (body)
@@ -158,9 +151,6 @@ This includes all the named variables, and excluses the * wildcard."
 
 
 (defpassmethod compute-dependencies (@ sensitivities &rest body)
-  (dolist (n (read-variables-sensitivities sensitivities))
-    (set-variable-property n 'read t))
-
   (compute-dependencies (with-implicit-progn body)))
 
 
@@ -205,14 +195,6 @@ This includes all the named variables, and excluses the * wildcard."
   'bit)
 
 
-(defpassmethod read-variables (posedge v)
-  (read-variables v))
-
-
-(defpassmethod compute-dependencies (posedge n)
-  (set-variable-property n 'read t))
-
-
 (defpassmethod synthesise (posedge v)
   (as-literal"posedge(")
   (synthesise v)
@@ -220,14 +202,6 @@ This includes all the named variables, and excluses the * wildcard."
 
 
 (defpassmethod compute-type (negedge v)
-  (:same-as posedge))
-
-
-(defpassmethod read-variables (negedge v)
-  (:same-as posedge))
-
-
-(defpassmethod compute-dependencies (negedge n)
   (:same-as posedge))
 
 

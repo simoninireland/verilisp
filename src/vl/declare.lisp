@@ -39,10 +39,6 @@
   t)
 
 
-(defpassmethod apply-type-constraints (declare &rest args)
-  nil)
-
-
 (defpassmethod float-let-blocks (declare &rest args)
   ;; delete declarations when blocks are floated
   '(() ()))
@@ -54,11 +50,6 @@
 
 (defpassmethod read-variables (declare &rest args)
   '())
-
-
-(defpassmethod compute-dependencies (declare &rest args)
-  nil)
-
 
 
 ;;; TODO: Should this be its own pass?
@@ -73,6 +64,14 @@
 
   ;; return form unaltered
   `(declare ,@args))
+
+
+;;; This is a little aggressive, as some declarations might make sense
+;;; to Lisp as well as to Verilisp. But most won't, so it's safer to
+;;; drop them all.
+
+(defpassmethod lispify (declare &rest args)
+  nil)
 
 
 ;;; ---------- Declaring annotations ----------

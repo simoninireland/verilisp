@@ -25,6 +25,26 @@
 ;;; not here.
 
 
+;;; ---------- Recursion schemata ----------
+
+;;; The place in SETQ has to be a vriable, not a place, so we can dispense
+;;; with recursing into it.
+
+(defmethod into-arguments ((fun (eql 'setq)) args &key pass-name option extra)
+  (destructuring-bind (n v)
+      args
+    (let ((nv (apply pass-name `(,v ,@extra))))
+      `(setq ,n ,nv))))
+
+
+(defmethod over-arguments ((fun (eql 'setq)) args &key pass-name option extra)
+  (destructuring-bind (n v)
+      args
+    (apply pass-name `(,v ,@extra))))
+
+
+;;; ---------- Writeability ----------
+
 (defun writeable-p (n)
   "Test whether N is writeable.
 
@@ -51,24 +71,15 @@ isn't declared."
 
 ;;; ---------- setq ----------
 
-(defpassmethod compute-type (setq n v)
-  (let ((ty (compute-type v)))
-    ;; constraint the variable directly
-    (add-type-constraint n ty)
-
-    ty))
-
-
-(defpassmethod apply-type-constraints (setq n v)
-  (ensure-writeable n)
-  (apply-type-constraints `(setf ,n ,v)))
+(defpassmethod compute-type (setq n val)
+  (:same-as setf))
 
 
 (defpassmethod read-variables (setq &rest args)
   (:same-as setf))
 
 
-(defpassmethod read-variables-setf (setq n v)
+(defpassmethod read-variables-setf (setq &rest args)
   (:same-as setf))
 
 
@@ -77,15 +88,14 @@ isn't declared."
 
   ;; catch the common mistake of using SETQ when we need SETF
   (when (listp n)
-    (error 'not-synthesisable :hint "Did you mean SETF instead of SETQ?"))
+    (error 'syntax-error :hint "Did you mean SETF instead of SETQ?"))
 
   ;; catch assigning to a non-variable
   (unless (symbolp n)
-    (error 'not-synthesisable :hint "Assignment target is not a variable"))
+    (error 'syntax-error :hint "Assignment target is not a variable"))
 
-  (let ((read (read-variables v)))
-    (add-dependencies n read)
-    (set-variable-property n 'written t)))
+  ;; otherwise :same-as setf
+  (compute-dependencies `(setf ,n ,v)))
 
 
 (defpassmethod synthesise (setq &rest args)
@@ -140,53 +150,38 @@ generalised places."
 (defpassmethod read-variables (setf place val)
   (declare (optimize debug))
 
-  (if (listp place)
-      (union (read-variables val)
-	     (read-variables-setf place))
-
-      ;; a SETF to a simple variable is a SETQ
-      (read-variables val)))
-
-
-(defpassmethod read-variables-setf (setf place val)
-  (union (read-variables place
-	 (read-variables val))))
+  (union (read-variables val)
+	 (read-variables-setf place)))
 
 
 (defpassmethod compute-dependencies (setf place val)
   (declare (optimize debug))
 
-  (if (listp place)
-      (let ((written (written-variables-setf place))
-	    (read (union (read-variables-setf place)
-			 (read-variables val))))
-	(dolist (n written)
-	  (add-dependencies n read)
-	  (set-variable-property n 'written t)))
-
-      ;; a SETF applied to a variable is just a SETQ
-      (compute-dependencies `(setq ,place ,val))))
+  (let ((written (written-variables-setf place))
+	(read (union (read-variables-setf place)
+		     (read-variables val))))
+    (dolist (n written)
+      (add-dependencies n read)
+      (mark-variable-as-written n))))
 
 
 (defpassmethod compute-type (setf place val)
   (declare (optimize debug))
 
-  (compute-type place)
-  (break)
-  (compute-type val))
-
-
-(defpassmethod apply-type-constraints (setf place val)
   ;; ensure we can do the assignment
   (ensure-generalised-place place)
+  ;;(ensure-writeable place)
 
-  ;; ensure the types match
-  (let* ((tyvar (compute-type place))
-	 (tyval (compute-type val)))
-    (ensure-subtype tyval tyvar))
+  (let ((tyval (compute-type val)))
+    (let ((ws (written-variables-setf place)))
+      (mapc (rcurry #'add-type-constraint tyval) ws))
 
-  (apply-type-constraints place)
-  (apply-type-constraints val))
+    tyval))
+
+
+(defpassmethod compute-variable-types (setf place val)
+  (compute-variable-types place)
+  (compute-variable-types val))
 
 
 (defpassmethod synthesise (setf var val)

@@ -1,27 +1,27 @@
-;; Tests of evaluation of static values
+;;;; Tests of evaluation of static values
 ;;
-;; Copyright (C) 2024--2025 Simon Dobson
+;;;; Copyright (C) 2024--2026 Simon Dobson
 ;;
-;; This file is part of verilisp, a very Lisp approach to hardware synthesis
+;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
 ;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
 ;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 (in-package :verilisp/test)
 (in-suite verilisp/vl)
 
 
-;; ---------- Environment closure ----------
+;;; ---------- Environment closure ----------
 
 (test test-make-environment
   "Test we shadow variables correctly."
@@ -40,14 +40,14 @@
 	    '((a ((initial-value 5)))
 	      (d ((initial-value 234) (g 76)))))
 
-      ;; a should be shadowed and appear only once
+      ;;; a should be shadowed and appear only once
       (let ((decls (vl::make-environment-alist env2)))
 	(is (equal (mapcar #'car decls)
 		   '(b c a d)))
 	(is (= (cadr (assoc 'a decls)) 5))))))
 
 
-;; ---------- Evaluation ----------
+;;; ---------- Evaluation ----------
 
 (test test-eval-literal
   "Test literals are static constants."
@@ -119,7 +119,7 @@
 		(initial-value 12)
 		(as register)))))
 
-     ;; statis
+     ;; static
      (is (= (vl::eval-if-static '(+ a (+ a 12)))
 	    36))
 
@@ -143,3 +143,20 @@
 				 (as constant)))
 
       (is (= (vl::eval-in-static-environment '(+ a b)) 42)))))
+
+
+(test test-eval-let-constants
+  "Test we reduce statically determined constants."
+  (let ((p (vl::expand/vl '(let* ((a 10)
+				  (b (+ a 12))
+				  (c (+ a b)))
+			    (declare (as constant a b)
+			     (type (unsigned-byte 8) a b c))
+			    (incf c)))))
+    (vl::typecheck p)
+
+    (let ((f (cadr p)))
+      (is (equal (vl::get-frame-property 'a 'initial-value f) 10))
+      (is (equal (vl::get-frame-property 'b 'initial-value f) 22))
+      (is (equal (vl::get-frame-property 'c 'initial-value f) 32))
+      (is (eql (vl::get-frame-property 'c 'as f) 'register)))))

@@ -60,7 +60,7 @@
 (test test-progn-empty-body
   "Test we can handle (and ignore) an empty-bodied PROGN."
   (vl::with-new-frame
-    (is (vl::typecheck (vl::expand/vl '(let ((a 12))))))))
+    (is (null (vl::typecheck (vl::expand/vl '(let ((a 12)))))))))
 
 
 (test test-progn-dependencies

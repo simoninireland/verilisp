@@ -56,13 +56,20 @@ Return the set of variables as a list.")
 
 ;;; ---------- Macro expansion ----------
 
+(defun expand-descend (fun args)
+  "Expand macros in ARGS when FUN applied."
+  `(,fun ,@(remove-nulls (mapcar (lambda (arg)
+				   (unless (null arg)
+				     (expand-macros arg)))
+				 args))))
+
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (define-recursion-schema into-arguments-macros (fun args)
     "A recursion schema that expands a form as a macro."
     (if (macro-declared-p fun)
-      ;; macro is expandable
+	;; macro is expandable
       (let ((realfun (variable-property fun 'initial-value)))
-
 	;; expand the macro in a nested environment that will contain
 	;; any locally-declared macros
 	(with-new-frame
@@ -84,14 +91,6 @@ Return the set of variables as a list.")
     form))
 
 
-(defun expand-descend (fun args)
-  "Expand macros in ARGS when FUN applied."
-  `(,fun ,@(remove-nulls (mapcar (lambda (arg)
-				   (unless (null arg)
-				     (expand-macros arg)))
-				 args))))
-
-
 (defun expand-macros-in-environment (form &optional (f *global-environment*))
   "Recursively expand all macros in FORM in an environment.
 
@@ -111,6 +110,9 @@ Return the expanded form."
 ;;; processing, so we replace the decls list with a single frame that
 ;;; holds all the same information in a more easily-processed form.
 ;;;
+;;; This happens /before/ any further processing, but /after/ macro
+;;; expansion, so that macros all see a standard Lisp source format.
+;;;
 ;;; We need to be able to reverse this transformation to re-produce
 ;;; source code.
 
@@ -126,7 +128,7 @@ will then be used by, and extended by, other passes.")
   (:queue expanding)
 
   (:passmethod (form)
-    form))
+	       form))
 
 
 (defun add-decl-to-frame (decl f)
@@ -212,7 +214,7 @@ used to trace 'indirect' chains of dependencies.
 Methods should also mark variables as read or written to using
 MARK-VARIABLE-AS-READ and MARK-VARIABLE-AS-WRITTEN.")
   (:schema over-arguments)
-  (:queue expanding)
+  (:queue typing)
 
   ;; return the original form (environments updated in place)
   (:post (lambda (form res)
@@ -242,8 +244,7 @@ A dependency is a variable that's read in assigning values to N."
     (set-variable-property n 'depends-on (union deps old-deps)))
 
   ;; any variables we depend on are read by definition
-  (dolist (m deps)
-    (set-variable-property m 'read t)))
+  (mark-variables-as-read deps))
 
 
 (defun mark-variable-as-read (n)
@@ -302,6 +303,29 @@ dependencies as they can't be updated."
 		       direct))))
 
 
+;;; ---------- Representation inference ----------
+
+(defpass infer-representation (form)
+  (:documentation "Infer the representations of variables in FORM.
+
+This function usually applies only to binders, and makes use of
+dependency and access information to determine the correct
+representation for each variable. This may also be influenced by
+explicit DECLARE declarations, which should be checked for
+consistency with the representation implied by the code.")
+  (:schema over-arguments)
+  (:queue typing)
+
+  ;; return the original form (environments updated in place)
+  (:post (lambda (form res)
+	   (declare (ignore res))
+
+	   form))
+
+  (:passmethod (form)
+    form))
+
+
 ;;; ---------- Variable re-writing ----------
 
 (defpass rewrite-variables (form rewrite)
@@ -313,32 +337,38 @@ rewrite free occurrances, not those that appear under binders.")
   (:schema into-arguments)
 
   (:passmethod ((form integer))
-    form)
+	       form)
 
   (:passmethod ((form symbol))
-    (if-let ((a (assoc form rewrite
-		       :key #'symbol-name
-		       :test #'string-equal)))
-      ;; reference to rewriteable variable, re-write it
-      (cadr a)
+	       (if-let ((a (assoc form rewrite
+				  :key #'symbol-name
+				  :test #'string-equal)))
+		 ;; reference to rewriteable variable, re-write it
+		 (cadr a)
 
-      ;; leave alone
-      form)))
+		 ;; leave alone
+		 form)))
 
 
 ;;; ---------- Type checking and inference ----------
 
-(defpass compute-type (form)
-   (:documentation "Compute the type of FORM.
+(defvar *computed-type* nil
+  "Variable holding the type returned by the most recent TYPING pass.")
 
-Verilisp uses a constraint-based type system, meaning that a form
-constrains -- but doe not structly determine -- its type based in the
-types of its sub-terms, whose types may themselves not be fully resolved at the
-time of checking.
+
+(defpass compute-type (form)
+  (:documentation "Compute the type of FORM.
+
+Verilisp uses a constraint-based type inference system, meaning that a
+form constrains -- but doe not strictly determine -- its type based in
+the types of its sub-terms, whose types may themselves not be known at
+the time of checking.
 
 Methods on this function should work out the type of FORM as a type
-expression. They may also apply constraints to any variables, which will
-be resolved when typing that variable's binder.
+expression. They may also apply constraints to any variables, which
+will be resolved when typing that variable's binder in the
+COMPUTE-VARIABLE-TYPES pass. They do not need to annotate variables
+read or written, which is done by the COMPUTE-DEPENDENCIES pass.
 
 The disadvantage of this approach is that type errors are caught where the
 variable is declared, not at the proximate cause of the error.
@@ -346,16 +376,56 @@ variable is declared, not at the proximate cause of the error.
 Returns a type expression.")
   (:schema fail-unknown-form)
   (:queue typing)
+  (:queue-position :prepend)
 
   (:post (lambda (form ty)
-	   ;; ensure the top-pevel type is a module
-	   (ensure-subtype ty 'module)
-
 	   ;; save this type for later use
-	   (setq *last-module-type* ty)
+	   (setq *computed-type* ty)
 
 	   ;; return the original form
 	   form)))
+
+
+(defpass compute-variable-types (form)
+  (:documentation "Compute the actual types of variables.
+
+This pass uses the constraints applied by the COMPUTE-TYPE pass
+to determine the actual, representable types of variables.
+
+Methods on this function perform type constraint resuolution. Only
+binding forms need to provide methods; other forms can have them as
+well if they want to check some property of the variables.")
+  (:schema over-arguments)
+  (:queue typing)
+
+  ;; return the original form
+  (:post (lambda (form res)
+	   (declare (ignore res))
+
+	   form)))
+
+
+(defpass check-all-variables-typed (form)
+  (:documentation "Check that all variables in FORM have types.
+
+This shouldn't be needed: the type rules should ensure that all
+varibles either have types declared ir types inferred (or both).
+Butlastjust to be sure, this pass checks that there are type
+attributes attached to all variables in all frames.")
+  (:schema over-arguments)
+  (:queue typing)
+
+  ;; return the original form
+  (:post (lambda (form res)
+	   (declare (ignore res))
+
+	   form))
+
+  ;; no action on literals or references
+  (:passmethod ((form integer))
+	       nil)
+  (:passmethod ((form symbol))
+	       nil))
 
 
 ;;; ---------- Generalised places ----------
@@ -363,6 +433,10 @@ Returns a type expression.")
 ;;; Generalised places are Lisp's version of lvalues: things that can be
 ;;; assigned to. They usually appear in the same way as they are
 ;;; accessed, but as the first element of a SETF.
+;;;
+;;; Places appearing in the first place of a SETF have variables that
+;;; are written to as well as read from, and we need functions to
+;;; return these.
 
 (defpass generalised-place-p (form)
   (:documentation "Test whether FORM is a generalised place.
@@ -383,17 +457,33 @@ but is also SETF-able.")
     (error 'not-synthesisable :hint "Make sure the target of the assignment is a generalised, SETF-able, place")))
 
 
-(defpass read-written-variables (form)
-  (:documentation "Return all variables that are read and written in an assignment.
+(defpass read-variables-setf (form)
+  (:documentation "Return all the variables accessed by FORM in a SETF.
 
-This function needs a method per generalised place, to determine which
-variables are read during as assignment, and which are written to
-during an assignment.
+This function is called when FORM is a generalised place in the
+assignment (first) position of a SETQ (or SETQ).
 
-For generalised places in non-assignment positions, use READ-VARIABLES. to
-extract the variables accessed.
+Return the set of read variables."))
 
-Return the two sets of variables as a list."))
+
+(defpass written-variables-setf (form)
+  (:documentation "Return all the variables updated by FORM in a SETF.
+
+This function is called when FORM is a generalised place in the
+assignment (first) position of a SETQ (or SETQ).
+
+Return the set of variables written to."))
+
+
+(defgeneric compute-type-setf (selector value &rest selargs)
+  (:documentation "Compute the type of an assignment.
+
+This function is called when forms of the type
+(SETF (SEL . SELARGS) VALUE) are encountered. The lambda
+list is the same as for functions defining new generalised places
+in Lisp (which Verilisp doesn't yet support).
+
+Return the type of the application."))
 
 
 ;;; ---------- Simple expressions ----------
@@ -402,7 +492,7 @@ Return the two sets of variables as a list."))
 ;;; an expression it can synthesise. These are considerably less
 ;;; general than Lisp's idea of expressions, so it will be necessary
 ;;; to transform more complex (but legal) Lisp to take the complicated
-;;; bits out of the expressions.
+;;; bits out of the expressions and into assignments to wires.
 
 (defpass simple-expression-p (form)
   (:documentation "Test whether FORM is a simple expression.")
@@ -412,29 +502,6 @@ Return the two sets of variables as a list."))
 	       t)
   (:passmethod ((s symbol))
 	       (variable-declared-p s)))
-
-
-;;; ---------- Representation inference ----------
-
-(defpass infer-representation (form)
-  (:documentation "Infer the representations of variables in FORM.
-
-This function usually applies only to binders, and makes use of
-dependency and access information to determine the correct
-representation for each variable. This may also be influenced by
-explicit DECLARE declarations, which should be checked for
-consistency with the representation implied by the code.")
-  (:schema over-arguments)
-  (:queue expanding)
-
-  ;; return the original form (environments updated in place)
-  (:post (lambda (form res)
-	   (declare (ignore res))
-
-	   form))
-
-  (:passmethod (form)
-    form))
 
 
 ;;; ---------- Elaborating state machines ----------
@@ -540,12 +607,12 @@ Return the simplified form.")
 
 (defpass synthesise (form)
   (:documentation "Synthesise the Verilog for FORM.
-
-FORM will be fully elaborated Core Verilisp with fully populated
+q
+FORM should be fully elaborated Core Verilisp with fully populated
 environments.
 
-The Verilog synthesised should be send to *STANDARD-OUTPUT*: this
-may be redirected by higher-level functions.")
+The Verilog synthesised by tis function should be send to
+*STANDARD-OUTPUT*: this may be redirected by higher-level functions.")
   (:schema fail-unknown-form)
   (:queue synthesising))
 

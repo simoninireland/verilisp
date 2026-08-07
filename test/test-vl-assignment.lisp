@@ -28,7 +28,7 @@
   (vl::with-new-frame
     (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 13))
 						       (setq a 9))))
-		       '(unsigned-byte 8)))
+		       '(unsigned-byte 4)))
 
     (signals (vl::access-mismatch)
       (vl::typecheck (vl::expand/vl '(let ((a 12))
@@ -115,7 +115,7 @@
   (signals (vl::not-synthesisable)
     (vl::with-new-frame
       (vl::typecheck (vl::expand/vl '(let ((a 0))
-				      (setq (bit a 0) 1)))))))
+				      (setq (bref a 0) 1)))))))
 
 
 (test test-setq-dependencies
@@ -162,6 +162,7 @@
   (vl::with-new-frame
     (let ((p (vl::expand/vl '(let ((a 12)
 				   (b 2))
+			      (declare (type (unsigned-byte 8) a b))
 			      (setf a (if (= b 1)
 					  a
 					  (+ a 1)))))))
@@ -175,6 +176,7 @@
     (let ((p (vl::expand/vl '(let ((a 12)
 				   (b 2)
 				   (c 0))
+			      (declare (type (unsigned-byte 8) a b c))
 			      (setf a (if (= b 1)
 					  a
 					  (setf c 1)

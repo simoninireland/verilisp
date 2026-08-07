@@ -27,7 +27,6 @@
 (define-pass-queue secondq)
 (define-pass-queue thirdq)
 
-
 (defmacro with-no-passes (&body body)
   "Clear all the pass queues before running BODY."
   `(progn
@@ -133,24 +132,24 @@
       (is (= (dsl::run-pass-queue 'firstq '5) 6))
       (is (eql a t))))
 
-    (let (a b)
+  (let (a b)
 
-      (with-no-passes
-	(defpass one (form)
-	  (:queue firstq)
-	  (:pre (lambda (form) (setf a 1) form))
-	  (:post (lambda (form result) (setf b 2))))
-	(defpassmethod one ((n integer))
-	  (+ n 1))
+    (with-no-passes
+      (defpass one (form)
+	(:queue firstq)
+	(:pre (lambda (form) (setf a 1) form))
+	(:post (lambda (form result) (setf b 2))))
+      (defpassmethod one ((n integer))
+	(+ n 1))
 
-	(is (null a))
-	(is (null b))
-	(is (= (one 5) 6))
-	(is (null a))
-	(is (null b))
-	(is (= (dsl::run-pass-queue 'firstq '5) 2))  ; value of post
-	(is (eql a 1))
-	(is (eql b 2)))))
+      (is (null a))
+      (is (null b))
+      (is (= (one 5) 6))
+      (is (null a))
+      (is (null b))
+      (is (= (dsl::run-pass-queue 'firstq '5) 2)) ; value of post
+      (is (eql a 1))
+      (is (eql b 2)))))
 
 
 ;;; ---------- Pass methods ----------

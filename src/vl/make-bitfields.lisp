@@ -28,9 +28,9 @@
     `(and ,@tys)))
 
 
-(defpassmethod apply-type-constraints (make-bitfieldsK &rest pats)
-  (let ((tys (mapcar #'compute-type pats)))
-    (mapc #'ensure-fixed-width tys)))
+(defpassmethod compute-variable-types (make-bitfields &rest pats)
+  (mapc #'ensure-fixed-width pats)
+  (mapc #'compute-variable-types pats))
 
 
 (defun synthesise-fixed-width-constant (c width &optional (base 2))
@@ -50,17 +50,20 @@ The BASE used can be 2, 8, 10, or 16."
 
 (defun synthesise-make-bitfields-field (f)
   "Synthesise a field F in a bitfield."
+  (declare (optimize debug))
+
   (if (static-constant-p f)
       ;; value is a static constant, output it
-      (let ((w (bits-for-integer (ensure-static f))))
-	(synthesise-fixed-width-constant f w))
+      (let* ((v (eval-in-static-environment f))
+	     (w (bits-for-integer v)))
+	(synthesise-fixed-width-constant v w))
 
       ;; value is an expression, synthesise it
       (synthesise f)))
 
 
-(defpassmethod simple-expression-form-p (make-bitfields &rest pats)
-  (every #'simple-expression-form-p pats))
+(defpassmethod simple-expression-p (make-bitfields &rest pats)
+  (every #'simple-expression-p pats))
 
 
 (defpassmethod synthesise (make-bitfields &rest pats)
@@ -73,22 +76,22 @@ The BASE used can be 2, 8, 10, or 16."
 
 (defpassmethod compute-type (extend-bits bs times)
   (let ((tybs (compute-type bs))
-	(n (eval-in-static-environment times)))
+	(n (ensure-static times)))
 
     `(and ,@(n-copies tybs n))))
 
 
-(defpassmethod apply-type-constraints (extend-bits bs times)
-  (let ((tyb (compute-type bs)))
-    (ensure-fixed-width tyb)))
+(defpassmethod compute-type (extend-bits bs times)
+  (let ((tybs (compute-type bs)))
+    (ensure-fixed-width tybs)))
 
 
 (defpassmethod read-variables (extend-bits bs times)
   (union-all (mapcar #'read-variables (list bs times))))
 
 
-(defpassmethod simple-expression-form-p (extend-bits &rest args)
-  (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-p (extend-bits &rest args)
+  (every #'simple-expression-p args))
 
 
 (defpassmethod synthesise (extend-bits bs times)
@@ -97,3 +100,17 @@ The BASE used can be 2, 8, 10, or 16."
   (as-literal "{")
   (synthesise-make-bitfields-field bs)
   (as-literal "}}"))
+
+
+(defpassmethod lispify (extend-bits bs times)
+  (declare (optimize debug))
+
+  (let* ((ty (compute-type bs))
+	 (n (eval-in-static-environment times))
+	 (w (bitwidth ty))
+	 (l (lispify bs)))
+
+    (with-gensyms (i v)
+      `(let ((,v 0))
+	 (dotimes (,i ,n ,v)
+	   (setf ,v (+ (ash ,v ,w) ,l)))))))

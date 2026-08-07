@@ -138,8 +138,8 @@
       (vl::typecheck p)
 
       ;; not (b d) as d is a constant
-      (is (set-equal (vl::variable-property 'a 'depends-on)
-		     '(b)))
+      (set-equal (vl::variable-property 'a 'depends-on)
+		 '(b))
 
       (is (null (vl::variable-property 'b 'depends-on)))
 
@@ -148,7 +148,7 @@
 
       ;; not (a b d), for the same reasons as above
       (is (set-equal (vl::traverse-dependencies 'c)
-		     '(a b)))
+		     '(a b d)))
       (is (null (vl::variable-property 'd 'depends-on))))))
 
 
@@ -178,3 +178,15 @@
 
       (is (set-equal (vl::variable-property 'c 'depends-on)
 		     '(c))))))
+
+
+;;; ---------- Lispification----------
+
+(test test-bit-lispify
+  "Test we can lispify bit operations."
+  (let ((p (vl::expand/vl '(let ((a #2r10))
+			    (declare (type (unsigned-byte 2) a))
+			    (incf a)
+			    (vl::extend-bits a 3)))))
+    (vl::typecheck p)
+    (is (equal (eval (lispify p)) #2r111111))))

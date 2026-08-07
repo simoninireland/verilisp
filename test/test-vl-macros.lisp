@@ -136,7 +136,7 @@
     (vl::macrolet/vl ((l1 (a)
 			  `(+ ,a ,z))
 		      (l2 (a &rest rs)
-			  `(+ ,a ,@rs)))
+			  `(+ ,a ,@rs ,z)))
 
       `(let (a b c)
 	 ,@body)))
@@ -206,3 +206,34 @@
     (vl::typecheck p)
     (let ((q (vl::transform/vl p)))
       (is (vl::synthesise/vl q)))))
+
+
+;;; ---------- Symbol macros ----------
+
+(test test-symbol-macros-in-macros
+  "Test we can expand symbol macros in code."
+  (let ((p (vl::expand/vl '(vl::symbol-macrolet/vl ((l1 23))
+			    (+ l1 1)))))
+    (is (equal p '(progn (+ 23 1))))))
+
+
+(test test-symbol-macros-in-macros
+  "Test we correctly expand symbol macros within macros."
+  (vl::defmacro/vl test-local-symbols (z &body body)
+    (vl::symbol-macrolet/vl ((l1 z)
+			     (l2 22))
+
+      `(let (a b c)
+	 ,@body)))
+
+  (let ((p (vl::expand/vl '(let (q w z)
+			    (test-local-symbols 23
+			      (+ l1 q)
+			      (list l2)
+			      (list z))))))
+
+    (is (contains-form-p '(+ 23 q) p))
+    (is (contains-form-p '(list 22) p))
+
+    ;; no capture
+    (is (contains-form-p '(list z) p))))

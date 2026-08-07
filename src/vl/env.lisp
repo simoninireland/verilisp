@@ -126,6 +126,15 @@ An UNKNOWN-VARIABLE error is signalled if N is undefined."
   (mapcar #'car (decls env)))
 
 
+(defun rename-frame-name (n m env)
+  "Rename N to M in the topmost frame of ENV."
+  (dolist (decl (decls env))
+    (if (equal (car decl) n)
+	(setf (car decl) m)))
+
+  env)
+
+
 (defun empty-frame-p (env)
   "Test whether ENV's shallowest frame is empty."
   (null (get-frame-names env)))
@@ -375,7 +384,6 @@ list will be flat, regardless of the frame structure of ENV."
 		 (append (descend-env (parent-frame l))
 			 (list (mapcar (lambda (n)
 					 (funcall f n l))
-				       (get-frame-names l)))
-			 ))))
+				       (get-frame-names l)))))))
 
     (flatten1 (remove-nulls (descend-env env)))))

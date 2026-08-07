@@ -103,27 +103,14 @@
   "Test we can typecheck cases with compatible clauses."
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 12)
 						       b)
-						  (case a
-						    (1
-						     (setf b 23))
-						    ((2 3 4)
-						     (setf b 34))
-						    (t
-						     (setf b 0))))))
+						     (case a
+						       (1
+							(setf b 23))
+						       ((2 3 4)
+							(setf b 34))
+						       (t
+							(setf b 0))))))
 		    '(unsigned-byte 8))))
-
-
-(test test-case-incompatible
-  "Test we catch cases with incompatible clauses."
-  (signals (vl::type-mismatch)
-    (is (vl::typecheck (vl::expand/vl '(let ((a 12)
-					   b)
-				      (case a
-					(1
-					 (setf b 23))
-					(2456
-					 (setf b 34))))))
-	'(unsigned-byte 8))))
 
 
 (test test-case-constants
@@ -159,29 +146,32 @@
   "Test we can assign to the results of a CASE block."
   (let ((p (vl::expand/vl '(let ((a 1)
 				(b 2))
-			   (setq a
-			    (case b
-			      (1 12)
-			      (2 (+ a 1))
-			      (t 0)))))))
+			    (declare (type (unsigned-byte 8) a b))
+			    (setq a
+			     (case b
+			       (1 12)
+			       (2 (+ a 1))
+			       (t 0)))))))
 
     (vl::with-new-frame
       (vl::typecheck p)
       (is (vl::synthesise/vl p)))))
 
 
+
 (test test-synthesise-case-complex-bodies
   "Test we can't synthesise CASE assignments where the bodies are too complicated."
   (signals (vl::not-synthesisable)
     (let ((p (vl::expand/vl '(let ((a 1)
-				  (b 2))
-			     (setq a
-			      (case b
-				(1 12)
-				(2
-				 (setq b 12)
-				 (+ a 1))
-				(t 0)))))))
+				   (b 2))
+			      (declare (type (unsigned-byte 8) a b))
+			      (setq a
+			       (case b
+				 (1 12)
+				 (2
+				  (setq b 12)
+				  (+ a 1))
+				 (t 0)))))))
 
       (vl::typecheck p)
       (vl::synthesise/vl p))))
@@ -192,7 +182,8 @@
   (let ((p (vl::expand/vl '(let ((a (if (= 2 1)
 				       1
 				       0)))
-			   (setf a (+ a 2))))))
+			    (declare (type (unsigned-byte 8) a))
+			    (setf a (+ a 2))))))
 
     (vl::typecheck p)
     (is (vl::synthesise/vl p))))

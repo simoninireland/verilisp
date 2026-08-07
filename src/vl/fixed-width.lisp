@@ -19,11 +19,8 @@
 
 (in-package :verilisp/core)
 
-;;; We re-use the Common Lisp fixed-width types like UNSIGNED--BYTE, but
+;;; We re-use the Common Lisp fixed-width types like UNSIGNED-BYTE, but
 ;;; we need more flexible checking and manipulation.
-
-;;; TODO: Change the ways that the extensible sub-typing works to
-;;; be more like passes
 
 
 ;;; ---------- Type algebra ----------
@@ -37,8 +34,11 @@
 	     (eql a '*))
 	 ;; unbounded LHS but not unbounded RHS
 	 nil)
+
 	(t
-	 (<= a b))))
+	 (let ((wa (eval-in-static-environment a))
+	       (wb (eval-in-static-environment b)))
+	   (<= wa wb)))))
 
 
 (defsubtype ((signed-byte a) (signed-byte b))
@@ -46,7 +46,10 @@
       (or (null a)
 	  (eql a '*))
 
-      (<= a b)))
+      (let ((wa (eval-in-static-environment a))
+	    (wb (eval-in-static-environment b)))
+	(<= wa wb))))
+
 
 (defsubtype (unsigned-byte signed-byte)
   t)
@@ -61,8 +64,11 @@
 	     (eql a '*))
 	 ;; unbounded LHS but not unbounded RHS
 	 nil)
+
 	(t
-	 (< a b))))
+	 (let ((wa (eval-in-static-environment a))
+	       (wb (eval-in-static-environment b)))
+	   (< wa wb)))))
 
 
 (deflub (unsigned-byte unsigned-byte)
@@ -82,6 +88,7 @@
 	     (eql a '*))
 	 ;; unbounded LHS but not unbounded RHS
 	 'unsigned-byte)
+
 	(t
 	 (let ((wa (eval-in-static-environment a))
 	       (wb (eval-in-static-environment b)))
@@ -104,8 +111,8 @@
 	((or (null a)
 	     (eql a '*))
 	 ;; unbounded LHS but not unbounded RHS
-	 'signed-byte
-	 )
+	 'signed-byte)
+
 	(t
 	 (let ((wa (eval-in-static-environment a))
 	       (wb (eval-in-static-environment b)))
@@ -141,13 +148,23 @@
   (lub `(unsigned-byte ,b) `(signed-byte ,a)))
 
 
+;; Simplification rules evaluate the width
+(deflub ((unsigned-byte a) nil)
+  (let ((w (eval-in-static-environment a)))
+    `(unsigned-byte ,w)))
+(deflub ((signed-byte a) nil)
+  (let ((w (eval-in-static-environment a)))
+    `(signed-byte ,w)))
+
+
 (defmethod bitwidth/form ((tytag (eql 'unsigned-byte)) tyargs)
+  (declare (optimize debug))
+
   (when (or (null tyargs)
 	    (eql (car tyargs) '*))
     (error 'not-representable :type (construct-type tytag tyargs)))
 
-  (let ((w (eval-in-static-environment (car tyargs))))
-    `(unsigned-byte ,w)))
+  (eval-in-static-environment (car tyargs)))
 
 
 (defmethod bitwidth/form ((tytag (eql 'signed-byte)) tyargs)
@@ -155,8 +172,7 @@
 	    (eql (car tyargs) '*))
     (error 'not-representable :type (construct-type tytag tyargs)))
 
-  (let ((w (eval-in-static-environment (car tyargs))))
-    `(signed-byte ,w)))
+  (eval-in-static-environment (car tyargs)))
 
 
 ;;; Abbreviations for fixed-width types
@@ -174,27 +190,66 @@
   (bitwidth '(unsigned-byte 1)))
 
 
-;;; Unions and intersections of fixed-width types
+;;; Intersections of fixed-width types
 
-(deflub ((or &rest tys) (&type ty))
-  (let ((oty (lub tys)))
-    (if (fixed-width-p oty)
-	(lub oty ty)
+(defun width-of-and-of-fixed-width (tys)
+  "Return the total bit width of the AND of TYS.
 
-	;; otherwise fall through
-	(call-next-method))))
-(deflub ((&type ty) (or &rest tys))
-  (lub `(or ,@tys) ty))
+All elements of TYS must reduce to a bounded fixed-width type.
+Otherwise, return NIL."
+  (declare (optimize debug))
+
+  (let ((ltys (mapcar #'lub tys)))
+    (if (every #'fixed-width-p ltys)
+	(let ((ws (mapcar #'bitwidth ltys)))
+	  (if (every #'identity ws)
+	      (apply #'+ ws))))))
+
+
+(defsubtype ((and &rest tys) (unsigned-byte a))
+  (declare (optimize debug))
+
+  (or (not (bounded-fixed-width-p `(unsigned-byte ,a)))
+      (<= (width-of-and-of-fixed-width tys) a)))
+
+
+(defsubtype ((and &rest ltys) (and &rest rtys))
+  (<= (width-of-and-of-fixed-width ltys)
+      (width-of-and-of-fixed-width rtys)))
+
+
+(defsubtype ((unsigned-byte a) (and &rest tys))
+  (declare (optimize debug))
+
+  (and (bounded-fixed-width-p `(unsigned-byte ,a))
+       (<= a (width-of-and-of-fixed-width tys))))
+
+
+(defsubtype ((and &rest tys) (signed-byte a))
+  (declare (optimize debug))
+
+  (or (not (bounded-fixed-width-p `(signed-byte ,a)))
+      (<= (width-of-and-of-fixed-width tys) a)))
+
+
+(defsubtype ((signed-byte a) (and &rest tys))
+  (declare (optimize debug))
+
+  (and (bounded-fixed-width-p `(signed-byte ,a))
+       (<= a (width-of-and-of-fixed-width tys))))
 
 
 (deflub ((and &rest tys) (&type ty))
   (declare (optimize debug))
 
-  (let ((w (apply #'+ (mapcar #'bitwidth tys))))
-    (lub `(unsigned-byte ,w) ty)
+  (let ((ltys (mapcar #'lub tys)))
+    (if (every #'fixed-width-p ltys)
+	(let ((w (apply #'+ (mapcar #'bitwidth ltys))))
+	  (lub `(unsigned-byte ,w) ty))
 
-    ;; otherwise fall through
-    (call-next-method)))
+	(call-next-method))))
+
+
 (deflub ((&type ty) (and &rest tys))
   (lub `(and ,@tys) ty))
 
@@ -204,6 +259,13 @@
 (defun fixed-width-p (ty)
   "Test whether TY is a fixed-width type."
   (subtype-p ty '(or unsigned-byte signed-byte)))
+
+
+(defun bounded-fixed-width-p (ty)
+  "Test whether TY is a fixed-width type with a concrete bound."
+  (and (fixed-width-p ty)
+       (not (or (atom ty)
+		(eql (cadr ty) '*)))))
 
 
 (defun signed-byte-p (ty)
@@ -228,39 +290,17 @@
 
 ;;; ---------- Widths ----------
 
-(defun bits-for-integer (val)
-  "Return the number of bits needed to represent VAL."
-  (flet ((bfi (val)
-	   (multiple-value-bind (b res)
-	       (ceiling (log val 2))
-
-	     (let ((bits (max (if (= res 0.0)
-				  ;; add a bit if val is on a
-				  ;; power-of-two boundary
-				  (1+ b)
-				  b)
-			      1)))	; always need at least one bit
-	       bits))))
-
-    (cond ((= val 0)
-	   1)
-
-	  ((> val 0)
-	   (bfi val))
-
-	  (t
-	   (1+ (bfi (abs val)))))))
-
-
-(defmethod bitwidth-type ((tytag (eql 'unsigned-byte)) tyargs)
-  (if (not (null tyargs))
+(defmethod bitwidth/form ((tytag (eql 'unsigned-byte)) tyargs)
+  (if (not (or (null tyargs)
+	       (eql (car tyargs) '*)))
       (car tyargs)))
 
 
-(defmethod bitwidth-type ((tytag (eql 'signed-byte)) tyargs)
-  (if (not (null tyargs))
+(defmethod bitwidth/form ((tytag (eql 'signed-byte)) tyargs)
+  (if (not (or (null tyargs)
+	       (eql (car tyargs) '*)))
       (car tyargs)))
 
 
-(defmethod bitwidth-type ((tytag (eql 'bit)) tyargs)
+(defmethod bitwidth/form ((tytag (eql 'bit)) tyargs)
   1)

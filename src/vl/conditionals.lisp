@@ -20,7 +20,7 @@
 (in-package :verilisp/core)
 (declaim (optimize debug))
 
-;;; The main conditional. IF and CASE and core language; COND is a macro.
+;;; The main conditionals. IF and CASE and core language; COND is a macro.
 ;;;
 ;;; CASE follows Common Lisp in not evaluating the values in the arms.
 ;;; However, we do allow those values to be constant variables, which is
@@ -42,11 +42,6 @@
     (if else
 	`(or ,tythen ,tyelse)
 	tythen)))
-
-
-(defpassmethod apply-type-constraints (if condition then &rest else)
-  (let ((tycond (compute-type condition)))
-    (ensure-boolean tycond)))
 
 
 (defun synthesise-if-expression (form)
@@ -72,12 +67,12 @@
       (synthesise form)))
 
 
-(defpassmethod simple-expression-form-p (if condition then &rest else)
+(defpassmethod simple-expression-p (if condition then &rest else)
   (declare (optimize debug))
-  (and (simple-expression-form-p condition)
-       (simple-expression-form-p then)
+  (and (simple-expression-p condition)
+       (simple-expression-p then)
        (or (null else)
-	   (every #'simple-expression-form-p else))))
+	   (every #'simple-expression-p else))))
 
 
 (defpassmethod synthesise (if condition then &rest else)
@@ -85,11 +80,11 @@
 
   (if (in-expression-context-p)
       ;; in expression, synthesise as a conditional expression
-      (if (and (simple-expression-form-p condition)
-	       (simple-expression-form-p condition)
+      (if (and (simple-expression-p condition)
+	       (simple-expression-p condition)
 	       (or (null else)
 		   (and (= (length else) 1)
-			(simple-expression-form-p (car else)))))
+			(simple-expression-p (car else)))))
 	  (synthesise-if-expression `(if ,condition ,then ,@else))
 
 	  (error 'not-synthesisable :hint "Ensure all arms of the conditional are simple expressions"))
@@ -133,6 +128,13 @@ Return the type of the clause body."
   (destructuring-bind (val &rest body)
       clause
 
+    ;; clause tests must be static
+    ;; This is more general that in Common Lisp, where they must
+    ;; be literals. Verilisp accepts variables that are annotated as being
+    ;; constants
+    (dolist (v (safe-list val))
+      (ensure-static v))
+
     (compute-type (with-implicit-progn body))))
 
 
@@ -152,14 +154,14 @@ The type is the union of the clause types."
   "Apply type constraints to a CLAUSE of a case.
 
 Each test element must be testable against TY."
+  (declare (optimize debug))
+
   (destructuring-bind (val &rest body)
       clause
 
     (if (not (eql val 't))
 	;; multiple test elements, make sure they're all appropriate
-	(dolist (v (if (listp val)
-		       val
-		       (list val)))
+	(dolist (v (safe-list val))
 
 	  ;; all comparison forms must be static constants
 	  (ensure-static v)
@@ -167,12 +169,6 @@ Each test element must be testable against TY."
 	  ;; check subtyping against comparison
 	  (let ((tyval (compute-type v)))
 	    (ensure-subtype tyval ty))))))
-
-
-(defpassmethod apply-type-constraints (case condition &rest clauses)
-  (let ((ty (compute-type condition)))
-
-    (mapc (curry #'constrain-clause ty) clauses)))
 
 
 (defun synthesise-clause (clause)
@@ -243,11 +239,11 @@ Each test element must be testable against TY."
   (as-literal "endcase"))
 
 
-(defpassmethod simple-expression-form-p (case condition &rest clauses)
-  (and (simple-expression-form-p condition)
+(defpassmethod simple-expression-p (case condition &rest clauses)
+  (and (simple-expression-p condition)
        (every (lambda (clause)
 		(and (= (length (cdr clause)) 1)
-		     (simple-expression-form-p (cadr clause))))
+		     (simple-expression-p (cadr clause))))
 	      clauses)))
 
 

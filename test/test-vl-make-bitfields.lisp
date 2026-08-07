@@ -70,4 +70,11 @@
 				b)
 			   (setq b (vl::make-bitfields (vl::extend-bits a 5)))))))
     (vl::typecheck p)
+    (is (vl::synthesise/vl p)))
+
+   (let ((p (vl::expand/vl '(let ((a 1)
+				  b)
+			     (declare (as register a))
+			     (setq b (vl::make-bitfields (vl::extend-bits a 5)))))))
+    (vl::typecheck p)
     (is (vl::synthesise/vl p))))

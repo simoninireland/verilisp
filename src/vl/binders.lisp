@@ -24,7 +24,96 @@
 ;;; with the rest of their behaviour being shared.
 
 
-;;; ---------- Representationas----------
+;;; ---------- Recursion schemata ----------
+
+;;; into-arguments
+
+(defun into-arguments-let (fun args &key pass-name option extra)
+  "The commonality for LET and LET* schemata."
+  (declare (ignore option))
+
+  (destructuring-bind (f &rest body)
+      args
+
+    ;; process initial values
+    (dolist (n (get-frame-names f))
+      ;; process initial values
+      (if-let ((iv (get-frame-property n 'initial-value f)))
+	(set-frame-property n 'initial-value
+			    (apply pass-name (cons iv extra))
+			    f)))
+
+    ;; process body
+    (let ((newbody (with-local-frame f
+		     (apply pass-name (cons (with-implicit-progn body) extra)))))
+      `(,fun ,f
+	     ,@newbody))))
+
+
+(defmethod into-arguments ((fun (eql 'let)) args &key pass-name option extra)
+  (into-arguments-let 'let args :pass-name pass-name :option option :extra extra))
+(defmethod into-arguments ((fun (eql 'let*)) args &key pass-name option extra)
+  (into-arguments-let 'let* args :pass-name pass-name :option option :extra extra))
+
+
+;;; over-arguments
+
+(defmethod over-arguments ((fun (eql 'let)) args &key pass-name option extra)
+  (declare (ignore option))
+
+  (destructuring-bind (f &rest body)
+      args
+
+    ;; process initial values
+    (dolist (n (get-frame-names f))
+      ;; process initial values
+      (if-let ((iv (get-frame-property n 'initial-value f)))
+	(apply pass-name (cons iv extra))))
+
+    ;; process body
+    (with-local-frame f
+      (apply pass-name (cons (with-implicit-progn body) extra)))))
+
+
+(defmethod over-arguments ((fun (eql 'let*)) args &key pass-name option extra)
+  (over-arguments 'let args :pass-name pasiname :option option :extra extra))
+
+
+;;; into-arguments-macros
+
+;;; These schemata are specific to EXPAND-MACROS and will be applied
+;;; before the ADD-FRAMES pass, so need to work on decls as lists, not
+;;; as frames
+
+(defun into-arguments-macros-let (fun args &key pass-name option extra)
+  "The commonality for LET and LET* schemata.
+
+Because this is called in the expansion pass the first argument will
+be a list of declarations, not a frame (which is applied later)."
+  (declare (ignore option) (optimize debug))
+
+  (destructuring-bind (decls &rest body)
+      args
+
+    (let ((newdecls (mapcar (lambda (decl)
+			      (if (listp decl)
+				  (list (car decl)
+					(apply pass-name (cons (cadr decl) extra)))
+				  decl))
+			    decls))
+	  (newbody (mapcar (apply #'rcurry `(,pass-name ,@extra)) body)))
+
+      `(,fun ,newdecls
+	     ,@newbody))))
+
+
+(defmethod into-arguments-macros ((fun (eql 'let)) args &key pass-name option extra)
+  (into-arguments-macros-let 'let args :pass-name pass-name :option option :extra extra))
+(defmethod into-arguments-macros ((fun (eql 'let*)) args &key pass-name option extra)
+  (into-arguments-macros-let 'let* args :pass-name pass-name :option option :extra extra))
+
+
+;;; ---------- Representations----------
 
 (deftype representation ()
   "The type of variable representations."
@@ -78,20 +167,11 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 
 ;;; TODO: change dependencies for LET*
 
-(defun compute-let-dependencies (decls)
-  "Compute the dependencies of all variables in the current frame."
-  (dolist (n (variables-declared-in-current-frame))
-    (with-recover-on-error
-	;; leave dependencies alone on error
-	t
-
+(defpassmethod compute-dependencies (let f &rest body)
+  (with-local-frame f
+    (dolist (n (variables-declared-in-current-frame))
       (if-let ((v (get-initial-value n)))
-	(add-dependencies n (read-variables v))))))
-
-
-(defpassmethod compute-dependencies (let decls &rest body)
-  (with-local-frame decls
-    (compute-let-dependencies decls)
+	(add-dependencies n (read-variables v))))
 
     (compute-dependencies (with-implicit-progn body))))
 
@@ -125,11 +205,33 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 
 ;;; ---------- Typechecking ----------
 
-(defun name-in-decl (decl)
-  "Extract the name being declared by DECL.
+;;; TODO: Need to consider representability here -- maybe in LUB?
 
-The name is the first element, whether or not DECL is a list."
-  (safe-car decl))
+(defun constrain-initial-value (n nf f)
+  "Add any constraints on N from is initial value.
+
+The types are computed in frame F and added to frame NF, which should be
+the frame declaring N."
+  (declare (optimize debug))
+
+  (if-let ((iv (get-frame-property n 'initial-value nf)))
+    ;; we have an initial value, use it for constraints
+    (let ((ity (in-frame f
+		 (compute-type iv))))
+
+      (if (or (subtype-p ity 'array)
+	      (subtype-p ity 'module))
+	  (progn
+	    ;; modules and arrays are fully elaborated and don't need to be inferred
+	    (set-frame-property n 'type ity nf)
+
+	    ;; modules are their own representation
+	    (when (subtype-p ity 'module)
+	      (set-frame-property n 'as 'module nf)))
+
+	  (progn
+	    ;; add the type to the constraints
+	    (add-frame-type-constraint n ity nf))))))
 
 
 (defun compute-let-env ()
@@ -144,19 +246,9 @@ other bindings."
   ;; any properties to the detached frame, and then re-attach it
   (with-detached-frame lenv
 
-    (dolist (n (variables-declared-in-frame lenv))
-      (with-recover-on-error
-	  ;; leave variable alone
-	  nil
-
-	;; constrain the variable with whatever information we have
-	(let ((ty (or (get-frame-property n 'type lenv :default nil)
-		      (if-let ((v (get-frame-property n 'initial-value lenv :default nil)))
-			(compute-type v))
-		      '(unsigned-byte 1))))
-
-	  ;; constrain the variable
-	  (add-frame-type-constraint n ty lenv))))))
+    (let ((f (current-frame)))
+      (dolist (n (variables-declared-in-frame lenv))
+	(constrain-initial-value n lenv f)))))
 
 
 (defun compute-let*-env ()
@@ -173,97 +265,60 @@ LET* adds bindings incrementally, so each can see those that went before."
     (let ((nenv (make-frame)))
       (with-frame nenv
 
-	(dolist (n (variables-declared-in-frame lenv))
-	  (with-recover-on-error
-	      ;; leave variable alone
-	      nil
+	(let ((f (current-frame)))
+	  (dolist (n (variables-declared-in-frame lenv))
+	    (constrain-initial-value n lenv f)
 
-	    ;; constrain the variable with whatever information we have
-	    (let ((ty (or (get-frame-property n 'type lenv :default nil)
-			  (if-let ((v (get-frame-property n 'initial-value lenv)))
-			    (compute-type v))
-			  '(unsigned-byte 1))))
-
-	      ;; constrain the variable
-	      (add-frame-type-constraint n ty lenv))
-
-	    ;; add the new variable incrementally to the empty frame
-	    ;; with the correct properties
+	    ;; dclare the variable ready for the next one
 	    (declare-variable n (get-frame-properties n lenv))))))))
 
 
-(defpassmethod compute-type (let decls &rest body)
+(defpassmethod compute-type (let f &rest body)
   (declare (optimize debug))
 
-  (with-local-frame decls
-    (compute-let-env)   ; type-check in parent frame
+  (with-local-frame f
+    (compute-let-env)
 
-    ;; compute-type the body
+    ;; the type is the type of the body
     (compute-type (with-implicit-progn body))))
 
 
-(defpassmethod compute-type (let* decls &rest body)
+(defpassmethod compute-type (let* f &rest body)
   (declare (optimize debug))
 
-  (with-local-frame decls
-    (compute-let*-env)   ; type-check in progressively expanded frame
+  (with-local-frame f
+    (compute-let*-env)
 
-    ;; compute-type the body
+    ;; the type is the type of the body
     (compute-type (with-implicit-progn body))))
 
 
-(defpassmethod apply-type-constraints (let f &rest body)
+(defpassmethod compute-variable-types (let f &rest body)
   (declare (optimize debug))
 
   (with-local-frame f
     (dolist (n (get-frame-names f))
-      (with-recover-on-error
-	  ;; leave constraints alone on error
-	  t
+      ;; solve the type constraints
+      (solve-type-constraints-and-declare n f))
 
-	;; constrain the variable's type (which must be representable)
-	(let* ((constraints (get-type-constraints n))
-	       (lubty (if constraints (apply #'lurb constraints)))
-	       (ty (get-type n)))
-
-	  (if ty
-	    (progn
-	      ;; check against provided type
-	      (unless (subtype-p lubty ty)
-		(warn 'type-mismatch :expected ty
-				     :got lubty
-				     :hint "Make sure explicit type matches usage"))
-
-	      (if (or (subtype-p ty 'array)
-		      (subtype-p ty 'module))
-
-		  ;; array and module types are fully elaborated and
-		  ;; so don't need to be inferred
-		  (progn
-		    (set-variable-property n 'type ty)
-
-		    ;; modules also are their own representation
-		    (when (subtype-p ty 'module)
-		      (set-variable-property n 'as 'module)))))
-
-	    ;; update the type with the constrained type
-	    (progn
-	      (set-variable-property n 'type lubty)
-	      (setq ty lubty)))
-
-	  ;; ensure the initial value is a valid element
-	  (if-let ((v (get-initial-value n)))
-	    (progn
-	      (ensure-subtype (compute-type v) ty)
-
-	      ;; cascade into any initial values
-	      (apply-type-constraints v))))))
-
-    ;; cascade into the body
-    (apply-type-constraints (with-implicit-progn body))))
+    ;; solve in the body
+    (compute-variable-types (with-implicit-progn body))))
 
 
-(defpassmethod apply-type-constraints (let* &rest args)
+(defpassmethod compute-variable-types (let* f &rest body)
+  (:same-as let))
+
+
+(defpassmethod check-all-variables-typed (let f &rest body)
+  (with-local-frame f
+    (dolist (n (get-frame-names f))
+      (unless (get-frame-property n 'type f :default nil)
+	(error 'compiler-error :hint (format nil "Variable ~s has no type" n))))
+
+    (check-all-variables-typed (with-implicit-progn body))))
+
+
+(defpassmethod check-all-variables-typed (let* f &rest body)
   (:same-as let))
 
 
@@ -273,14 +328,6 @@ LET* adds bindings incrementally, so each can see those that went before."
   (declare (optimize debug))
 
   (with-local-frame f
-    ;; do representation inference on initial values
-    (dolist (n (get-frame-names f))
-      (if-let ((v (variable-property n 'initial-value)))
-	(infer-representation v)))
-
-    ;; do representation inference in body
-    (infer-representation (with-implicit-progn body))
-
     ;; do representation inference on local variables
     (dolist (n (get-frame-names f))
       (let ((read (variable-property n 'read))
@@ -290,6 +337,7 @@ LET* adds bindings incrementally, so each can see those that went before."
 
 	(let ((rep (if written
 		       ;; variable is updated, must be a register
+		       ;; TODO: Is this true? -- or only by default?
 		       'register
 
 		       (if read
@@ -338,7 +386,10 @@ LET* adds bindings incrementally, so each can see those that went before."
 					     :hint "Make sure the explicitly-assigned representation is appropriate"))
 
 	    ;; update representation if none given
-	    (set-variable-property n 'as rep)))))))
+	    (set-variable-property n 'as rep)))))
+
+    ;; do representation inference in body
+    (infer-representation (with-implicit-progn body))))
 
 
 (defpassmethod infer-representation (let* &rest args)
@@ -347,108 +398,33 @@ LET* adds bindings incrementally, so each can see those that went before."
 
 ;;; ---------- Variable re-writing ----------
 
-(defun rewrite-variables-keys (kvs rewrite)
-  "Rewrite variables in the values of the key/value pairs KVS using REWRITE."
-  (flet ((rewrite-key-value (l kv)
-	   (append l (list (car kv) (rewrite-variables (cadr kv) rewrite)))))
-    (foldr #'rewrite-key-value (adjacent-pairs kvs) '())))
+(defpassmethod rewrite-variables (let f &rest body)
+  (declare (optimize debug))
 
+  (dolist (n (get-frame-names f))
+    (if-let ((iv (get-frame-property n 'initial-value f :default nil)))
+      (let ((rv (rewrite-variables iv rewrite)))
+	(set-frame-property n 'initial-value rv f))))
 
-(defun rewrite-variables-decl (decl rewrite)
-  "Re-write the values of DECL using REWRITE."
-  (if (listp decl)
-      ;; full decl, recurse into key values
-      (destructuring-bind (n v &rest keys)
-	  decl
-	(if keys
-	    `(,n ,(rewrite-variables v rewrite) ,(rewrite-variables-keys keys rewrite))
-
-	    ;; no keys to add
-	    `(,n ,(rewrite-variables v rewrite))))
-
-      ;; naked declaration, nothing to do
-      decl))
-
-
-(defpassmethod rewrite-variables (let decls &rest body)
-  (let* ((rwdecls (mapcar (rcurry #'rewrite-variables-decl rewrite) decls))
-
-	 ;; remove any re-writes referring to shadowed variables
-	 (rwnames (mapcar #'name-in-decl rwdecls))
+  (let* (;; remove any re-writes referring to shadowed variables
+	 (rwnames (get-frame-names f))
 	 (rwrewrite (remove-if (lambda (rw)
 				 (member (car rw) rwnames))
 			       rewrite))
 
 	 ;; re-write the body with these new re-writes
-	 (rwbody (mapcar (rcurry #'rewrite-variables rwrewrite) body)))
+	 (rwbody (rewrite-variables (with-implicit-progn body) rwrewrite)))
 
     ;; rewrite the form to use re-written decls and the body
     ;; re-written respecting shadowing
-    `(let ,rwdecls
+    `(let ,f
        ,@rwbody)))
 
 
+;;; TODO: Change rules for LET*
+
 (defpassmethod rewrite-variables (let* &rest args)
   (:same-as let))
-
-
-;;; ---------- Macro expansion ----------
-
-(defun expand-macros-decl (decl)
-  "Expand macros in the value of DECL."
-  (if (listp decl)
-      ;; full declaration, expand the value
-      (destructuring-bind (n v)
-	  decl
-	`(,n ,(expand-macros v)))
-
-      ;; naked name, leave it alone
-      decl))
-
-
-(defmethod into-arguments-macros ((fun (eql 'let)) args &key &allow-other-keys)
-  (destructuring-bind (decls &rest body)
-      args
-    (let ((newdecls (mapcar #'expand-macros-decl decls))
-	  (newbody (mapcar #'expand-macros body)))
-
-      `(,fun ,newdecls
-	     ,@newbody))))
-
-
-(defmethod into-arguments-macros ((fun (eql 'let*)) args &key &allow-other-keys)
-  (destructuring-bind (decls &rest body)
-      args
-    (let ((newdecls (mapcar #'expand-macros-decl decls))
-	  (newbody (mapcar #'expand-macros body)))
-
-      `(,fun ,newdecls
-	     ,@newbody))))
-
-
-;;; ---------- Elaborating state machines ----------
-
-;;; LET and LET* elaborate state machines the same way, but need to
-;;; retain their function tag (or do they?)
-
-(defmethod into-arguments ((fun (eql 'let)) args &key &allow-other-keys)
-  (destructuring-bind (f &rest body)
-      args
-
-    (let ((newbody (with-local-frame f
-		     (mapcar #'elaborate-state-machines body))))
-      `(,fun ,f
-	     ,@newbody))))
-
-
-(defmethod into-arguments ((fun (eql 'let*)) args &key &allow-other-keys)
-  (destructuring-bind (f &rest body)
-      args
-
-    (let ((newbody (with-local-frame f
-		     (mapcar #'elaborate-state-machines body))))
-      `(,fun ,f
-	     ,@newbody))))
 
 
 ;;; ---------- Floating ----------
@@ -531,9 +507,28 @@ by LET and MODULE forms."
 
 ;;; ---------- Synthesis ----------
 
+;;; TODO: All this should live in arrays.lisp
+
 (defun array-type-p (ty)
   "Test whether TY is an array type."
   (subtype-p ty 'array))
+
+
+(defun displaced-array-p (form)
+  "Test whetehr FORM is a MAKE-ARRAY for a displaced array.
+
+Displaced arrays are simply renamings of underlying arrays and so
+don't need their own storage."
+  (when (eql (car form) 'make-array)
+    (destructuring-bind (shape &key
+				 initial-element initial-contents
+				 element-width element-type
+				 displaced-to
+				 displaced-index-offset
+				 conformal
+				 displaced-offset)
+	(cdr form)
+      displaced-to)))
 
 
 (defun synthesise-register (n)
@@ -541,36 +536,40 @@ by LET and MODULE forms."
   (declare (optimize debug))
 
   (let ((v (get-initial-value n :default 0)))
-    (as-literal "reg ")
-    (let* ((type (get-type n))
-	   (width (if (array-type-p type)
-		      ;; width is the width of the element type
+    (let ((type (get-type n)))
+
+      ;; only synthesise a declaration for a things that aren't
+      ;; displaced arrays (which will be transformed)
+      (when (or (not (array-type-p type))
+		(not (displaced-array-p v)))
+	(let ((width (if (array-type-p type)
+			 ;; width is the width of the element type
 		      (bitwidth (element-type-of-array type))
 
 		      ;; width is of the type itself
 		      (bitwidth type))))
+	  (as-literal "reg ")
+	  ;; (if (and (fixed-width-p type)
+	  ;;	       (not (unsigned-byte-p type)))
+	  ;;	  (as-literal "signed "))
 
-      ;; (if (and (fixed-width-p type)
-      ;;	       (not (unsigned-byte-p type)))
-      ;;	  (as-literal "signed "))
+	  (when (or (not (numberp width))
+		    (> width 1))
+	    ;; we have a width (or a width expression)
+	    (as-literal"[ ")
+	    (synthesise width)
+	    (as-literal " - 1 : 0 ] "))
+	  (synthesise n)
+	  (if v
+	      (if (make-array-form-p v)
+		  ;; synthesise the array bounds and initialisation
+		  (synthesise-array-init n v)
 
-      (when (or (not (numberp width))
-		(> width 1))
-	;; we have a width (or a width expression)
-	(as-literal"[ ")
-	(synthesise width)
-	(as-literal " - 1 : 0 ] "))
-      (synthesise n)
-      (if v
-	  (if (make-array-form-p v)
-	      ;; synthesise the array bounds and initialisation
-	      (synthesise-array-init n v)
-
-	      ;; synthesise the assignment to the initial value
-	      (progn
-		  (as-literal " = ")
-		  (synthesise v))))
-      (as-literal ";"))))
+		  ;; synthesise the assignment to the initial value
+		  (progn
+		    (as-literal " = ")
+		    (synthesise v))))
+	  (as-literal ";"))))))
 
 
 (defun synthesise-wire (n)
@@ -648,7 +647,7 @@ Valid RHSs are either null, array or object constructors, or simple expressions.
   (or (null form)
       (make-array-form-p form)
       (make-instance-form-p form)
-      (simple-expression-form-p form)))
+      (simple-expression-p form)))
 
 
 (defun synthesise-decl (decl)
@@ -656,7 +655,7 @@ Valid RHSs are either null, array or object constructors, or simple expressions.
   (declare (optimize debug))
 
   (with-current-form decl
-    (let* ((n (name-in-decl decl))
+    (let* ((n (safe-car decl))
 	   (v (get-initial-value n)))
 
       (progn
@@ -696,3 +695,21 @@ Valid RHSs are either null, array or object constructors, or simple expressions.
 
 (defpassmethod synthesise (let* &rest args)
   (:same-as let))
+
+
+;;; ---------- Lispification ----------
+
+(defpassmethod lispify (let f &rest body)
+  (let ((decls (build-decls-from-frame f))
+	(newbody (with-local-frame f
+		   (lispify (with-implicit-progn body)))))
+    `(let ,decls
+       ,newbody)))
+
+
+(defpassmethod lispify (let* f &rest body)
+  (let ((decls (build-decls-from-frame f))
+	(newbody (with-local-frame f
+		   (lispify (with-implicit-progn body)))))
+    `(let* ,decls
+       ,newbody)))

@@ -79,15 +79,19 @@ This should only be used during system loading."
 
 (defmacro with-frame (f &body body)
   "Attach F to the current environment for BODY."
-  `(let ((*current-frame* (attach-frame ,f *current-frame*)))
-     (unwind-protect
-	  (progn
-	    ;; run the body in the extended environment
-	    ,@body)
+  (with-gensyms (oldframe)
+    `(let ((,oldframe *current-frame*))
+       (unwind-protect
+	    (progn
+	      (setq *current-frame* (attach-frame ,f *current-frame*))
 
-       ;; detach the attached frame and restore the environment
-       (progn
-	 (detach-frame *current-frame*)))))
+	      ;; run the body in the extended environment
+	      ,@body)
+
+	 ;; detach the attached frame and restore the environment
+	 (progn
+	  (detach-frame *current-frame*)
+	  (setq *current-frame* ,oldframe))))))
 
 
 (defmacro with-new-frame (&body body)

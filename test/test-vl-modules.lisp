@@ -98,7 +98,7 @@
 
 
 (test test-synthesise-moduletest
-  "Test we can syntheise a module with a variety of features."
+  "Test we can synthesise a module with a variety of features."
   (let ((p (vl::expand/vl '(module test (clk a b
 					    &key e (f 45))
 			   (declare (type bit clk)
@@ -108,7 +108,8 @@
 			   (let ((x 0)
 				 (y 10)
 				 (z 44))
-			     (declare (as constant z))
+			     (declare (as constant z)
+				      (type (unsigned-byte 8) x))
 			     (vl::@ (vl::posedge clk)
 				    (setf x (+ x b))))))))
 
@@ -128,7 +129,7 @@
 			    (type (unsigned-byte 4) b)
 			    (direction in clk a b))
 			   (let ((x 0)
-				 (a (make-array '(8) :initial-contents (:file "test.hex"))))
+				 (a (make-array '(8) :element-type (unsigned-byte 8)  :initial-contents (:file "test.hex"))))
 			     (@ (posedge clk)
 				(setf x (aref a 4))))))))
 
@@ -153,7 +154,7 @@
 	     (direction in clk a b))
 
     (let ((x 0)
-	  (a (make-array '(8) :initial-contents (:file "test.hex"))))
+	  (a (make-array '(8) :element-type (unsigned-byte 8)  :initial-contents (:file "test.hex"))))
       (@ (posedge clk)
 	 (setf x (aref a 4)))))
 
@@ -549,6 +550,7 @@
   (flet ((instanciate (x)
 	   (let ((p (vl::expand/vl `(let (clk-in clk reset-in reset
 						 (b #2r100))
+				      (declare (type bit clk-in clk reset-in reset))
 				      (let ((cw1 (make-instance 'clockworks
 								:clk-in clk-in
 								:clk ,x

@@ -114,22 +114,24 @@
 				     :element-type (unsigned-byte 32))))
 			    (setf (aref a 8) (aref a 0))))))
 
-    ;; (is (vl::subtype-p (vl::typecheck p)
-    ;;		       '(unsigned-byte 32)))
-    (vl::typecheck p)
-    )
-  )
+    (is (vl::subtype-p (vl::typecheck p)
+		       '(unsigned-byte 32)))))
 
+
+;;; TODO: We can't use (setf (bref (aref a 8) :end 0) ..) here as the
+;;; nesting doesn't work in Lisp because of the lack of references. Maybe
+;;; we should find a way to allow it, given it might be a common pattern?
 
 (test test-aref-bits
   "Test we can bit-index into an element of an array."
-  (let ((p (vl::expand/vl '(let ((a (make-array '(16)
-				     :element-type (unsigned-byte 32))))
-			    (setf (vl::bref (aref a 8) 3 :end 0)
+  (let ((p (vl::expand/vl '(let* ((a (make-array '(16)
+				      :element-type (unsigned-byte 32)))
+				  (v (aref a 8)))
+			    (setf (vl::bref v 3 :end 0)
 			     (vl::bref (aref a 0) 3 :end 0))))))
 
     (is (vl::subtype-p (vl::typecheck p)
-		      '(unsigned-byte 4)))))
+		       '(unsigned-byte 4)))))
 
 
 (test test-aref-bref
@@ -256,6 +258,11 @@
     (vl::typecheck (vl::expand/vl '(let ((a (make-array (5)
 					     :element-type '(unsigned-byte 4)
 					     :initial-contents (1 2 35))))
+				    (aref a 0)))))
+
+  (signals syntax-error
+    (vl::typecheck (vl::expand/vl '(let ((a (make-array (5)
+					     :initial-contents 3)))
 				    (aref a 0))))))
 
 
@@ -269,12 +276,25 @@
     (is (vl::synthesise/vl p))))
 
 
-;; The next test uses ROM data from the SAP-1 example
+;; The next tests use ROM data from the SAP-1 example
+
+(test test-synthesise-array-no-element-type
+  "Test we need an element type for initialising from a file."
+   (let* ((fn (pathname-relative-to-project-root "examples/sap-1-raw/program.bin"))
+	  (p (vl::expand/vl `(let ((a (make-array '(10)
+						 :initial-contents '(:file ,fn)))
+				  (b 0))
+			      (setf b (aref a 1))))))
+
+     (signals syntax-error
+       (vl::typecheck p))))
+
 
 (test test-synthesise-array-init-from-example
   "Test we can synthesise array initialisation from a file."
   (let* ((fn (pathname-relative-to-project-root "examples/sap-1-raw/program.bin"))
 	 (p (vl::expand/vl `(let ((a (make-array '(10)
+						 :element-type (unsigned-byte 8)
 						 :initial-contents '(:file ,fn)))
 				  (b 0))
 			      (setf b (aref a 1))))))
@@ -282,3 +302,48 @@
     (vl::typecheck p)
     (is (vl::synthesise/vl p))
     (vl::run-module-late-initialisation)))
+
+
+;;; ---------- Array displacement ----------
+
+(test test-array-displaced
+  "Test we can displace an array into another."
+  (let ((p (vl::expand/vl '(let* ((a (make-array (10) :element-type (unsigned-byte 8)))
+				  (b (make-array (2) :displaced-to a :displaced-index-offset 0))
+				  c)
+			    (setq c (aref b 0))))))
+    (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 8))))
+
+  ;; displaced arrays can't have initial elements
+  (let ((p (vl::expand/vl '(let* ((a (make-array (10) :element-type (unsigned-byte 8)))
+				  (b (make-array (2) :displaced-to a :displaced-index-offset 0 :initial-element 5)))
+			    (setq c (aref b 0))))))
+    (signals syntax-error
+      (vl::typecheck p)))
+
+  ;; displaced arrays can't have element types given
+  (let ((p (vl::expand/vl '(let* ((a (make-array (10) :element-type (unsigned-byte 8)))
+				  (b (make-array (2) :element-type bit :displaced-to a :displaced-index-offset 0))
+				  c)
+			    (setq c (aref b 0))))))
+    (signals syntax-error
+      (vl::typecheck p))))
+
+
+(test test-synthesise-array-displaced
+  "Test we correct for displaced arrays."
+  (let ((p (vl::expand/vl '(let* ((a (make-array (10) :element-type (unsigned-byte 8)))
+				  (b (make-array (2) :displaced-to a :displaced-index-offset 5))
+				  c)
+			    (setf (aref b 0) 10)
+			    (setq c (aref b 0))))))
+    (vl::typecheck p)
+
+    ;; these are a bit fragile...
+    (let ((s (make-array '(0) :element-type 'base-char
+			      :fill-pointer 0 :adjustable t)))
+      (with-output-to-string (str s)
+	(vl::synthesise/vl p str))
+
+      (is (str:containsp "a[ 5 ]" s))
+      (is (not (str:containsp "b" s))))))

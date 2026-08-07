@@ -25,20 +25,13 @@
 ;;; variables. This makes COERCE in particular more important, because
 ;;; we use the signed-ness of a variable to drive the way things are
 ;;; synthesised.
+;;;
+;;; At present only numbers can be coerced. This may change.
 
 
 ;;; ---------- Type casts ----------
 
 (defpassmethod compute-type (the ty val)
-  (unquote ty)
-
-  (compute-type val)
-
-  ;; the type we assume is the type we're asserting
-  ty)
-
-
-(defpassmethod apply-type-constraints (the ty val)
   (unquote ty)
 
   (let ((tyval (compute-type val)))
@@ -48,23 +41,24 @@
 
 	  ((null ty)
 	   ;; casting to nil can't possibly succeed
-	   (error 'type-mismatch :expected "a type"
+	   (error 'type-mismatch :expected "a representable type"
 				 :got nil
 				 :hint "Casting to the empty type can't succeed"))
 
 	  (t
-	   ;; check the cast makes sense
-	   (ensure-subtype tyval ty)
-
 	   ty))))
+
+
+(defpassmethod compute-variable-types (the ty val)
+  (ensure-subtype (compute-type val) ty))
 
 
 (defpassmethod read-variables (the ty val)
   (read-variables val))
 
 
-(defpassmethod simple-expression-form-p (the &rest args)
-  t)
+(defpassmethod simple-expression-p (the ty val)
+  (simple-expression-p val))
 
 
 (defpassmethod synthesise (the ty val)
@@ -86,16 +80,12 @@
 (defpassmethod compute-type (coerce val ty)
   (unquote ty)
 
-  (compute-type val)
-
   ;; the type of the coercion is the type we're coercing to
   ty)
 
 
-(defpassmethod apply-type-constraints (coerce val ty)
+(defpassmethod compute-variable-types (coerce val ty)
   (unquote ty)
-
-  (apply-type-constraints val)
 
   ;; check we can do the coercion
   (let ((vty (compute-type val)))
@@ -110,8 +100,8 @@
   (read-variables val))
 
 
-(defpassmethod simple-expression-form-p (coerce &rest args)
-  t)
+(defpassmethod simple-expression-p (coerce val ty)
+  (simple-expression-p val))
 
 
 ;;; We transform COERCE forms away before synthesis.
@@ -132,7 +122,7 @@ before FLOAT-LET-BLOCKS.")
   (:schema into-arguments)
 
   (:passmethod (form)
-    form))
+	       form))
 
 
 ;;; We can make use of some type constraints here. Either:
@@ -149,8 +139,8 @@ before FLOAT-LET-BLOCKS.")
   (unquote ty)
 
   (let* ((vty (compute-type val))
-	 (tyw (bitwidth (lub ty)))
-	 (vtyw (bitwidth (lub vty))))
+	 (tyw (bitwidth ty))
+	 (vtyw (bitwidth vty)))
 
     (cond
       ;; type are both unsigned

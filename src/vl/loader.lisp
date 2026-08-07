@@ -29,12 +29,6 @@
 
 ;;; Modules are all held in the global environment.
 
-(defvar *last-module-type* nil
-  "Variable holding the type of the last module type-checked.
-
-This is filled-in by COMPUTE-TYPE as the result of the TYPECHECKING pass.")
-
-
 (defun declare-module (modname intf code)
   "Declare a module MODNAME with the given interface INTF and code CODE.
 
@@ -145,8 +139,6 @@ of a larger compilation process."
 (defun typecheck/vl (form)
   "Type-check and infer types in FORM.
 
-Returns the overall type of FORM, which will typically be a module.
-
 This function is not usually called directly, but is called as part
 of a larger compilation process."
   (run-pass-queue 'typing form))
@@ -155,11 +147,14 @@ of a larger compilation process."
 (defun typecheck (form)
   "Return the type of FORM.
 
-This is an internal function maily for testing that runs the default
-parts of the TYPING pass and returns the type."
-  (let ((ty (compute-type form)))
-    (apply-type-constraints form)
-    ty))
+This is an internal function maily for testing that runs the
+TYPING pass and returns the type, not the reslting form."
+  (let (*computed-type*)
+    ;; run the queue
+    (run-pass-queue 'typing form)
+
+    ;; return the type computed by the COMPUTE-TYPE pass
+    *computed-type*))
 
 
 (defun transform/vl (form)
@@ -222,7 +217,8 @@ Return the name of the newly-defined module."
 
   (with-gensyms (module expanded typed transformed)
     (let ((code `(module ,modname ,decls
-			 ,@body)))
+			 ,@body))
+	  *computed-type*)
 
       `(let* ((,module ',code)
 	      (,expanded (expand/vl ,module))
@@ -230,7 +226,7 @@ Return the name of the newly-defined module."
 	      (,transformed (transform/vl ,typed)))
 
 	 ;; declare the module
-	 (declare-module ',modname *last-module-type* ,transformed)
+	 (declare-module ',modname *computed-type* ,transformed)
 
 	 ',modname))))
 

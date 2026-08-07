@@ -50,13 +50,10 @@
     (vl::typecheck p)
 
     (let ((env (cadr p)))
-      (vl::get-frame-properties 'a env)
+      (is (equal (vl::get-frame-property 'a 'type env)
+		 '(unsigned-byte 1))))))
 
-      )
 
-
-    )
-  )
 
 (test test-let-double
   "Test we can typecheck an expression with two variables."
@@ -118,11 +115,12 @@
 
 
 (test test-let-naked
-  "Test that we accept "naked" declarations."
+  "Test that we accept 'naked' declarations."
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 10)
-						       b)
-						  (+ a b))))
-		    `(unsigned-byte 5))))
+							  b)
+						     (declare (type (unsigned-byte 8) b))
+						     (+ a b))))
+		     `(unsigned-byte 9))))
 
 
 (test test-binders-conditional
@@ -165,14 +163,12 @@
   (let ((p (vl::expand/vl '(let (b)
 			    (let ((a 10))
 			      (+ a b))))))
-    (vl::typecheck p)
     (is (equal (vl::read-variables (caddr p)) ; body of the outer LET
 	       '(b))))
 
   (let ((p (vl::expand/vl '(let ((a 10)
 				 b)
 			    (+ a b)))))
-    (vl::typecheck p)
     (is (null (vl::read-variables p)))))
 
 
@@ -224,11 +220,20 @@
     (vl::typecheck p)
     (is (vl::synthesise/vl p)))
 
-  ;; nested if that's got a complicated body
-  (let ((p (vl::expand/vl '(let* (a (b (+ 10 (if (< 1 2) 1 (setf a 27))))) a))))
+  ;; nested if that's got an acceptably complicated body
+  (let ((p (vl::expand/vl '(let* (a (b (+ 10 (if (< 1 2) 1 (+ 1 a)))))
+			    (declare (type (unsigned-byte 8) a))
+			    a))))
+    (vl::typecheck p)
+    (is (vl::synthesise/vl p)))
+
+  ;; nested if that's got an unacceptably complicated body
+  (let ((p (vl::expand/vl '(let* (a (b (+ 10 (if (< a 2) 1 (progn (setf a 27) 16)))))
+			    (declare (type (unsigned-byte 8) a))
+			    a))))
     (vl::typecheck p)
     (signals not-synthesisable
-      (is (vl::synthesise/vl p)))))
+      (vl::synthesise/vl p))))
 
 
 (test test-let-width
@@ -244,11 +249,13 @@
   (let ((p (vl::expand/vl '(let ((a 1)
 				(b 2)
 				c)
-			   (setf c (+ a b))
+			    (declare (type (unsigned-byte 8) a b c))
+			    (setf c (+ a b))
 			   (let ((d 4)
 				 e
 				 (f 6)
 				 g)
+			     (declare (type (unsigned-byte 8) d e f g))
 			     (setf e 5))))))
 
     (vl::typecheck p)
@@ -332,7 +339,8 @@
   (vl::with-new-frame
     (let ((p (expand/vl '(let ((a 1)
 			       (b (+ c 1))
-			       (c 3))))))
+			       (c 3))
+			  c))))
       (signals unknown-variable
 	(vl::typecheck p)))))
 
@@ -342,7 +350,8 @@
   (vl::with-new-frame
     (let ((p (expand/vl '(let ((a 1)
 			       (b (+ a 1))
-			       (c 3))))))
+			       (c 3))
+			  c))))
       (signals unknown-variable
 	(vl::typecheck p)))))
 
@@ -352,7 +361,8 @@
   (vl::with-new-frame
     (let ((p (expand/vl '(let* ((a 1)
 				(b (+ a 12))
-				(c 3))))))
+				(c 3))
+			  c))))
       (is (vl::typecheck p)))))
 
 
@@ -361,9 +371,22 @@
   (vl::with-new-frame
     (let ((p (expand/vl '(let* ((a 1)
 				(b (+ c 12))
-				(c 3))))))
+				(c 3))
+			  c))))
       (signals unknown-variable
 	(is (vl::typecheck p))))))
+
+
+(test test-let-empty-body
+  "Test we can handlke empty LETs."
+  (let ((p (vl::expand/vl '(let ((a 10)
+				 (b 20))))))
+    (is (null (vl::typecheck p))))
+
+  (let* ((p (vl::expand/vl '(let* ((a 10)
+				  (b 20))))))
+    (is (null (vl::typecheck p)))))
+
 
 
 (test test-let-extract-types
@@ -393,7 +416,7 @@
   (let ((p (vl::expand/vl '(let (a b c)
 			    (setq a 1)
 			    (setq b (+ a 1))
-			    (setq c (+ a c))))))
+			    (setq c (+ a b))))))
     (vl::typecheck p)
 
     ;; no free variables
@@ -405,9 +428,19 @@
 	(is (vl::variable-property 'a 'written))
 	(is (vl::variable-property 'a 'read))
 	(is (vl::variable-property 'b 'written))
-	(is (not (vl::variable-property 'b 'read)))
+	(is (vl::variable-property 'b 'read))
 	(is (vl::variable-property 'c 'written))
-	(is (vl::variable-property 'c 'read))))))
+	(is (not (vl::variable-property 'c 'read)))))))
+
+
+(test test-let-accesses-circular
+  "Test we catch circular type dependencies in updates."
+  (let ((p (vl::expand/vl '(let (a b)
+			    (setq a 1)
+			    (setq b (+ b 1))))))
+
+    (signals circular-type-dependencies
+      (vl::typecheck p))))
 
 
 ;;; ---------- Variable declarations ----------

@@ -65,6 +65,7 @@
 
     (let ((a-b-c 12)
 	  (d 19))
+      (declare (type (unsigned-byte 8) a-b-c))
       (setq a-b-c (+ 3 a-b-c d q-r)))
     (setq clk-out clk-in))
 
@@ -96,6 +97,7 @@
 
     (let ((a-b-c 12)
 	  (d 19))
+      (declare (type (unsigned-byte 8) a-b-c))
       (setq a-b-c (+ 3 a-b-c d q-r)))
     (setq clk-out clk-in))
 

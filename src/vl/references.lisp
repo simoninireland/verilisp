@@ -31,14 +31,13 @@
 	  ;; recurse into the expanded form
 	  (expand-macros p)))
 
-      ;; symbol is a variable, leave unchanged
+      ;; reference is a variable, leave unchanged
       form))
 
 
 (defpassmethod compute-type ((form symbol))
   (if-let ((f (get-frame-declaring form (current-frame))))
-    (or (get-frame-property form 'type f :default nil)
-	`(type-of ,form ,f))
+    `(type-of ,form ,f)
 
     ;; not declared
     (error 'unknown-variable :variable form)))

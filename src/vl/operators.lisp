@@ -43,24 +43,19 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
     `(and (or ,@tys) (unsigned-byte ,n))))
 
 
-(defmethod apply-type-constraints-addition (args)
-  (let ((tys (mapcar #'compute-type args)))
-    (dolist (ty tys)
-      (ensure-fixed-width ty))))
-
-
 ;;; +
 
 (defpassmethod compute-type (+ &rest args)
-  (compute-type-addition args))
+  (let ((tys (mapcar #'compute-type args))
+	(n (1- (length args))))
+
+    ;; type is the LUB of the arguments plus the
+    ;; extra bits required for carries between the additions
+    `(and (or ,@tys) (unsigned-byte ,n))))
 
 
-(defpassmethod apply-type-constraints (+ &rest args)
-  (apply-type-constraints-addition args))
-
-
-(defpassmethod simple-expression-form-p (+ &rest args)
-  (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-p (+ &rest args)
+  (every #'simple-expression-p args))
 
 
 (defpassmethod synthesise (+ &rest args)
@@ -81,11 +76,7 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 	`(signed-byte (bitwidth ',ty)))))
 
 
-(defpassmethod apply-type-constraints (- &rest args)
-  (:same-as +))
-
-
-(defpassmethod simple-expression-form-p (- &rest args)
+(defpassmethod simple-expression-p (- &rest args)
   (:same-as +))
 
 
@@ -105,12 +96,7 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 
 (defpassmethod compute-type (* &rest args)
   (:same-as +))
-
-(defpassmethod apply-type-constraints (* &rest args)
-  (:same-as +))
-
-
-(defpassmethod simple-expression-form-p (* &rest args)
+(defpassmethod simple-expression-p (* &rest args)
   (:same-as +))
 
 
@@ -144,8 +130,8 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
     `(and ,tyval (unsigned-byte (bitwidth ',tyoffset)))))
 
 
-(defpassmethod simple-expression-form-p (<< &rest args)
-  (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-p (<< &rest args)
+  (every #'simple-expression-p args))
 
 
 (defpassmethod synthesise (<< &rest args)
@@ -173,7 +159,7 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
     tyval))
 
 
-(defpassmethod simple-expression-form-p (>> &rest args)
+(defpassmethod simple-expression-p (>> &rest args)
   (:same-as <<))
 
 
@@ -199,16 +185,14 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 ;; LOGAND is the prototype
 
 (defpassmethod compute-type (logand l r)
-  '(unsigned-byte 1))
-
-
-(defpassmethod apply-type-constraints (logand l r)
   (ensure-fixed-width (compute-type l))
-  (ensure-fixed-width (compute-type r)))
+  (ensure-fixed-width (compute-type r))
+
+  'bit)
 
 
-(defpassmethod simple-expression-form-p (logand &rest args)
-  (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-p (logand &rest args)
+  (every #'simple-expression-p args))
 
 
 (defpassmethod synthesise (logand l r)
@@ -222,14 +206,8 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 ; LOGIOR
 
 (defpassmethod compute-type (logior l r)
-  '(unsigned-byte 1))
-
-
-(defpassmethod apply-type-constraints (logior l r)
   (:same-as logand))
-
-
-(defpassmethod simple-expression-form-p (logior &rest args)
+(defpassmethod simple-expression-p (logior &rest args)
   (:same-as logand))
 
 
@@ -244,14 +222,8 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 ;; LOGXOR
 
 (defpassmethod compute-type (logxor l r)
-  '(unsigned-byte 1))
-
-
-(defpassmethod apply-type-constraints (logxor l r)
   (:same-as logand))
-
-
-(defpassmethod simple-expression-form-p (logxor &rest args)
+(defpassmethod simple-expression-p (logxor &rest args)
   (:same-as logand))
 
 
@@ -263,16 +235,16 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
   (as-literal ")"))
 
 
+;;; ---------- LOGNOT ----------
+
 (defpassmethod compute-type (lognot v)
-  '(unsigned-byte 1))
+  (ensure-fixed-width (compute-type v))
+
+  'bit)
 
 
-(defpassmethod apply-type-constraints (lognot v)
-  (ensure-fixed-width (compute-type v)))
-
-
-(defpassmethod simple-expression-form-p (lognot v)
-  (simple-expression-form-p v))
+(defpassmethod simple-expression-p (lognot v)
+  (simple-expression-p v))
 
 
 (defpassmethod synthesise (lognot v)
@@ -287,16 +259,14 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 ;;; AND
 
 (defpassmethod compute-type (and &rest args)
-  '(unsigned-byte 1))
-
-
-(defpassmethod apply-type-constraints (and &rest args)
   (dolist (a args)
-    (ensure-boolean (compute-type a))))
+    (ensure-boolean (compute-type a)))
+
+  'bit)
 
 
-(defpassmethod simple-expression-form-p (and &rest args)
-  (every #'simple-expression-form-p args))
+(defpassmethod simple-expression-p (and &rest args)
+  (every #'simple-expression-p args))
 
 
 (defpassmethod synthesise (and &rest args)
@@ -306,14 +276,8 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 ;;; OR
 
 (defpassmethod compute-type (or &rest args)
-  '(unsigned-byte 1))
-
-
-(defpassmethod apply-type-constraints (or &rest args)
-  (:same-as and))
-
-
-(defpassmethod simple-expression-form-p (or &rest args)
+ (:same-as and))
+(defpassmethod simple-expression-p (or &rest args)
   (:same-as and))
 
 
@@ -324,15 +288,13 @@ A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
 ;;; NOT
 
 (defpassmethod compute-type (not v)
-  '(unsigned-byte 1))
+  (ensure-boolean (compute-type v))
+
+  'bit)
 
 
-(defpassmethod apply-type-constraints (not v)
-  (ensure-boolean (compute-type v)))
-
-
-(defpassmethod simple-expression-form-p (not v)
-  (simple-expression-form-p v))
+(defpassmethod simple-expression-p (not v)
+  (simple-expression-p v))
 
 
 (defpassmethod synthesise (not v)
