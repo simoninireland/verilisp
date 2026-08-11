@@ -71,6 +71,10 @@
    #:over-arguments
    #:into-arguments-union
 
+   ;; common post-processors
+   #:return-original-form
+   #:return-pass-result
+
    ;; pass definition macros
    #:defpass
    #:defpassmethod

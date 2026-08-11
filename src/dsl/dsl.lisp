@@ -106,11 +106,12 @@ of the pass. The options are:
 - (:PRE fun): run FUN before running the pass
 - (:POST fun): run FUN after running the pass, returning its value
 
-For :PRE and :POST, FUN should be a function designator. The function
-for :PRE is passed FORM, and its result is used as the initial form
-for the pass. The function for :POST is passed the modified FORM as
-retruned by :PRE (if present) and the result of the pass, and the pass
-overall returns its value.
+For :PRE and :POST, FUN should be a function designator. This may be a
+symbol naming a function, the function attached to a symbol, or an
+explicit LAMBDA form. The function for :PRE is passed FORM, and its
+result is used as the initial form for the pass. The function for
+:POST is passed the modified FORM as retruned by :PRE (if present) and
+the result of the pass, and the pass overall returns its value.
 
 By default the pass is not added to a queue. The default recuursion
 schema is FAIL-UNKNOWN-FORM. Some schemata accept an extra argument,
@@ -379,3 +380,21 @@ body of the method."
 				   (list `(,schema ,fun ,args :pass-name ',pass-name
 							      :extra ,extra-args))
 				   body)))))))))))
+
+
+;;; ---------- Standard post-processing functions ----------
+
+;;; Some common functions for the :POST part of a pass method.
+
+(defun return-original-form (form result)
+  "Return the original FORM passed to a pass, ignoring the RESULT of the pass."
+  (declare (ignore result))
+
+  form)
+
+
+(defun return-pass-result (form result)
+  "Return the RESULT of the pass, ignoring FORM."
+  (declare (ignore form))
+
+  result)

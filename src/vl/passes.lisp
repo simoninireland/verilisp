@@ -217,23 +217,20 @@ MARK-VARIABLE-AS-READ and MARK-VARIABLE-AS-WRITTEN.")
   (:queue typing)
 
   ;; return the original form (environments updated in place)
-  (:post (lambda (form res)
-	   (declare (ignore res))
-
-	   form))
+  (:post #'return-original-form)
 
   (:passmethod (form))
 
   (:passmethod ((form list))
-    (destructuring-bind (fun &rest args)
-	form
+	       (destructuring-bind (fun &rest args)
+		   form
 
-      (with-current-form form
-	(with-recover-on-error
-	    ;; leave dependencies unchanged on error
-	    t
+		 (with-current-form form
+		   (with-recover-on-error
+		       ;; leave dependencies unchanged on error
+		       t
 
-	  (compute-dependencies/form fun args))))))
+		     (compute-dependencies/form fun args))))))
 
 
 (defun add-dependencies (n deps)
@@ -275,7 +272,7 @@ A dependency is a variable that's read in assigning values to N."
 (defun variable-written-p (n)
   "Test whether N is updated over its extent.
 
-This does not include the assignment of any initial value, only
+This does not include the setting of any initial value, only
 subsequent updates."
   (variable-property n 'written))
 
@@ -317,10 +314,7 @@ consistency with the representation implied by the code.")
   (:queue typing)
 
   ;; return the original form (environments updated in place)
-  (:post (lambda (form res)
-	   (declare (ignore res))
-
-	   form))
+  (:post #'return-original-form)
 
   (:passmethod (form)
     form))
@@ -399,10 +393,7 @@ well if they want to check some property of the variables.")
   (:queue typing)
 
   ;; return the original form
-  (:post (lambda (form res)
-	   (declare (ignore res))
-
-	   form)))
+  (:post #'return-original-form))
 
 
 (defpass check-all-variables-typed (form)
@@ -416,10 +407,7 @@ attributes attached to all variables in all frames.")
   (:queue typing)
 
   ;; return the original form
-  (:post (lambda (form res)
-	   (declare (ignore res))
-
-	   form))
+  (:post #'return-original-form)
 
   ;; no action on literals or references
   (:passmethod ((form integer))
