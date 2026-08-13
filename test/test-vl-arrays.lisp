@@ -34,10 +34,29 @@
 						     :element-type (unsigned-byte 8))))
 		     '(array (unsigned-byte 8) (16))))
 
-  ;; at the moment we only allow one dimension
-  (signals (vl::not-synthesisable)
-    (vl::typecheck (vl::expand/vl '(make-array '(16 16)
-				    :element-type (unsigned-byte 8))))))
+  ;; different dimensions
+  (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(make-array '(16 16)
+						     :element-type (unsigned-byte 8))))
+		     '(array (unsigned-byte 8) (16 16)))))
+
+
+(test test-array-shapes
+  "Test we can determine array shapes."
+  ;; 1D
+  (is (vl::data-has-shape-p '(1 2 3) '(3)))
+  (is (not (vl::data-has-shape-p '(1 2 3 4 5) '(3))))
+  (is (not (vl::data-has-shape-p '(1 2 3) '(5))))
+
+  ;; 2D
+  (is (vl::data-has-shape-p '((1 2 3) (4 5 6) (7 8 9)) '(3 3)))
+  (is (not (vl::data-has-shape-p '((1 2 3) (4 5 6)) '(3 3))))
+  (is (not (vl::data-has-shape-p '((1 2 3) (4 5 6)) '(2 4))))
+  (is (not (vl::data-has-shape-p '((1 2 3) (4 5 6)) '(2 2))))
+  (is (not (vl::data-has-shape-p '((1 2) (4 5 6)) '(2 2))))
+
+  ;; 3D
+  (is (vl::data-has-shape-p '(((1 2) (3 4)) ((5 6) (7 8))) '(2 2 2)))
+  (is (not (vl::data-has-shape-p '(((1 2) (3 4)) ((5 6) 7)) '(2 2 2)))))
 
 
 (test test-array-bind

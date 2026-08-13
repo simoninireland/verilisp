@@ -26,10 +26,6 @@
 
 ;;; ---------- Array type ----------
 
-;;; For now we don't operate on the indices at type level -- although we
-;;; could, since they're known statically. At the very least we should
-;;; check the order of the arrays.
-
 (defsubtype ((array lty &optional indices) array)
   t)
 
@@ -42,31 +38,51 @@
   `(array ,(lub lty rty)))
 
 
-;;; ---------- Array initialisation data ----------
+;;; ---------- Dope vector ----------
 
-;;; TODO: Should allow multi-dimensionsal shapes
+;;; A dope vector is the representation of the metadata of an array. Unlike
+;;; in most situations, in Verilisp they only exist at compile time.
+
+(defclass ArrayDopeVector ()
+  ((dimensions
+    :initarg :dimensions
+    :reader dimensions
+    :documentation "The dimensions of the array.")
+   (element-type
+    :initarg :element-type
+    :reader element-type
+    :documentation "The element type of the array."))
+  (:documentation "A dope vector of metadata for an array."))
+
+
+;;; ---------- Array initialisation data ----------
 
 (defun valid-array-shape-p (shape)
   "Test that SHAPE is a valid array shape.
 
-At the moment this means a one-dimensional list of integers
-whose values are statically determinable."
-  (handler-bind ((error nil))
-    (and (listp shape)
-	 (= (length shape) 1)
-	 (every #'eval-in-static-environment shape))))
+The dimensions must be statically determined."
+  (and (listp shape)
+       (every #'static-p shape)))
 
 
 (defun ensure-valid-array-shape (shape)
   "Ensure SHAPE is a valid array shape."
   (unless (valid-array-shape-p shape)
-    (error 'not-synthesisable :hint "Arrays must be 1d with dimensions known statically")))
+    (error 'not-synthesisable :hint "Arrays dimensions must be known statically")))
 
 
 (defun data-has-shape-p (data shape)
-  "Test whether DATA has the given SHAPE."
-  (and (= (length shape) 1)
-       (= (length data) (car shape))))
+  "Test whether DATA has the given SHAPE.
+
+DATA should consist of nested lists, one nesting per dimension, with each
+having the correct length as given in SHAPE."
+  (let ((d (car shape)))
+    (and (= (length data) d)
+	 (if-let ((ds (cdr shape)))
+	     (and (every #'listp data)
+		  (every (rcurry #'data-has-shape-p ds) data))
+
+	     t))))
 
 
 (defun ensure-data-has-shape (data shape)
@@ -105,7 +121,6 @@ Verilisp, but don't *require* it."
 					  element-type
 					  displaced-to
 					  displaced-index-offset
-					  conformal
 					  displaced-offset)
   (unquote shape)
 
@@ -116,10 +131,8 @@ Verilisp, but don't *require* it."
 (defpassmethod compute-type (make-array shape &key initial-element
 					initial-contents
 					element-type
-					fill-pointer
 					displaced-to
 					displaced-index-offset
-					conformal
 					displaced-offset)
   (declare (optimize debug))
 
@@ -168,6 +181,7 @@ Verilisp, but don't *require* it."
     ;; TODO: Handle conformant displaced arrays too
 
     ;; mustn't have initial values or element types
+    ;; TODO: This isn't actually true....
     (when (or initial-element initial-contents)
       (error 'syntax-error :hint "Displaced arrays can't be initialised"))
     (when element-type
@@ -336,7 +350,6 @@ may involve recursively checking for displacements.
 
 Return a list containing the final array and indices."
   (declare (optimize debug))
-
   ;; can only currently assign directly to variables (no indirect references)
   (ensure-symbol place)
 
@@ -346,7 +359,6 @@ Return a list containing the final array and indices."
 				 element-type
 				 displaced-to
 				 (displaced-index-offset 0)
-				 conformal
 				 displaced-offset)
 	(cdr iv)
 

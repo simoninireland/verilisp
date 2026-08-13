@@ -188,3 +188,43 @@
 
 ;; Tests of the actual generalised place forms appear in their
 ;; respective test files.
+
+
+;;; ---------- Variables ----------
+
+;;; The READ-VARIABLES-SETF and WRITTEN-VARIABLES-SETF passes
+;;; refer to forms in the first (generalised place) argument position
+;;; of a SETF.
+
+(test test-setf-read-variables
+  "Test we can extract the read variables correctly."
+  (is (null (vl::read-variables-setf 'a)))
+
+  (is (null (vl::read-variables-setf '(aref a 5))))
+  (is (set-equal (vl::read-variables-setf '(aref a 1 2 b)) '(b)))
+
+  (is (null (vl::read-variables-setf '(bref b 1 :end 4))))
+  (is (set-equal (vl::read-variables-setf '(bref b c :end 4)) '(c)))
+
+  (is (set-equal (vl::read-variables-setf '(aref a (bref b 1 :end 4))) '(b)))
+  (is (set-equal (vl::read-variables-setf '(bref b (aref a 8) :end 4)) '(a))))
+
+
+(test test-setf-written-variables
+  "Test we can identify the written variables."
+  (with-new-frame
+    (vl::declare-variable 'v '((type (unsigned-byte 8))))
+    (vl::declare-variable 'c '((type (unsigned-byte 8))))
+    (vl::declare-variable 'a '((type (array (unsigned-byte 8)))
+			       (initial-value (make-array (10) :element-type (unsigned-byte 8)))))
+
+    (is (set-equal (written-variables-setf 'v) '(v)))
+
+    (is (set-equal (written-variables-setf '(aref a 5)) '(a)))
+    (is (set-equal (written-variables-setf '(aref a v)) '(a)))
+
+    (is (set-equal (written-variables-setf '(bref v 1 :end 4)) '(v)))
+    (is (set-equal (written-variables-setf '(bref v c :end 4)) '(v)))
+
+    (is (set-equal (written-variables-setf '(aref a (bref v 6 :end 4))) '(a)))
+    (is (set-equal (written-variables-setf '(bref v (aref a 1) :end 4)) '(v)))))

@@ -28,7 +28,6 @@
 ;;; separate functions for these two cases, which we can of course replicate:
 ;;; but we can also coerce one to the other, which Common Lisp doesn't allow.
 
-
 (defun compute-end-bit (start end width)
   "Compute the end bit given START, END, and WIDTH."
   (if (null end)

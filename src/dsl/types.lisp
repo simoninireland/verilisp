@@ -21,11 +21,13 @@
 
 ;;; A type algebra lets us talk about the relationships between types.
 ;;; Common Lisp uses SUBTYPEP for this, indicating whether one type is
-;;; a sub-type of another. For DSLs we often need something different
-;;; or more flexible than the built-in operation: we might want to
-;;; exclude some Lisp types from consideration, for example. For this
-;;; reason the DSL builder lets us define type algebras specific to a
-;;; given language.
+;;; a sub-type of another.
+;;;
+;;; For DSLs we often need something different or more flexible than
+;;; the built-in operation: we might want to exclude some Lisp types
+;;; from consideration, for example. For this reason the DSL builder
+;;; lets us define type algebras specific to a given language and
+;;; provides SUBTYPE-P and LUB operations over the algebra.
 ;;;
 ;;; The algebra always has the "lattice" types of T and NIL defined,
 ;;; but no others by default.
@@ -106,16 +108,15 @@ Use the DEFSUBTYPE macro to define methods for this function.")
 The most common form will be a pair of types, but multiple are
 acceptable -- as is one, in which case the type will be reduced
 to a normal form (if one exists according to the type rules)."
-
   (flet ((lub/pair (l r)
 	   ;; lattice types
 	   (cond
-	     ;; top is always the result
-	     ((eql l t)
+	     ;; top on either side is always the result
+	     ((or (eql l t)
+		  (eql r t))
 	      t)
-	     ((eql r t)
-	      t)
-	     ;; nil reurns the other type
+
+	     ;; bottom always returns the other type
 	     ((null l)
 	      r)
 	     ((null r)
@@ -129,19 +130,27 @@ to a normal form (if one exists according to the type rules)."
 
 		  (lub/form lfun largs rfun rargs)))))))
 
-    (let ((l (length tys)))
-      (cond ((= l 0)
-	     nil)
+    (case (length tys)
+      (0
+       ;; lub of no types is bottom
+       nil)
 
-	    ((= l 1)
-	     ;; for a single type we LUB it with nil /without/
-	     ;; triggering the shortcut above, so we reduce
-	     ;; any complex types
-	     (destructuring-bind (lfun largs)
-		 (deconstruct-type (car tys))
-	       (lub/form lfun largs nil nil)))
+      (1
+       ;; for a single type we LUB it with bottom /without/
+       ;; triggering the shortcut above, so we reduce
+       ;; any complex types
+       (destructuring-bind (lfun largs)
+	   (deconstruct-type (car tys))
+	 (lub/form lfun largs nil nil)))
 
-	    (t (foldr #'lub/pair (cdr tys) (car tys)))))))
+      (2
+       ;; short-cut for a pair of types to save constructing the fold
+       (lub/pair (car tys) (cadr tys)))
+
+
+      (t
+       ;; by default we fold over the list of types
+       (foldr #'lub/pair (cdr tys) (car tys))))))
 
 
 (defgeneric lub/form (lfun largs rfun rargs)

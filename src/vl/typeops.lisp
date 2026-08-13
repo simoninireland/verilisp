@@ -32,11 +32,11 @@
 ;;; Union types
 
 (defsubtype ((or &rest tys) (&type ty))
-  ;; A or B < C if A < C and B < C
+  ;; A or B < C iff A < C and B < C
   (every (rcurry #'subtype-p ty) tys))
 
 (defsubtype ((&type ty) (or &rest tys))
-  ;; C < A or B  if C < A or C < B
+  ;; C < A or B iff C < A or C < B
   (some (curry #'subtype-p ty) tys))
 
 (deflub ((or &rest tys) (&type ty))
@@ -45,8 +45,11 @@
   (lub `(or ,@tys) ty))
 
 
-;;; There are no general intersection types (yet), but
-;;; there are some defined for fixed-width types.
+;;; Intersection types
+
+(defsubtype ((&type ty) (and &rest tys))
+  ;; C < A and B iff C < A and C < B
+  (every (curry #'subtype-p ty) tys))
 
 (deflub ((&type ty) (and &rest tys))
   (lub `(and ,@tys) ty))
@@ -56,7 +59,7 @@
 
 ;;; Types containing references to the types of other variables
 ;;; mean that we may need to solve type constraints in the course
-;;; of funding LUBs. Since there's a danger of circularity, we
+;;; of finding LUBs. Since there's a danger of circularity, we
 ;;; define a queue of variables having their types solved and
 ;;; escape if we encounter a cycle. (This is possibly too strong,
 ;;; but I don't think there are fixpoints to be found in the

@@ -54,6 +54,14 @@ Return the set of variables as a list.")
   (:schema into-arguments-union))
 
 
+(defpass written-variables (form)
+  (:documentation "Return all variables in FORM that are written to.
+
+This function is used for constructing dependencies of variables.
+Return the set of variables as a list.")
+  (:schema into-arguments-union))
+
+
 ;;; ---------- Macro expansion ----------
 
 (defun expand-descend (fun args)
@@ -380,16 +388,15 @@ Returns a type expression.")
 	   form)))
 
 
-(defpass compute-variable-types (form)
-  (:documentation "Compute the actual types of variables.
+(defpass compute-type-constraints (form)
+  (:documentation "Add constraints to the variables in FORM.
 
-This pass uses the constraints applied by the COMPUTE-TYPE pass
-to determine the actual, representable types of variables.
+Methods on this function should ass type constraints to the variables
+within FORM, typically by calling ADD-TYPE-CONSTRAINT and similar
+functions. These constraints will be unified by a later pass.
 
-Methods on this function perform type constraint resuolution. Only
-binding forms need to provide methods; other forms can have them as
-well if they want to check some property of the variables.")
-  (:schema over-arguments)
+The default recursion schema recurses into argument sub-forms.")
+  (:schema into-arguments)
   (:queue typing)
 
   ;; return the original form
@@ -400,8 +407,8 @@ well if they want to check some property of the variables.")
   (:documentation "Check that all variables in FORM have types.
 
 This shouldn't be needed: the type rules should ensure that all
-varibles either have types declared ir types inferred (or both).
-Butlastjust to be sure, this pass checks that there are type
+variables either have types declared ir types inferred (or both).
+But just to be sure, this pass checks that there are type
 attributes attached to all variables in all frames.")
   (:schema over-arguments)
   (:queue typing)

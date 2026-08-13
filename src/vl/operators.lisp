@@ -26,9 +26,9 @@
 (defun ensure-number-of-arguments (fun args n)
   "Ensure that ARGS has exactly N arguments.
 
-A NOT-SYNTHESISABLE error is raised if the arguments are wrong."
+A SYNTAX-ERROR error is signalled if the arguments are wrong."
    (if (/= (length args) n)
-      (error 'not-synthesisable :hint (format nil "Operator needs exactly ~a arguments" n))))
+      (error 'syntax-error :hint (format nil "Operator needs exactly ~a arguments" n))))
 
 
 ;;; ---------- Addition-like operators ----------

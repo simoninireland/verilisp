@@ -154,6 +154,11 @@ generalised places."
 	 (read-variables-setf place)))
 
 
+(defpassmethod written-variables (setf place val)
+  (union (written-variables val)
+	 (written-variables-setf place)))
+
+
 (defpassmethod compute-dependencies (setf place val)
   (declare (optimize debug))
 
@@ -165,23 +170,18 @@ generalised places."
       (mark-variable-as-written n))))
 
 
-(defpassmethod compute-type (setf place val)
-  (declare (optimize debug))
-
-  ;; ensure we can do the assignment
+(defpassmethod compute-type-constraints (setf place val)
   (ensure-generalised-place place)
-  ;;(ensure-writeable place)
-
-  (let ((tyval (compute-type val)))
-    (let ((ws (written-variables-setf place)))
-      (mapc (rcurry #'add-type-constraint tyval) ws))
-
-    tyval))
-
-
-(defpassmethod compute-variable-types (setf place val)
   (compute-variable-types place)
   (compute-variable-types val))
+
+
+(defpassmethod compute-type (setf place val)
+  (let ((typlace (compute-type place))
+	(tyval (compute-type val)))
+    (ensure-subtype typlace tyval)
+
+    tyval))
 
 
 (defpassmethod synthesise (setf var val)

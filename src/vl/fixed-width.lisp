@@ -19,11 +19,18 @@
 
 (in-package :verilisp/core)
 
-;;; We re-use the Common Lisp fixed-width types like UNSIGNED-BYTE, but
-;;; we need more flexible checking and manipulation.
+;;; We re-use the Common Lisp fixed-width types like UNSIGNED-BYTE,
+;;; but we need more flexible checking and manipulation. Specifically,
+;;; we need to assign a type (UNSIGNED-BYTE x) to constants needing x
+;;; bits for their representation. (Normal SUBTYPEP will typically
+;;; assign a type of (INTEGER 0 *) to a value 2, rather than
+;;; (UNSIGNED-BYTE 2).)
 
 
 ;;; ---------- Type algebra ----------
+
+;;; Subtypes take account of the width constraints of types when specified.
+;;; These can be expressions that are computed statically.
 
 (defsubtype ((unsigned-byte a) (unsigned-byte b))
   (cond ((or (null b)

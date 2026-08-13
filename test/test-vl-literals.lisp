@@ -29,6 +29,6 @@
 		    '(unsigned-byte 2)))
 
   (is (not (vl::subtype-p (vl::typecheck -2)
-			 '(signed-byte 2))))
+			 '(signed-byte 2)))) ;; no room for the sign bit
   (is (vl::subtype-p (vl::typecheck -2)
 		    '(signed-byte 3))))
