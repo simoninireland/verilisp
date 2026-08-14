@@ -119,7 +119,7 @@ the increments to the variables being executed every time."
 BODY is not run if CONDITION is already true."
   (with-gensyms (loop-head loop-end)
     `(tagbody
-	,loop-head
+      ,loop-head
 	;; exit if condition isn't met
 	(if (not ,condition)
 	    (go ,loop-end))
@@ -128,7 +128,7 @@ BODY is not run if CONDITION is already true."
 	,@body
 	(go ,loop-head)
 
-	,loop-end)))
+      ,loop-end)))
 
 
 (defcoremacro/vl until (condition &body body)
