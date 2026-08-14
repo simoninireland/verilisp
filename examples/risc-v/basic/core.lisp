@@ -87,6 +87,11 @@
 				  (bref instr 20)
 				  (bref instr 30 :end 21)
 				  (extend-bits 0 1))))
+	(declare (type bit ALUreg-p ALUimm-p branch-p
+			   JALR-p JAL-p
+			   AIUPC-p LUT-p
+			   load-p store-p
+			   system-p))
 
 	;; register file and working registers
 	(let ((register-file (make-array '(32) :element-type (unsigned-byte 32)
