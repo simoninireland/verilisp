@@ -74,15 +74,6 @@ the increments to the variables being executed every time."
     (destructuring-bind (var-decls steppers)
 	(generate-do-vars vars)
 
-      ;; warn about extra resources
-      (when (> (length var-decls) 0)
-	(warn 'resources-created
-	      :description (format nil "DO form created ~a new variable~a"
-				   (length var-decls)
-				   (if (> (length var-decls) 1)
-				       "s"
-				       ""))))
-
       (with-gensyms (loop-head loop-body loop-end)
 	(let ((loop-body `(tagbody
 			     ;; initialise any variables declared
@@ -117,10 +108,12 @@ the increments to the variables being executed every time."
 	  (if var-decls
 	      ;; form introduces variables, declare them and declare
 	      ;; them ignorable in the body
-	      `(let ,var-decls
-		 (declare (ignorable ,@(mapcar #'car var-decls)))
+	      (let ((var-names (mapcar #'car var-decls)))
+		`(let ,var-decls
+		   (declare (ignorable ,@var-names)
+			    (as register ,@var-names))
 
-		 ,loop-body)
+		   ,loop-body))
 
 	      ;; no new variables
 	      loop-body))))))
@@ -167,6 +160,8 @@ BODY is not run if CONDITION is already true."
 (defcoremacro/vl dotimes ((var count) &body body)
   (with-gensyms (counter)
     `(let ((,counter ,count))
+       (declare (as register ,counter))
+
        (do ((,var 0 (1+ ,var)))
 	   ((>= ,var ,counter))
 
