@@ -28,7 +28,8 @@
 	     (width bits out))
 
     (@ (posedge clk)
-       (setf counter (+ counter 1))
-       (setf out (>> counter delay)))
+       (forever
+	(setf counter (+ counter 1))
+	(setf out (>> counter delay))))
 
     (setf leds out)))

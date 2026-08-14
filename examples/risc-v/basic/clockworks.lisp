@@ -27,7 +27,8 @@
     (declare (type (unsigned-byte (1+ slow)) slow-clk))
 
     (@ (posedge clk-in)
-       (incf slow-clk))
+       (forever
+	(incf slow-clk)))
     (setf clk (bref slow-clk slow)))
 
   ;; reset (always active-high)
