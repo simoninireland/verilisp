@@ -157,3 +157,5 @@
 			#2r10010110
 			(setf c (+ a b))
 			(setf c 0))))))
+
+(vl::bitwidth '(unsigned-byte (+ 1 24)))

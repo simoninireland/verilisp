@@ -170,12 +170,6 @@ generalised places."
       (mark-variable-as-written n))))
 
 
-(defpassmethod compute-type-constraints (setf place val)
-  (ensure-generalised-place place)
-  (compute-variable-types place)
-  (compute-variable-types val))
-
-
 (defpassmethod compute-type (setf place val)
   (let ((typlace (compute-type place))
 	(tyval (compute-type val)))

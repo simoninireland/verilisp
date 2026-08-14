@@ -29,11 +29,11 @@
 (test test-declare-variables
   "Test we can declare variables in a frame."
   (let ((env (vl::empty-environment)))
-    (is (vl::variable-declared-in-environment-p 'a (vl::declare-environment-variable 'a '((:a 1) (:b 2)) env)))
-    (is (vl::variable-declared-in-environment-p 'b (vl::declare-environment-variable 'b '((:a 6) (:b 4)) env)))
+    (is (vl::variable-declared-p 'a (vl::declare-environment-variable 'a '((:a 1) (:b 2)) env)))
+    (is (vl::variable-declared-p 'b (vl::declare-environment-variable 'b '((:a 6) (:b 4)) env)))
 
     ;; can't declare duplicates in the same frame
-    (signals (vl::duplicate-variable)
+    (signals vl::duplicate-variable
       (vl::declare-environment-variable 'b '((:a 6) (:b 4)) env))
 
     ;; names

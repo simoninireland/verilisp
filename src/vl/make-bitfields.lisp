@@ -28,11 +28,6 @@
     `(and ,@tys)))
 
 
-(defpassmethod compute-variable-types (make-bitfields &rest pats)
-  (mapc #'ensure-fixed-width pats)
-  (mapc #'compute-variable-types pats))
-
-
 (defun synthesise-fixed-width-constant (c width &optional (base 2))
   "Synthesise C as a constant with the given WIDTH.
 

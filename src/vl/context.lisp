@@ -57,6 +57,11 @@ This forgets everything apart from core Verilisp."
   *current-frame*)
 
 
+(defun current-environment ()
+  "Return the current environment."
+  (current-frame))
+
+
 (defmacro in-frame (f &body body)
   "Run BODY in an environment consisting solely of F."
   `(let ((*current-frame* ,f))
@@ -139,12 +144,12 @@ shoowest frame is re-attached at the end of BODY."
 
 (defun variables-declared ()
   "Return the variables declared in the current global environment."
-  (get-environment-names (current-frame)))
+  (get-environment-names-of-kind 'variable (current-frame)))
 
 
 (defun variables-declared-in-frame (f)
   "Return the variables declared in frame F."
-  (get-frame-names f))
+  (get-frame-names-of-kind 'variable f))
 
 
 (defun variables-declared-in-current-frame ()
@@ -230,6 +235,52 @@ This is used for setting defaults."
 (defun get-direction (n)
   "Return the direction of N."
   (variable-property n 'direction))
+
+
+;;; ---------- Compiler flags ----------
+
+(defvar *compiler-flags* '(default-variable-type)
+  "The list of recognised compiler flags.
+
+These should be set with DECLARE, as they live in a different namespace
+to variables declared with LET or LET*.")
+
+
+(defun compiler-flag-p (flag)
+  "Test whether FLAG is a recognised compiler flag."
+  (member flag *compiler-flags*))
+
+
+(defun ensure-compiler-flag (flag)
+  "Ensure that FLAG is a valid compiler flag.
+
+A COMPILER-ERROR is signalled for invalid flags."
+  (unless (compiler-flag-p flag)
+    (error 'compiler-error :hint (format nil "~a isn't a recognised compiler flag" flag))))
+
+
+(defun get-compiler-flag (flag)
+  "Return the current compiler FLAG.
+
+The flag is always looked-up in the current environment to allow for
+local overriding."
+  (ensure-compiler-flag flag)
+  (get-environment-property flag 'initial-value (current-environment)))
+
+
+(defun set-compiler-flag (flag v)
+  "Set the value for compiler FLAG within the current environment.
+
+The flag is always set in the current environment to allow for
+local overriding."
+  (ensure-compiler-flag flag)
+  (declare-in-environment flag v (current-environment) :kind 'compiler-flag))
+
+
+;; The default defaults
+
+(in-core-environment
+  (declare-variable 'default-variable-type '((initial-value (unsigned-byte 32)))))
 
 
 ;;; ---------- Form and context classifiers ----------
@@ -358,8 +409,13 @@ Synchronous blocks have sensitivities that depend on signal edges."
 
 
 (defun in-assignment-context-p ()
-  "Test if we're in a SETF or SETQ context."
+  "Test if we're in an assignment context."
   (in-context-p #'assignment-form-p))
+
+
+(defun in-let-context-p ()
+  "Test if we're under a binder."
+  (in-context-p #'let-form-p))
 
 
 (defun in-expression-context-p ()

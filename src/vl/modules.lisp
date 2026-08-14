@@ -285,10 +285,13 @@ Return the frame containing the parameters."
 	    (destructuring-bind (n v)
 		nv
 	      (declare-environment-variable n `((initial-value ,v)
+						(type ,(compute-type v))
 						(as parameter))
 					    f))
 
-	    (declare-environment-variable nv `((as parameter)) f)))
+	    (declare-environment-variable nv `((as parameter)
+					       (type ,(get-compiler-flag 'default-variable-type)))
+					  f)))
 
       ;; return the frame
       f)))
@@ -356,16 +359,6 @@ F should be the module's local frame."
 
     ;; return the interface type
     (build-module-interface-type-from-frame f)))
-
-
-(defpassmethod compute-variable-types (module modname f &rest body)
-  (with-local-frame f
-    (dolist (n (get-frame-names f))
-      ;; solve the type constraints
-      (solve-type-constraints-and-declare n f))
-
-    ;; solve in the body
-    (compute-variable-types (with-implicit-progn body))))
 
 
 (defpassmethod check-all-variables-typed (module modname f &rest body)
@@ -652,12 +645,6 @@ F should be the module's local frame."
 	      (mark-variables-as-written rs))))))
 
     intf))
-
-
-(defpassmethod compute-variable-types (make-instance modname &rest initargs)
-  (dolist (arg (adjacent-pairs initargs))
-    (let ((v (cadr arg)))
-      (compute-variable-types v))))
 
 
 (defpassmethod read-variables (make-instance modname &rest initargs)

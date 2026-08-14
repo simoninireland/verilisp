@@ -28,30 +28,27 @@
 
 A SYNTAX-ERROR error is signalled if the arguments are wrong."
    (if (/= (length args) n)
-      (error 'syntax-error :hint (format nil "Operator needs exactly ~a arguments" n))))
+      (error 'syntax-error :hint (format nil "Operator ~a needs exactly ~a arguments" fun n))))
 
 
 ;;; ---------- Addition-like operators ----------
 
-(defun compute-type-addition (args)
-  "Compute the type of an addition or subtraction of ARGS."
-  (let ((tys (mapcar #'compute-type args))
-	(n (1- (length args))))
-
-    ;; type is the LUB of the arguments plus the
-    ;; extra bits required for carries between the additions
-    `(and (or ,@tys) (unsigned-byte ,n))))
-
-
 ;;; +
 
 (defpassmethod compute-type (+ &rest args)
-  (let ((tys (mapcar #'compute-type args))
-	(n (1- (length args))))
+  (declare (optimize debug))
 
-    ;; type is the LUB of the arguments plus the
-    ;; extra bits required for carries between the additions
-    `(and (or ,@tys) (unsigned-byte ,n))))
+  (let ((tys (mapcar #'compute-type args)))
+    (unless (every #'fixed-width-p tys)
+      (error 'syntax-error :hint "Arguments must be numbers"))
+
+    (let ((signed (some #'signed-byte-p tys))
+	  (width (+ (apply #'max (mapcar (compose #'eval-in-static-environment #'bitwidth) tys))
+		    (1- (length tys)))))
+
+      (if signed
+	  `(signed-byte ,width)
+	  `(unsigned-byte ,width)))))
 
 
 (defpassmethod simple-expression-p (+ &rest args)
@@ -67,13 +64,18 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 (defpassmethod compute-type (- &rest args)
   (if (= (length args) 1)
       ;; unary negation
-      (let ((ty (compute-type (car args))))
-	`(signed-byte (1+ (bitwidth ',ty))))
+      (compute-type `(- 0 ,@args))
 
       ;; general subtraction
-      ;; we force subtractions to be signed
-      (let ((ty (compute-type-addition args)))
-	`(signed-byte (bitwidth ',ty)))))
+      (let ((tys (mapcar #'compute-type args)))
+	(unless (every #'fixed-width-p tys)
+	  (error 'syntax-error :hint "Arguments must be numbers"))
+
+	(let ((width (+ (apply #'max (mapcar (compose #'eval-in-static-environment #'bitwidth) tys))
+			(1- (length tys)))))
+
+	  ;; we force subtractions to always be signed
+	  `(signed-byte ,width)))))
 
 
 (defpassmethod simple-expression-p (- &rest args)
@@ -82,13 +84,13 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 
 (defpassmethod synthesise (- &rest args)
   (if (= (length args) 1)
-      ;;;; unary minus
+      ;; unary minus
       (progn
 	(as-literal "(- ")
 	(synthesise (car args))
 	(as-literal ")"))
 
-      ;;;; application
+      ;; application
       (as-infix '- args)))
 
 
@@ -113,7 +115,7 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 ;;; change if I can figure out a way to synthesise ash.)
 ;;;
 ;;; The right shift (>>) operator behaves like ash in that it does
-;;; sign extension automat6ically based on the type of the value. This
+;;; sign extension automatically based on the type of the value. This
 ;;; means that Verilog's >>> (arithmetic shoft right) is generated implicitly
 ;;; by type, rather than being provided explicitly.
 
@@ -124,10 +126,14 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 
   (let ((tyval (compute-type val))
 	(tyoffset (compute-type offset)))
+    (unless (and (fixed-width-p tyval)
+		 (fixed-width-p tyoffset))
+	  (error 'syntax-error :hint "Arguments must be numbers"))
 
-    ;; the width is the width of the value plus the
+    ;; the width is the width of the value plus the width of
     ;; maximum number that can be in the offset
-    `(and ,tyval (unsigned-byte (bitwidth ',tyoffset)))))
+    `(unsigned-byte ,(+ (bitwidth tyval)
+			(1- (coerce (expt 2 (bitwidth tyoffset)) 'unsigned-byte))))))
 
 
 (defpassmethod simple-expression-p (<< &rest args)

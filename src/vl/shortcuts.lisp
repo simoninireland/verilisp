@@ -1,6 +1,6 @@
-;;;; Shortcut macros
+;;;; Core macros offering various shortcuts
 ;;;;
-;;;; Copyright (C) 2024--2025 Simon Dobson
+;;;; Copyright (C) 2024--2026 Simon Dobson
 ;;;;
 ;;;; This file is part of verilisp, a very Lisp approach to hardware synthesis
 ;;;;
@@ -83,3 +83,22 @@
 (defcoremacro/vl 2/ (arg)
   "Return ARG divided by two."
   `(>> ,arg 1))
+
+
+;;; ---------- Assertion tests and constructs ----------
+
+(defcoremacro/vl asserted-p (arg)
+  "Test whether ARG is non-zero."
+  `(0/= ,arg))
+
+
+(defcoremacro/vl with-asserted (arg &body body)
+  "Evaluate BODY with ARG asserted.
+
+ARG should be a generalised place, typically one bit wide. It is set
+to 1 before executing BODY, and to 0 afterwards /regardless/ of what
+it's value was before."
+  `(progn
+     (setf ,arg 1)
+     ,@body
+     (setf ,arg 0)))

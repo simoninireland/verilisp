@@ -49,10 +49,6 @@
 	   ty))))
 
 
-(defpassmethod compute-variable-types (the ty val)
-  (ensure-subtype (compute-type val) ty))
-
-
 (defpassmethod read-variables (the ty val)
   (read-variables val))
 
@@ -82,18 +78,6 @@
 
   ;; the type of the coercion is the type we're coercing to
   ty)
-
-
-(defpassmethod compute-variable-types (coerce val ty)
-  (unquote ty)
-
-  ;; check we can do the coercion
-  (let ((vty (compute-type val)))
-    (if (not (and (fixed-width-p ty)
-		  (fixed-width-p vty)))
-	;; can't coerce anything else for now
-	(error 'coercion-mismatch :expected ty :got vty
-				  :hint "Make sure the two types are coercible."))))
 
 
 (defpassmethod read-variables (coerce val ty)

@@ -43,10 +43,6 @@
     (error 'unknown-variable :variable form)))
 
 
-(defpassmethod compute-variable-types ((form symbol))
-  nil)
-
-
 (defpassmethod read-variables ((form (eql nil)))
   nil)
 

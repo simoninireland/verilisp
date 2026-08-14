@@ -66,28 +66,36 @@
 ;;; Verilisp type system.)
 
 (defvar *variables-being-constrained* nil
-  "List of variables names a frames that are having their types solved..
+  "List of variables names a frames that are having their types solved.
 
 This is used only in computing LUBs involving TYPE-OF types.")
 
 
-(defsubtype ((type-of a f) (&type ty))
-  (if-let ((ty (get-frame-property a 'type f :default nil)))
+(defsubtype ((type-of a f) (&type ty2))
+  (if-let ((ty1 (get-frame-property a 'type f :default nil)))
     ;; either we've constrained the type fully or it's been declared
     ;; explicitly (and won't be inferred to be wider)
-    ty
+    (subtype-p ty1 ty2)
 
     ;; we don't know the full type of a variable until it's been fully
     ;; constrained, but we can work out an upper bound and leave it to
     ;; be further refined later
     ;; TODO: Not sure this is the right approach
     (if-let ((constraints (get-frame-property a 'type-constraints f :default nil)))
-      (subtype-p (solve-type-constraints a f constraints) ty)
+      (subtype-p (solve-type-constraints a f constraints) ty2)
 
       ;; otherwise we have to stay unconstrained
       t)))
-(defsubtype ((&type ty) (type-of a f))
-  (subtype-p `(type-of ,a ,f) ty))
+
+
+(defsubtype ((&type ty1) (type-of a f))
+  (if-let ((ty2 (get-frame-property a 'type f :default nil)))
+    (subtype-p ty1 ty2)
+
+    (if-let ((constraints (get-frame-property a 'type-constraints f :default nil)))
+      (subtype-p ty1 (solve-type-constraints a f constraints))
+
+      t)))
 
 
 (deflub ((type-of a f) (&type ty2))
@@ -114,20 +122,23 @@ This is used only in computing LUBs involving TYPE-OF types.")
 
 ;;; ---------- Type constraints ----------
 
+;;; TODO: Disabled type constraints completely for now
+
 (defun add-frame-type-constraint (n ty env)
   "Constrain variable N to have type TY in ENV.
 
 This constraint will be used when inferring the finla type of N."
-  (let ((constraints (get-frame-property n 'type-constraints env)))
-    (set-frame-property n 'type-constraints (cons ty constraints) env)))
-
+  ;; (let ((constraints (get-frame-property n 'type-constraints env)))
+  ;;   (set-frame-property n 'type-constraints (cons ty constraints) env))
+  )
 
 (defun add-type-constraint (n ty)
   "Constrain N to have type TY.
 
 This constraint will be used when inferring the finla type of N."
-  (let ((constraints (variable-property n 'type-constraints)))
-    (set-variable-property n 'type-constraints (cons ty constraints))))
+  ;; (let ((constraints (variable-property n 'type-constraints)))
+  ;;   (set-variable-property n 'type-constraints (cons ty constraints)))
+  )
 
 
 (defun get-type-constraints (n)
@@ -221,7 +232,11 @@ can be ignored for systems not concerned with loss of precision."
 ;;; TODO: Change this into a proper structure
 
 (defun bitwidth (ty)
-  "Return the number of bits needed to represent type TY."
+  "Return the number of bits needed to represent type TY.
+
+This may be a value or more generally a static constant that will
+This need to be evaluated (using EVAL-IN-STATIC-ENVIRONMENT) if
+This used internally."
   (destructuring-bind (tytag tyargs)
       (deconstruct-type ty)
     (bitwidth/form tytag tyargs)))

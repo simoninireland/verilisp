@@ -116,13 +116,6 @@
   `(unsigned-byte ,width))
 
 
-(defpassmethod compute-dependencies (bref place start &key end width)
-  (let ((rs (union-all (mapcar #'read-variables (remove-nulls (list start end width))))))
-    (add-dependencies place rs)
-    (mark-variables-as-read rs)
-    (mark-variable-as-written place)))
-
-
 (defpassmethod simple-expression-p (bref place start &key end width)
   (and (simple-expression-p place)
        (simple-expression-p start)

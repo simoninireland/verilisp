@@ -20,18 +20,6 @@
 (in-package :verilisp/core)
 
 
-;;; ---------- Defaults ----------
-
-;;; TODO: Get rid of this, it makes no sense for FPGAs
-
-(defparameter *default-register-width* 8
-  "Default width for registers.
-
-This is used absent any specfic width specification. It will
-generally reflect the word size of the desired circuit, for
-example 8, 16, 32, or 64 bits.")
-
-
 ;;; ---------- Frames----------
 
 (defclass frame ()
@@ -51,6 +39,12 @@ An environment is composed of frames, which are in turn composed of declarations
 consisting of a name and a list of key-value property pairs. The names in a frame
 must be unique, but may be the same as names in parent frames, in which case
 the name and properties in the shallower frame shadow those in the deeper frame.
+
+The bindings in an enviropnment are kinded to allow for compiler extensions. The
+main kind is VARIABLE, whih contains all symbols declared in a program (whether
+they are actually variables or not: we include functions, modules, etc).. The
+COMPILER kind holds compiler defaults and flags, and these bindings are not
+visible to programs.
 
 There are functions that operate on the shallowest frame, and corresponding
 one that operate on the complete environment."))
@@ -121,9 +115,31 @@ An UNKNOWN-VARIABLE error is signalled if N is undefined."
 			     :hint "Make sure the variable is in scope in the current frame")))
 
 
+(defun get-frame-property (n prop env &key default)
+  "Return the property PROP of variable N in the topmost frame of ENV.
+
+Undeclared properties value value NIL, which can be changed using the
+:DEFAULT argument. An UNKNOWN-VARIABLE error is signalled if N is
+undefined."
+  (let ((props (get-frame-properties n env)))
+    (if-let ((m (assoc prop props)))
+      ;; we found a binding, return the property
+      (cadr m)
+
+      ;; no property defined, return the default
+      default)))
+
+
 (defun get-frame-names (env)
-  "Return the names of the variables in the topmost frame of ENV."
+  "Return the names declared in the topmost frame of ENV."
   (mapcar #'car (decls env)))
+
+
+(defun get-frame-names-of-kind (kind env)
+  "Return the names of all bindings with KIND in the topmost frame of ENV."
+  (remove-if (lambda (n)
+	       (not (eql (get-kind n env) kind)))
+	     (get-frame-names env)))
 
 
 (defun rename-frame-name (n m env)
@@ -140,28 +156,13 @@ An UNKNOWN-VARIABLE error is signalled if N is undefined."
   (null (get-frame-names env)))
 
 
-(defun variable-declared-in-frame-p (n env)
-  "Test whether N is defined in the topmost frame of ENV."
+(defun name-declared-in-frame-p (n env)
+  "Test whether N is declared in the topmost frame of ENV."
   (not (null (if (symbolp n)
 		 (assoc n (decls env))
 		 (assoc n (decls env)
 			:key #'symbol-name
 			:test #'string-equal)))))
-
-
-(defun get-frame-property (n prop env &key default)
-  "Return the property PROP of variable N in the topmost frame of ENV.
-
-Undeclared properties value value NIL, which can be changed using the
-:DEFAULT argument. An UNKNOWN-VARIABLE error is signalled if N is
-undefined."
-  (let ((props (get-frame-properties n env)))
-    (if-let ((m (assoc prop props)))
-      ;; we found a binding, return the property
-      (cadr m)
-
-      ;; no property defined, return the default
-      default)))
 
 
 (defun set-frame-properties (n props env)
@@ -192,15 +193,6 @@ An UNKNOWN-VARIABLE error is signalled if N is undefined."
       (setf (cdr kv) (list (list (list prop v)))))))
 
 
-(defun get-frame-declaring (n env)
-  "Return the shallowest frame in ENV that declares N."
-  (if (variable-declared-in-frame-p n env)
-      env
-
-      (if-let ((penv (parent-frame env)))
-	(get-frame-declaring n penv))))
-
-
 (defun forget-frame-variable (n env)
   "Forget the declaration of NAME in the shallowest frame of ENV.
 
@@ -217,6 +209,15 @@ Returns the name oe the variable forgotten."
 
 ;;; ---------- Environments ----------
 
+(defun get-frame-declaring (n env)
+  "Return the shallowest frame in ENV that declares N."
+  (if (name-declared-in-frame-p n env)
+      env
+
+      (if-let ((penv (parent-frame env)))
+	(get-frame-declaring n penv))))
+
+
 (defun get-environment-properties (n env)
   "Return the key/value list for N in ENV.
 
@@ -227,19 +228,34 @@ An UNKNOWN-VARIABLE error is signalled if N is undefined."
   (if-let ((f (get-frame-declaring n env)))
     (get-frame-properties n f)
 
-     ;; not declared
+    ;; not declared
     (error 'unknown-variable :variable n)))
 
 
 (defun get-environment-names (env)
   "Return the names in ENV."
-  (union-all (map-environment (lambda (n env) (list n))
+  (union-all (map-environment (lambda (n env)
+				(declare (ignore env))
+				(list n))
+			      env)))
+
+
+(defun get-environment-names-of-kind (kind env)
+  "Return the names of KIND in ENV."
+  (union-all (map-environment (lambda (n env)
+				(if (eql (get-kind n env) kind)
+				    (list n)))
 			      env)))
 
 
 (defun empty-environment-p (env)
   "Test whether ENV is empty."
   (null (get-environment-names env)))
+
+
+(defun name-declared-p (n env)
+  "Test whether N is declared in ENV."
+  (not (null (get-frame-declaring n env))))
 
 
 (defun get-environment-property (n prop env &key default)
@@ -274,50 +290,6 @@ This affects the shallowest declaration of N."
     (error 'unknown-variable :variable n)))
 
 
-(defun variable-declared-in-environment-p (n env)
-  "Test whether N is declared in ENV."
-  (not (null (member n (get-environment-names env)))))
-
-
-(defun declare-environment-variable (n props env &optional at-start)
-  "Declare a variable N with properties PROPS in the shallowest frame of ENV.
-
-If AT-START is non-nil, add the variable to the start of the environment;
-otherwise (by default) add it to the end.
-
-Return the updated environment.
-
-Signals a DUPLICATE-VARIABLE error if the variable already exists in this frame."
-  (when (variable-declared-in-frame-p n env)
-    (error 'duplicate-variable :variable n))
-
-  ;; copy properties to avoid re-writing the original
-  (if (null (decls env))
-      (setf (decls env) (list (list n (copy-tree props))))
-
-      (if at-start
-	  ;; add to the start
-	  (setf (decls env) (cons (list n (copy-tree props)) (decls env)))
-
-	  ;; add to the end
-	  (setf (cdr (last (decls env))) (list (list n (copy-tree props))))))
-
-  ;; return the updated environment
-  env)
-
-
-(defun forget-environment-variable (name env)
-  "Forget the definition of NAME in ENV.
-
-  Returns the name of the variable forgotten."
-  (if-let ((f (get-frame-declaring name env)))
-    (forget-frame-variable name f)
-
-
-     ;; not declared
-    (error 'unknown-variable :variable n)))
-
-
 (defun add-frame-to-environment (f env &optional at-start)
   "Add all entries from F to ENV.
 
@@ -337,18 +309,120 @@ Return ENV."
   env)
 
 
+(defun declare-in-environment (n props env &key at-start kind)
+  "Declare a binding N with properties PROPS in the shallowest frame of ENV.
+
+If AT-START is non-nil, add the binding to the start of the environment;
+otherwise (by default) add it to the end.
+
+If non-NIL, KIND will be used as the kind of the binding. If KIND is NIL,
+the kind will be as set in PROPS. (Not setting a kind either way is bad.)
+
+Return the updated environment."
+  (declare (optimize debug))
+
+  (let ((newprops (copy-tree props)))
+    (when kind
+      ;; set the kind of this binding, overriding any set in PROPS
+      ;; (We need to assign the results back in case PROPS is NIL)
+      (setf newprops (associatef 'kind kind newprops)))
+
+    (if (null (decls env))
+	(setf (decls env) (list (list n newprops)))
+
+	(if at-start
+	    ;; add to the start
+	    (setf (decls env) (cons (list n newprops) (decls env)))
+
+	    ;; add to the end
+	    (setf (cdr (last (decls env))) (list (list n newprops))))))
+
+  ;; return the updated environment
+  env)
+
+
+;;; ---------- Kinds ----------
+
+(defun get-kind (n env)
+  "Return the kind of N in ENV."
+  (get-environment-property n 'kind env))
+
+
+(defun variable-kind-p (n env)
+  "Test whether N is a variable declared in ENV."
+  (eql (get-kind n env) 'variable))
+
+
+(defun compiler-flag-kind-p (n env)
+  "Rest whether N is a compiler flag declared in ENV.
+
+Compiler flags will always /be/ declared because they're set initially
+in the core environment. They can be re-declared (shadowed) in
+shallower frames."
+  (eql (get-kind n env) 'compiler-flag))
+
+
+;;; ---------- Variables ----------
+
+(defun variable-declared-in-frame-p (n env)
+  "Test whether N is declared as a variable in the topmost frame of ENV."
+  (and (name-declared-in-frame-p n env)
+       (variable-kind-p n env)))
+
+
+(defun variable-declared-in-environment-p (n env)
+  "Test whether N is declared in ENV."
+  (and (name-declared-p n env)
+       (variable-kind-p n env)))
+
+
+(defun get-frame-variable-names (env)
+  "Return the names all the variables declared in frame ENV."
+  (get-frame-names-of-kind 'variable env))
+
+
+(defun declare-environment-variable (n props env &optional at-start)
+  "Declare a variable N with properties PROPS in the shallowest frame of ENV.
+
+If AT-START is non-nil, add the variable to the start of the environment;
+otherwise (by default) add it to the end.
+
+Return the updated environment.
+
+Signals a DUPLICATE-VARIABLE error if the variable already exists in this frame."
+  (when (variable-declared-in-frame-p n env)
+    (error 'duplicate-variable :variable n))
+
+  (declare-in-environment n props env :at-start at-start :kind 'variable))
+
+
+(defun forget-environment-variable (n env)
+  "Forget the definition of N in ENV.
+
+  Returns the name of the variable forgotten."
+  (if-let ((f (get-frame-declaring n env)))
+    (forget-frame-variable n f)
+
+    ;; not declared
+    (error 'unknown-variable :variable n)))
+
+
+;;; ---------- Frame and environment mappings ----------
+
 (defun filter-frame (pred env)
   "Return a frame  containing all entries in the shallowest frame of ENV matching PRED.
 
 PRED should be a predicate taking a name and the environment with the
 frame containing that name."
-  (let ((retained (remove-if-not (lambda (n)
-				   (funcall pred n env))
-				 (get-frame-names env)))
+  (declare (optimize debug))
+
+  (let ((retained (remove-if (lambda (n)
+			       (not (funcall pred n env)))
+			     (get-frame-names env)))
 	(fenv (make-frame)))
 
     (dolist (n retained)
-      (declare-environment-variable n (get-frame-properties n env) fenv))
+      (declare-in-environment n (get-frame-properties n env) fenv))
 
     fenv))
 

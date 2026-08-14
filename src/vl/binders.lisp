@@ -26,6 +26,9 @@
 
 ;;; ---------- Recursion schemata ----------
 
+;;; These new schemata operations rewcurse into the initial values and the
+;;; body, but skip the variable names.
+
 ;;; into-arguments
 
 (defun into-arguments-let (fun args &key pass-name option extra)
@@ -81,7 +84,7 @@
 
 ;;; into-arguments-macros
 
-;;; These schemata are specific to EXPAND-MACROS and will be applied
+;;; This schemata is specific to EXPAND-MACROS and will be applied
 ;;; before the ADD-FRAMES pass, so need to work on decls as lists, not
 ;;; as frames
 
@@ -231,7 +234,14 @@ the frame declaring N."
 
 	  (progn
 	    ;; add the type to the constraints
-	    (add-frame-type-constraint n ity nf))))))
+	    ;;(add-frame-type-constraint n ity nf)
+	    ;; TODO: Fix when we do more precise typing
+	    (unless (get-frame-property n 'type nf :default nil)
+	      (set-frame-property n 'type (get-compiler-flag 'default-variable-type) nf)))))
+
+    ;; otherwise use the default type
+    (unless (get-frame-property n 'type nf :default nil)
+      (set-frame-property n 'type (get-compiler-flag 'default-variable-type) nf))))
 
 
 (defun compute-let-env ()
@@ -269,7 +279,7 @@ LET* adds bindings incrementally, so each can see those that went before."
 	  (dolist (n (variables-declared-in-frame lenv))
 	    (constrain-initial-value n lenv f)
 
-	    ;; dclare the variable ready for the next one
+	    ;; declare the variable ready for the next one
 	    (declare-variable n (get-frame-properties n lenv))))))))
 
 
@@ -293,25 +303,9 @@ LET* adds bindings incrementally, so each can see those that went before."
     (compute-type (with-implicit-progn body))))
 
 
-(defpassmethod compute-variable-types (let f &rest body)
-  (declare (optimize debug))
-
-  (with-local-frame f
-    (dolist (n (get-frame-names f))
-      ;; solve the type constraints
-      (solve-type-constraints-and-declare n f))
-
-    ;; solve in the body
-    (compute-variable-types (with-implicit-progn body))))
-
-
-(defpassmethod compute-variable-types (let* f &rest body)
-  (:same-as let))
-
-
 (defpassmethod check-all-variables-typed (let f &rest body)
   (with-local-frame f
-    (dolist (n (get-frame-names f))
+    (dolist (n (get-frame-variable-names f))
       (unless (get-frame-property n 'type f :default nil)
 	(error 'compiler-error :hint (format nil "Variable ~s has no type" n))))
 
@@ -329,7 +323,7 @@ LET* adds bindings incrementally, so each can see those that went before."
 
   (with-local-frame f
     ;; do representation inference on local variables
-    (dolist (n (get-frame-names f))
+    (dolist (n (get-frame-variable-names f))
       (let ((read (variable-property n 'read))
 	    (written (variable-property n 'written))
 	    (ignored (variable-property n 'ignore))
@@ -432,10 +426,21 @@ LET* adds bindings incrementally, so each can see those that went before."
 (defun float-initial-values (newenv)
   "Return a list of assignments to be made for the initial values in NEWENV."
   (let ((regs (remove-if (lambda (n)
-			   (not (eql (get-representation n) 'register)))
+			   (or (get-frame-property n 'floated newenv)
+			       (not (eql (get-representation n) 'register))
+			       (null (get-initial-value n))))
 			 (variables-declared-in-current-frame))))
+
+    ;; mark variables as floated, to prevent further re-assignment if
+    ;; they're floated further
+    (mapc (lambda (n)
+	    (set-frame-property n 'floated t newenv)
+	    (set-frame-property n 'initial-value nil newenv))
+	  regs)
+
+    ;; return the initial assignments, to be inserted in-place
     (mapcar (lambda (n)
-	      `(setq ,n ,(get-initial-value n :default 0)))
+	      `(setq ,n ,(get-initial-value n)))
 	    regs)))
 
 
@@ -448,25 +453,29 @@ LET* adds bindings incrementally, so each can see those that went before."
     ;; add our declarations to the environment
     (when (null newenv)
       (setq newenv (make-frame)))
+
     (with-local-frame decls
       ;; add the new declarations to the front of NEWENV
       (add-frame-to-environment (current-frame) newenv t)
 
-      ;; return the re-written body and the new environment
-      (if (in-module-context-p)
-	  (list newbody newenv)
+      ;; The initial values are written here for all non-top-level
+      ;; LET blocks, so that they're assigned correctly relative
+      ;; to the expected semantics. Top-level blocks aren't floating
+      ;; any further, so their initial values can stay where they are
+      ;; (they're also not marked as floated, obviously).
+      (let ((ivs (if (in-let-context-p)
+		     (float-initial-values newenv))))
 
-	  ;; get any initial value assignments to be added
-	  (let ((ivs (float-initial-values newenv)))
-	    (list (if ivs
-		      ;; initial values, prepend them to the new body
-		      `(progn
-			 ,@ivs
-			 ,newbody)
+	;; return the re-written body and the new environment
+	(list (if ivs
+		  ;; initial values, prepend them to the new body
+		  `(progn
+		     ,@ivs
+		     ,newbody)
 
-		      ;; no initial values, return the body
-		      newbody)
-		  newenv))))))
+		  ;; no initial values, return the body
+		  newbody)
+	      newenv)))))
 
 
 (defpassmethod float-let-blocks (let* &rest args)
@@ -535,19 +544,21 @@ don't need their own storage."
   "Synthesise a register N within a LET block."
   (declare (optimize debug))
 
-  (let ((v (get-initial-value n :default 0)))
+  (let ((v (get-initial-value n)))
     (let ((type (get-type n)))
 
       ;; only synthesise a declaration for a things that aren't
       ;; displaced arrays (which will be transformed)
       (when (or (not (array-type-p type))
 		(not (displaced-array-p v)))
+
 	(let ((width (if (array-type-p type)
 			 ;; width is the width of the element type
-		      (bitwidth (element-type-of-array type))
+			 (bitwidth (element-type-of-array type))
 
-		      ;; width is of the type itself
-		      (bitwidth type))))
+			 ;; width is of the type itself
+			 (bitwidth type))))
+
 	  (as-literal "reg ")
 	  ;; (if (and (fixed-width-p type)
 	  ;;	       (not (unsigned-byte-p type)))
@@ -556,10 +567,11 @@ don't need their own storage."
 	  (when (or (not (numberp width))
 		    (> width 1))
 	    ;; we have a width (or a width expression)
-	    (as-literal"[ ")
+	    (as-literal "[ ")
 	    (synthesise width)
 	    (as-literal " - 1 : 0 ] "))
 	  (synthesise n)
+
 	  (if v
 	      (if (make-array-form-p v)
 		  ;; synthesise the array bounds and initialisation
@@ -666,13 +678,13 @@ Valid RHSs are either null, array or object constructors, or simple expressions.
 
 	;; synthesise the different kinds of declaration in Verilog
 	(case (get-representation n)
-	  ('module
+	  (module
 	   (synthesise-module-instanciation n))
-	  ('constant
+	  (constant
 	   (synthesise-constant n))
-	  ('register
+	  (register
 	   (synthesise-register n))
-	  ('wire
+	  (wire
 	   (synthesise-wire n))
 	  (t
 	   (synthesise-register n)))))))
@@ -686,8 +698,8 @@ Valid RHSs are either null, array or object constructors, or simple expressions.
     (let ((decls (build-decls-from-frame f)))
       (as-block-forms decls :process #'synthesise-decl)
 
-      (if (> (length decls) 0)
-	  (as-blank-line)))
+      (when (> (length decls) 0)
+	(as-blank-line)))
 
     ;; synthesise the body
     (as-block-forms body)))

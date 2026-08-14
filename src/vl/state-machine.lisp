@@ -556,7 +556,9 @@ Return LABEL if the the state is not merged."
 
 		     (let ((,state-variable ,(car state-labels)))
 		       (declare (type (unsigned-byte ,(bits-for-integer (length state-labels))) ,state-variable)
-				(as register ,state-variable))
+				(as register ,state-variable)
+				(synthetic ,state-variable)
+				(assigned-at-declaration ,state-variable))
 
 		       (case ,state-variable
 			 ,@clauses)))))))
@@ -576,8 +578,8 @@ Return LABEL if the the state is not merged."
 
       ;; we hold on to the NEWENV frame because it contains all the information
       ;; we've already extracted about the variables -- and these were the only
-      ;; ones in scope when the code was analysed, with others beng created
-      ;; by SYNTHESISE-STATE-MACHINE. which adds the necessary types and
+      ;; ones in scope when the code was analysed, with others being created
+      ;; by SYNTHESISE-STATE-MACHINE, which adds the necessary types and
       ;; representations directly
       ;;
       ;; We put the state machine synthesis into its own frame so that
@@ -587,17 +589,9 @@ Return LABEL if the the state is not merged."
       (with-new-frame
 	(let* ((synth (synthesise-state-machine newargs))
 	       (p (if newenv
-		      ;; float the locally-declared varables around the state machine
-		      (let* ((newdecls (build-frame-from-decls
-					(mapcar (lambda (np)
-						  (destructuring-bind (n props)
-						      np
-						    (list n
-							  (get-environment-property n 'initial-value newenv :default 0))))
-						(decls newenv))
-					newenv)))
-			`(let ,newdecls
-			   ,synth))
+		      ;; float the locally-declared variables around the state machine
+		      `(let ,newenv
+			 ,synth)
 
 		      ;; no locally-declared variables in body
 		      synth)))

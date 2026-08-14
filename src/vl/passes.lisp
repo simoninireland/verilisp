@@ -75,19 +75,20 @@ Return the set of variables as a list.")
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (define-recursion-schema into-arguments-macros (fun args)
     "A recursion schema that expands a form as a macro."
-    (if (macro-declared-p fun)
+    (if (and (symbolp fun) ; need this to avoid expanding quoted lists of numbers
+	     (macro-declared-p fun))
 	;; macro is expandable
-      (let ((realfun (variable-property fun 'initial-value)))
-	;; expand the macro in a nested environment that will contain
-	;; any locally-declared macros
-	(with-new-frame
-	  (let ((expansion (apply realfun args)))
+	(let ((realfun (variable-property fun 'initial-value)))
+	  ;; expand the macro in a nested environment that will contain
+	  ;; any locally-declared macros
+	  (with-new-frame
+	    (let ((expansion (apply realfun args)))
 
-	    ;; expand the expansion
-	    (expand-macros expansion))))
+	      ;; expand the expansion
+	      (expand-macros expansion))))
 
-      ;; macro is not expandable, descend into the form
-      (expand-descend fun args))))
+	;; macro is not expandable, descend into the form
+	(expand-descend fun args))))
 
 
 (defpass expand-macros (form)
@@ -150,7 +151,7 @@ will then be used by, and extended by, other passes.")
 	(declare-environment-variable n `((initial-value ,v)) f))
 
       ;; declare just name
-      (declare-environment-variable decl '() f)))
+      (declare-environment-variable decl `() f)))
 
 
 (defun build-frame-from-decls (decls &optional (f (make-frame)))
@@ -388,21 +389,6 @@ Returns a type expression.")
 	   form)))
 
 
-(defpass compute-type-constraints (form)
-  (:documentation "Add constraints to the variables in FORM.
-
-Methods on this function should ass type constraints to the variables
-within FORM, typically by calling ADD-TYPE-CONSTRAINT and similar
-functions. These constraints will be unified by a later pass.
-
-The default recursion schema recurses into argument sub-forms.")
-  (:schema into-arguments)
-  (:queue typing)
-
-  ;; return the original form
-  (:post #'return-original-form))
-
-
 (defpass check-all-variables-typed (form)
   (:documentation "Check that all variables in FORM have types.
 
@@ -561,6 +547,7 @@ Return the re-written FORMS and a merged environment."
 			     (append oldbody (list newbody)))
 			 (if (null newenv)
 			     oldenv
+
 			     (add-frame-to-environment newenv oldenv))))))))
 
     (foldr #'pairwise-append forms (list '() (make-frame)))))

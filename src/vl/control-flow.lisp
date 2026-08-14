@@ -115,7 +115,7 @@ block, and are represented by the symbol *."
       (compute-type sensitivities))
 
   ;; check the body in the outer environment
-  (compute-type (with-implicit-progn body)))
+  (compute-type (with-implicit-tagbody body)))
 
 
 (defun read-variables-sensitivities (sensitivities)
@@ -159,10 +159,19 @@ This includes all the named variables, and excluses the * wildcard."
     `(@ ,sensitivities ,@(simplify-progn-body newbody))))
 
 
+(defpassmethod elaborate-state-machines (@ sensitivities &rest body)
+  (declare (optimize debug))
+
+  ;; elaborate the body as an implicit TAGBODY
+  (let ((newbody (elaborate-state-machines (with-implicit-tagbody body))))
+    `(@ ,sensitivities
+	,newbody)))
+
+
 (defpassmethod synthesise (@ sensitivities &rest body)
   (declare (optimize debug))
   (if (combinatorial-trigger-p sensitivities)
-      ;; luteral expansion for combinatoreial blocks
+      ;; literal expansion for combinatoreal blocks
       (as-literal "always @(*)")
 
       ;; expand specified wires
