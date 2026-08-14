@@ -76,15 +76,7 @@ the increments to the variables being executed every time."
 
       (with-gensyms (loop-head loop-body loop-end)
 	(let ((loop-body `(tagbody
-			     ;; initialise any variables declared
-			     ,@(if var-decls
-				   (mapcar (lambda (decl)
-					     (destructuring-bind (n v)
-						 decl
-					       `(setq ,n ,v)))
-					   var-decls))
-
-			     ,loop-head
+			   ,loop-head
 			     ;; run test to determine whether we exit
 			     (if ,end-test
 				 (progn
@@ -92,7 +84,7 @@ the increments to the variables being executed every time."
 				   ,@end-body
 				   (go ,loop-end)))
 
-			     ,loop-body
+			   ,loop-body
 			     ;; run the loop body
 			     ,@body
 
@@ -103,7 +95,7 @@ the increments to the variables being executed every time."
 			     ;; return to head of the loop
 			     (go ,loop-head)
 
-			     ,loop-end)))
+			   ,loop-end)))
 
 	  (if var-decls
 	      ;; form introduces variables, declare them and declare
