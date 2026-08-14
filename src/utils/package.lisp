@@ -63,6 +63,7 @@
    #:assoc-decls
    #:mapappend
    #:merge-alists
+   #:associatef
 
    ;; string functions
    #:string-times

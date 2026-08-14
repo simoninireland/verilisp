@@ -451,3 +451,23 @@ get their value in A2."
 					 (cdr (assoc k a1))
 					 (cdr (assoc k a2)))))
 		      ks)))))
+
+
+(defun associatef (k v alist)
+  "If ALIST has an association for K, replace it with V, otherwise add an association.
+
+V will be made into a list if it isn't one already.
+
+Return the updated ALIST."
+  (if (null alist)
+      ;; null alist, create one
+       (setq alist (list (list k v)))
+
+      (if-let ((a (assoc k alist)))
+	;; association exists, update it to the new value
+	(setf (cdr a) (safe-list v))
+
+	;; append the new association
+	(setf (cdr (last alist)) (list (list k v)))))
+
+  alist)

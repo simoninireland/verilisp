@@ -442,3 +442,24 @@
     (setf (aref a 1) 1)
     (setf (aref a 3) 1)
     (is (equal (integer-to-bit-array (bit-array-to-integer a) 8) a))))
+
+
+;;; ---------- Association ----------
+
+(test test-alist-associate
+  "Test we can add or set associations in alists."
+  ;; atomic values
+  (is (equal (associatef 1 4 nil) '((1 4))))
+  (is (equal (associatef 1 4 '((2 6))) '((2 6) (1 4))))
+  (is (equal (associatef 1 4 '((2 6) (1 1))) '((2 6) (1 4))))
+  (is (equal (associatef 1 4 '((1 1) (2 6))) '((1 4) (2 6))))
+  (is (equal (associatef 1 4 '((1 1))) '((1 4))))
+
+  ;; list values
+  (is (equal (associatef 1 '(1 2 3) '((1 1) (2 6))) '((1 1 2 3) (2 6))))
+  (is (equal (associatef 1 '(3 4 5) '((1 1) (2 6))) '((1 3 4 5) (2 6))))
+
+  ;; update is destructive
+  (let ((alist '((1 1) (4 5))))
+    (is (equal (associatef 1 4 alist) '((1 4) (4 5))))
+    (is (equal alist '((1 4) (4 5))))))
