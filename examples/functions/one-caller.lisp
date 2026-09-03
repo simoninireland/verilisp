@@ -1,4 +1,4 @@
-;;;; Function with one caller
+;;;; Function with one caller thread
 ;;;;
 ;;;; Copyright (C) 2024--2025 Simon Dobson
 ;;;;
@@ -17,27 +17,17 @@
 ;;;; You should have received a copy of the GNU General Public License
 ;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-;;; The protocol for calling the function:
-;;;
-;;; 1. Starts with ready=0 and finished=0
-;;; 2. Caller waits for finished=0; function waits for ready=1
-;;; 3. Caller assigns values to arguments, sets ready=1, and
-;;;    waits for finished=1
-;;; 4. Function sets finished=0 and computes
-;;; 5. Function sets finished=1 and waits for ready=0
-;;; 6. Caller retrieves results (if any) and sets ready=0
-;;; 7. Function sets finished=0
-
-
 (defmodule/vl flasher (clk
 		       flashy
 		       start	 ;; initial value for flasher
+		       result    ;; number of flashes flashed
 		       ready	 ;; input ready trigger flag
 		       finished) ;; done flag
   (declare (type bit clk ready finished)
-	   (type (unsigned-byte 5) flashy start)
+	   (type (unsigned-byte 5) flashy start result)
 	   (direction in clk start ready)
-	   (direction out flashy finished))
+	   (direction out flashy result finished)
+	   (as register result))
 
   (let ((leds 0)
 	fin)
@@ -62,11 +52,10 @@
 	  (setq leds i))
 
 	;; signal finished
+	(setq result start)
 	(setq fin 1)
 	(until (not (asserted-p ready)))
-	(setq fin 0))
-
-       )))
+	(setq fin 0)))))
 
 
 (defmodule/vl SOC (clk-in
@@ -82,18 +71,17 @@
 					:clk clk
 					:reset reset
 					:slow 19))
-	 flashes (ready 0) finished
+	 flashes result (ready 0) finished
 	 (flash (make-instance 'flasher :clk clk
 					:flashy leds-out
 					:start flashes
+					:result result
 					:ready ready
-					:finished finished))
-	 )
+					:finished finished)))
     (declare (type bit clk reset)
 	     (type (unsigned-byte 5) leds)
 	     (type bit ready finished)
-	     (type (unsigned-byte 5) flashes)
-     )
+	     (type (unsigned-byte 5) flashes result))
 
     (setq leds-out leds)
 

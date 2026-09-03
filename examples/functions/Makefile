@@ -27,7 +27,7 @@ TARGET = functions.bin
 TOPMODULE = soc
 
 # Sources
-SOURCES = clockworks.lisp one-caller.lisp
+SOURCES = clockworks.lisp two-callers.lisp
 CONFIG = functions.pcf
 OBJECT = functions.v
 
