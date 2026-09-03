@@ -56,6 +56,19 @@ to *INDENTATION-LEVEL*.")
      ,@body))
 
 
+(defmacro with-synthesis-to-string (&body body)
+  "Send all code synthersised in BODY to a string.
+
+The string is returned."
+  (with-gensyms (str)
+    `(let ((,str (make-string-output-stream :element-type 'base-char)))
+       (with-synthesis-to-stream ,str
+	 ,@body)
+
+       ;; return the resulting string
+       (get-output-stream-string ,str))))
+
+
 (defmacro with-indentation (&body body)
   "Output BODY with an extra level of indentation."
   `(let ((*indentation-level* (1+ *indentation-level*)))
