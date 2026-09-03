@@ -606,5 +606,5 @@ The Verilog synthesised by tis function should be send to
   (:schema into-arguments)
 
   (:passmethod (quote &rest args)
-    ;; leave quoted lisp expressions alone
-    `(quote ,@args)))
+	       ;; leave quoted lisp expressions alone
+	       `(quote ,@args)))

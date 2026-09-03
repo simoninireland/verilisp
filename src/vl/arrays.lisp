@@ -290,6 +290,17 @@ Otheriwse it is read as a literal list."
 
 ;;; ---------- Array access ----------
 
+(defun array-type-p (ty)
+  "Test whether TY is an array type."
+  (subtype-p ty 'array))
+
+
+(defun ensure-array-type (ty)
+  "Ensure TY is an array type"
+  (unless (array-type-p ty)
+    (error 'type-mismatch :expected 'array :got ty)))
+
+
 (defun valid-array-index-p (ty indices)
   "Ensure INDICES are a potentially valid index into TY.
 
@@ -315,13 +326,9 @@ probably should, for those that are statically determined."
 			 :hint "Indices must match array dimension")))
 
 
-(defun element-type-of-array (ty)
+(defun array-type-element-type (ty)
   "Extract the element type of array TY."
-  (unless (or (null ty)
-	      (eql ty 'array)
-	      (and (listp ty)
-		   (eql (car ty) 'array)))
-    (error 'type-mismatch :expected 'array :got ty :hint "Needs an array to get its element type"))
+  (ensure-array-type ty)
 
   (if (or (atom ty)
 	  (= (length ty) 1)
@@ -332,6 +339,18 @@ probably should, for those that are statically determined."
       ;; array has a specialiser
       (cadr ty)))
 
+(defun array-type-shape (ty)
+  "Extract the shape of array TY."
+  (ensure-array-type ty)
+
+  (if (and (list ty)
+	   (= (length ty) 3))
+      ;; shape is the last element
+      (caddr ty)
+
+      ;; otherwise fail
+      (error 'representation-mismatch :expected "a bounded array" :got ty :hint "Need a specified shape")))
+
 
 (defpassmethod generalised-place-p (aref place &rest indices)
   t)
@@ -340,6 +359,13 @@ probably should, for those that are statically determined."
 ;;; TODO: Assume place is simple (no indirect references)
 
 ;;; TODO: Should this be a transform pass? (I don't think it can be...)
+
+;;; TODO: This assumes compile-time resolution, but there may be situations
+;;; where this doesn't work, i.e., module arguments that are arrays, and
+;;; are passed a displaced array. The Lisp semantics would then have any
+;;; assignments passed-through to the argument value. Handling this would
+;;; require that we provide dope vectors for array values, which makes them
+;;; ore complicated that Verilog's arrays -- but perhaps that's fine.
 
 (defun displaced-aref (place indices)
   "Dereference through a displaced array PLACE, correcting INDICES.
@@ -350,10 +376,12 @@ may involve recursively checking for displacements.
 
 Return a list containing the final array and indices."
   (declare (optimize debug))
+
   ;; can only currently assign directly to variables (no indirect references)
   (ensure-symbol place)
 
-  (let ((iv (get-initial-value place)))
+  (if-let ((iv (get-initial-value place)))
+    ;; deconstruct the initial value looking for displacement
     (destructuring-bind (shape &key initial-element
 				 initial-contents
 				 element-type
@@ -369,7 +397,10 @@ Return a list containing the final array and indices."
 	    (displaced-aref displaced-to realindices))
 
 	  ;; array is not displaced, return as-is
-	  (list place indices)))))
+	  (list place indices)))
+
+    ;; otherwise, assume the indices are as-is
+    (list place indices)))
 
 
 (defpassmethod read-variables-setf (aref place &rest indices)
@@ -392,7 +423,7 @@ Return a list containing the final array and indices."
     (mapc #'ensure-fixed-width dindices)
     (add-type-constraint dplace `array) ; TODO: add bounds on indices?
     (let ((ty (get-type dplace)))
-      (element-type-of-array ty))))
+      (array-type-element-type ty))))
 
 
 (defpassmethod compute-dependencies (aref place &rest indices)

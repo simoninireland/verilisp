@@ -424,11 +424,15 @@ LET* adds bindings incrementally, so each can see those that went before."
 ;;; ---------- Floating ----------
 
 (defun float-initial-values (newenv)
-  "Return a list of assignments to be made for the initial values in NEWENV."
+  "Return a list of assignments to be made for the initial values in NEWENV.
+
+This creates SETQ assignments for each initial value -- but /not/ for
+arrays, which can't be re-assigned and just get declared once."
   (let ((regs (remove-if (lambda (n)
 			   (or (get-frame-property n 'floated newenv)
 			       (not (eql (get-representation n) 'register))
-			       (null (get-initial-value n))))
+			       (null (get-initial-value n))
+			       (array-type-p (get-type n))))
 			 (variables-declared-in-current-frame))))
 
     ;; mark variables as floated, to prevent further re-assignment if
@@ -458,13 +462,13 @@ LET* adds bindings incrementally, so each can see those that went before."
       ;; add the new declarations to the front of NEWENV
       (add-frame-to-environment (current-frame) newenv t)
 
-      ;; The initial values are written here for all non-top-level
-      ;; LET blocks, so that they're assigned correctly relative
-      ;; to the expected semantics. Top-level blocks aren't floating
-      ;; any further, so their initial values can stay where they are
-      ;; (they're also not marked as floated, obviously).
-      (let ((ivs (if (in-let-context-p)
-		     (float-initial-values newenv))))
+      ;; The initial values are written here for all non-top-level LET
+      ;; blocks, so that they're assigned correctly relative to the
+      ;; expected semantics. Top-level LET blocks (ouside @ blocks)
+      ;; aren't floating any further, so their initial values can stay
+      ;; where they are (they're also not marked as floated,
+      ;; obviously).
+      (let ((ivs (float-initial-values newenv)))
 
 	;; return the re-written body and the new environment
 	(list (if ivs
@@ -518,11 +522,6 @@ by LET and MODULE forms."
 
 ;;; TODO: All this should live in arrays.lisp
 
-(defun array-type-p (ty)
-  "Test whether TY is an array type."
-  (subtype-p ty 'array))
-
-
 (defun displaced-array-p (form)
   "Test whetehr FORM is a MAKE-ARRAY for a displaced array.
 
@@ -537,7 +536,7 @@ don't need their own storage."
 				 conformal
 				 displaced-offset)
 	(cdr form)
-      displaced-to)))
+      (not (null displaced-to)))))
 
 
 (defun synthesise-register (n)
@@ -554,7 +553,7 @@ don't need their own storage."
 
 	(let ((width (if (array-type-p type)
 			 ;; width is the width of the element type
-			 (bitwidth (element-type-of-array type))
+			 (bitwidth (array-type-element-type type))
 
 			 ;; width is of the type itself
 			 (bitwidth type))))
@@ -591,7 +590,7 @@ don't need their own storage."
     (let* ((type (get-type n))
 	   (width (if (array-type-p type)
 		      ;; width is the width of the element type
-		      (bitwidth (element-type-of-array type))
+		      (bitwidth (array-type-element-type type))
 
 		      ;; width is of the type itself
 		      (bitwidth type))))

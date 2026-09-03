@@ -409,6 +409,35 @@
 			   '(unsigned-byte 5)))))))
 
 
+(test test-let-float-initial-value
+  "Test we retain an assignment when we float a LET block."
+  (let ((p (vl::expand/vl '(let (a b c)
+
+			    (vl::@ (vl::posedge clk)
+			     (let ((d 24))
+			       (let ((e (+ d a)))
+				 (declare (as register e))
+				 (setq a (+ b c d e)))))))))
+
+    (vl::typecheck p)
+    (let ((f (car (vl::float-let-blocks p))))
+      (is (contains-form-p '(setq e (+ d a)) f)))))
+
+
+(test test-let-float-array-initial-value
+  "Test that we don;t leave an array behind in an assignment."
+  (let ((p (vl::expand/vl '(let (a b c)
+
+			    (vl::@ (vl::posedge clk)
+			     (let ((d 24))
+			       (let ((e (make-array '(12) :element-type bit)))
+				 (setq a (+ b c d (aref e 0))))))))))
+
+    (vl::typecheck p)
+    (let ((f (car (vl::float-let-blocks p))))
+      (is (not (contains-form-p '(setq e (+ d a)) f))))))
+
+
 ;;; ---------- Variable accesses ----------
 
 (test test-let-accesses

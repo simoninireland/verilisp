@@ -482,25 +482,41 @@ F should be the module's local frame."
   "Return the code for argument N."
   (declare (optimize debug))
 
-  (let ((type (get-type n))
+  (let ((ty (get-type n))
 	(direction (get-direction n))
 	(as (get-representation n)))
 
-    (let* ((width (bitwidth type))
+    (let* ((width (if (array-type-p ty)
+		      (bitwidth (array-type-element-type ty))
+		      (bitwidth ty)))
 	   (w (eval-in-static-environment width)))
-      (as-literal (format nil "~a ~a ~a"
-			  (case direction
-			    (in    "input")
-			    (out   "output")
-			    (inout "inout"))
-			  (if (eql as 'register)
-			      "reg"
-			      "")
-			  (if (and (integerp w)
-				   (= w 1))
-			      ""
-			      (format nil "[ ~(~a~) - 1 : 0 ] " width))))
-      (synthesise n))))
+      ;; direction
+      (as-literal (case direction
+		    (in    "input ")
+		    (out   "output ")
+		    (inout "inout ")))
+
+      ;; representation
+      (if (eql as 'register)
+	  (as-literal "reg "))
+
+      ;; width
+      (if (not (and (integerp w)
+		    (= w 1)))
+	  (as-literal (format nil "[ ~(~a~) - 1 : 0 ] " (with-synthesis-to-string
+							  (synthesise width)))))
+
+      ;; variable name
+      (synthesise n)
+
+      ;; array size
+       (if (array-type-p ty)
+	   (let ((shape (array-type-shape ty)))
+	     (unquote shape)
+	     ;; TODO: 1d arrays only
+	     (let ((elements (car shape)))
+	       (as-literal (format nil "[ ~(~a~) - 1 : 0 ]" (with-synthesis-to-string
+							      (synthesise elements))))))))))
 
 
 (defpassmethod synthesise (module modname f &rest body)
