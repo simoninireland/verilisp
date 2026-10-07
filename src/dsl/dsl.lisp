@@ -59,9 +59,9 @@ The default is the pass name followed by a suffix."
 
 ;;; ---------- Defining a pass ----------
 
-;;; To make sure we only use passes where trhey're needed we add
+;;; To make sure we only use passes where they're needed we add
 ;;; properties to the main pass function symbols holding whether the
-;;; symbol's function value is a pss and what its extra arguments are.
+;;; symbol's function value is a pass and what its extra arguments are.
 
 (defun add-pass (pass-name extra-args)
   "Add a pass called PASS-NAME that takes EXTRA-ARGS in addition to the form it works over.
@@ -88,7 +88,7 @@ If PASS-NAME exists already it is overridden."
   (get pass-name 'pass-extra-args))
 
 
-!(defmacro defpass (pass-name form-arg &rest opts)
+(defmacro defpass (pass-name form-arg &rest opts)
   "Define a compiler nanopass called PASS-NAME.
 
 FORM-ARG should be a list of a single argument that names the
@@ -183,6 +183,7 @@ as described in DEFINE-RECURSION-SCHEMA."
 	     (not queue-tag))
 	(error 'dsl-error :hint ":PRE and :POST only make sense for passes on a pass queue"))
 
+    ;; generate the pass declaration
     (let ((top-level-f (pass-top-level-function-name pass-name))
 	  (form-level-f (pass-form-level-function-name pass-name))
 	  (wrap-level-f (pass-wrap-level-function-name pass-name)))
@@ -195,7 +196,7 @@ as described in DEFINE-RECURSION-SCHEMA."
 	   (defgeneric ,top-level-f (,form ,@extra-args)
 	     (:documentation ,docstring)
 
-	     ;; add the explicit methods for atoms forms
+	     ;; add the explicit methods for atom forms
 	     ,@(mapcar (lambda (m)
 			 (destructuring-bind (margs &rest mbody)
 			     m
