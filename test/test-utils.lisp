@@ -460,6 +460,6 @@
   (is (equal (associatef 1 '(3 4 5) '((1 1) (2 6))) '((1 3 4 5) (2 6))))
 
   ;; update is destructive
-  (let ((alist '((1 1) (4 5))))
+  (let ((alist (list '(1 1) '(4 5))))
     (is (equal (associatef 1 4 alist) '((1 4) (4 5))))
     (is (equal alist '((1 4) (4 5))))))
