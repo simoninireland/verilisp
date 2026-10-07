@@ -83,7 +83,8 @@
 			     (:file "state-machine")
 			     (:file "eval")
 			     (:file "loader")
-			     (:file "embedding")))
+			     (:file "embedding")
+			     (:file "wire-protocols")))
 
 	       ;; public package
 	       (:file "package"))
