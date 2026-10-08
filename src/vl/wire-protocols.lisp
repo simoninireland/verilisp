@@ -46,7 +46,7 @@
 
 (defmacro/vl asserted-p (wire)
   "Test whether WIRE is asserted."
-  `(0<> (logand ,wire 1)))     ; only check the lowest-order bit
+  `(0/= (logand ,wire 1)))     ; only check the lowest-order bit
 
 
 (defmacro/vl with-asserted (wire &body body)
