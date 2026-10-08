@@ -193,7 +193,7 @@ The patterns are used to form three code fragments:
 - The left and right patterns for matching the types
 - A body that declares the pattern's variables around BODY
 
-This means that BODY has access to the variables delcared in the
+This means that BODY has access to the variables declared in the
 LFORM and RFORM patterns."
   (declare (optimize debug))
 
@@ -289,7 +289,7 @@ LFORM and RFORM patterns."
       `(defmethod subtype-p/form (,@lpattern ,@rpattern)
 	 ,docstring
 
-	 , matcher))))
+	 ,matcher))))
 
 
 (defmacro deflub ((lform rform) &body body)
