@@ -35,7 +35,7 @@
 ;;;
 ;;; The standard nanopasses are added as defined below and added to the
 ;;; appropriate queues. Note that the order that passes are added to
-;;; their queue is probably significant.
+;;; their queue is often significant.
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (define-pass-queue expanding)
@@ -363,15 +363,15 @@ rewrite free occurrances, not those that appear under binders.")
   (:documentation "Compute the type of FORM.
 
 Verilisp uses a constraint-based type inference system, meaning that a
-form constrains -- but doe not strictly determine -- its type based in
+form constrains -- but do not strictly determine -- its type based in
 the types of its sub-terms, whose types may themselves not be known at
 the time of checking.
 
 Methods on this function should work out the type of FORM as a type
 expression. They may also apply constraints to any variables, which
-will be resolved when typing that variable's binder in the
-COMPUTE-VARIABLE-TYPES pass. They do not need to annotate variables
-read or written, which is done by the COMPUTE-DEPENDENCIES pass.
+will be resolved when typing that variable's binder. They do not need
+to annotate variables read or written, which is done by the
+COMPUTE-DEPENDENCIES pass.
 
 The disadvantage of this approach is that type errors are caught where the
 variable is declared, not at the proximate cause of the error.
