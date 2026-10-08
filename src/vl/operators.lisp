@@ -36,19 +36,9 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 ;;; +
 
 (defpassmethod compute-type (+ &rest args)
-  (declare (optimize debug))
-
+  ;; note that the + here refers to the + type, not the + operator
   (let ((tys (mapcar #'compute-type args)))
-    (unless (every #'fixed-width-p tys)
-      (error 'syntax-error :hint "Arguments must be numbers"))
-
-    (let ((signed (some #'signed-byte-p tys))
-	  (width (+ (apply #'max (mapcar (compose #'eval-in-static-environment #'bitwidth) tys))
-		    (1- (length tys)))))
-
-      (if signed
-	  `(signed-byte ,width)
-	  `(unsigned-byte ,width)))))
+    `(+ ,@tys)))
 
 
 (defpassmethod simple-expression-p (+ &rest args)
@@ -67,15 +57,8 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
       (compute-type `(- 0 ,@args))
 
       ;; general subtraction
-      (let ((tys (mapcar #'compute-type args)))
-	(unless (every #'fixed-width-p tys)
-	  (error 'syntax-error :hint "Arguments must be numbers"))
-
-	(let ((width (+ (apply #'max (mapcar (compose #'eval-in-static-environment #'bitwidth) tys))
-			(1- (length tys)))))
-
-	  ;; we force subtractions to always be signed
-	  `(signed-byte ,width)))))
+      ;; we force the result to be of type SIGNED-BYTE
+      (lub (compute-type `(+ ,@args)) '(signed-byte 1))))
 
 
 (defpassmethod simple-expression-p (- &rest args)
@@ -97,7 +80,11 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 ;;; *
 
 (defpassmethod compute-type (* &rest args)
-  (:same-as +))
+  ;; note that the * here refers to the * type, not the * operator
+  (let ((tys (mapcar #'compute-type args)))
+    `(* ,@tys)))
+
+
 (defpassmethod simple-expression-p (* &rest args)
   (:same-as +))
 
@@ -108,16 +95,16 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 
 ;;; ---------- Shifts ----------
 
-;;; Verilog provides left and right shift operators; Common Lisp uses ash
+;;; Verilog provides left and right shift operators; Common Lisp uses ASH
 ;;; and switches depending on the sign of the shift (negative for right).
 ;;; That behaviour seems impossible to synthesise without using an extra
 ;;; register, so we provide two different operators instead. (This will
-;;; change if I can figure out a way to synthesise ash.)
+;;; change if I can figure out a way to synthesise ASH.)
 ;;;
-;;; The right shift (>>) operator behaves like ash in that it does
+;;; The right shift (>>) operator behaves like ASH in that it does
 ;;; sign extension automatically based on the type of the value. This
-;;; means that Verilog's >>> (arithmetic shoft right) is generated implicitly
-;;; by type, rather than being provided explicitly.
+;;; means that Verilog's >>> (arithmetic shift right) is generated implicitly
+;;; by type, rather than being provided explicitly within Verilisp.
 
 ;;; <<
 
@@ -144,7 +131,7 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
   (as-infix '<< args))
 
 
-;;; TODO: Should we be able to pass an option to the into-auguments schema
+;;; TODO: Should we be able to pass an option to the into-arguments schema
 ;;; to change the function tag?
 
 (defpassmethod lispify (<< args)
