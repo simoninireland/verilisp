@@ -113,24 +113,6 @@ sure that methods on this function can handle types in either
 position.
 
 
-Least upper representable bounds (LURBs)
-----------------------------------------
-
-Sometimes we need to find the largest upper bound of a lost of types
-that is representable: the type that can contain actual values and be
-synthesised. This is especially needed when defining bindings.
-
-For example, we allow forms to constrain their argument type to
-``unsigned-byte`` (with no bound), which ensures that they only get passed
-numbers but doesn't constrain the width of those numbers. Assuming this
-width is inferred from wider context, we then want to form the least
-upper bound of this context, making sure that the type we infer is a
-sub-type of ``unsigned-byte`` as required, but not letting this affect the
-width calculation.
-
-.. cl:function:: lurb
-
-
 Type (de)construction
 ---------------------
 
