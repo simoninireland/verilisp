@@ -122,23 +122,21 @@ This is used only in computing LUBs involving TYPE-OF types.")
 
 ;;; ---------- Type constraints ----------
 
-;;; TODO: Disabled type constraints completely for now
-
 (defun add-frame-type-constraint (n ty env)
   "Constrain variable N to have type TY in ENV.
 
 This constraint will be used when inferring the finla type of N."
-  ;; (let ((constraints (get-frame-property n 'type-constraints env)))
-  ;;   (set-frame-property n 'type-constraints (cons ty constraints) env))
-  )
+  (let ((constraints (get-frame-property n 'type-constraints env)))
+    (set-frame-property n 'type-constraints (cons ty constraints) env)))
 
 (defun add-type-constraint (n ty)
-  "Constrain N to have type TY.
+  "Constrain N to have type TY in the current environment.
 
-This constraint will be used when inferring the finla type of N."
-  ;; (let ((constraints (variable-property n 'type-constraints)))
-  ;;   (set-variable-property n 'type-constraints (cons ty constraints)))
-  )
+This constraint will be used when inferring the final type of N."
+  (declare (optimize debug))
+
+  (let ((env (get-frame-declaring n (current-environment))))
+    (add-frame-type-constraint n ty env)))
 
 
 (defun get-type-constraints (n)
@@ -153,25 +151,21 @@ This constraint will be used when inferring the finla type of N."
 ;;; represent the values required.
 
 (defun solve-type-constraints (n f constraints)
-  "Determine the smallest representable type under CONSTRAINTS.
+  "Determine the smallest representable type for N in F under CONSTRAINTS.
 
 Return the inferred type."
   (declare (optimize debug))
 
   (let ((*variables-being-constrained* (cons (list n f)
 					     *variables-being-constrained*)))
-    (let ((cty (if (= (length constraints) 1)
-		   (lub (car constraints)) ; simplify
-		   (foldr #'lub (cdr constraints) (car constraints)))))
-
-      cty)))
+    (apply #'lub constraints)))
 
 
 (defun solve-type-constraints-and-declare (n f)
   "Determine the smallest representable type for N in frame F.
 
 The type inferred is used to declare N's type in F. If N already
-has a declared type nit is retained, but a warning is signalled if
+has a declared type it is retained, but a warning is signalled if
 the inferred type is not compatible with the declared type.
 
 It is safe to call this method repeatedly for the same variable, as
@@ -179,41 +173,41 @@ once it's been called once (and has resolved the constraints) they are
 deleted to prevent re-solving."
   (declare (optimize debug))
 
-  (if-let ((ty (get-frame-property n 'type f :default nil)))
-    ;; variable has a declared type
-    (if-let ((constraints (get-frame-property n 'type-constraints f :default nil)))
-      ;; variable has constraints, solve them
-      (let ((cty (solve-type-constraints n f constraints)))
-	;; check the declared and inferred types are compatible
-	(unless (subtype-p cty ty)
-	    (warn 'type-mismatch :expected ty
-				 :got cty
-				 :hint "Check the declared type is appropriate"))
+  (let* ((cs (get-frame-property n 'type-constraints f :default nil))
+	 (ety (get-frame-property n 'type f :default nil)))
 
-	;; remove the constraints so we don't re-solve them
-	(set-frame-property n 'type-constraints nil f)
+    (if (null cs)
+	;; no constraints (and therefore no initial value), is there an explicit type?
+	(if ety
+	    ;; explicit type provided, use it
+	    (progn
+	      (set-frame-property n 'type ety f)
+	      ety)
 
-	;; return the declared type
-	ty)
+	    ;; no explicit type either, use the compiler's default type
+	    (let ((dty (get-compiler-flag 'default-variable-type)))
+	      (set-frame-property n 'type dty f)
+	      dty))
 
-      ;; variable has no constraints
-      ty)
+	;; we have constraints, solve them
+	(let ((ty (solve-type-constraints n f cs)))
+	  ;; remove the constraints so we don't re-solve them
+	  (set-frame-property n 'type-constraints nil f)
 
-    ;; variable doesn't have a declared type
-    (if-let ((constraints (get-frame-property n 'type-constraints f :default nil)))
-      ;; variable has constraints, solve them
-      (let ((cty (solve-type-constraints n f constraints)))
-	;; remove the constraints so we don't re-solve them
-	(set-frame-property n 'type-constraints nil f)
+	  ;; check for compatibility with any explicit type given
+	  (when ety
+	    (unless (subtype-p ty ety)
+	      (warn 'type-mismatch :expected ety
+				   :got ty
+				   :hint "Check the declared type is appropriate")
 
-	;; declare the type
-	(set-frame-property n 'type cty f)
-	cty)
+	      ;; retain the explicit type
+	      (setq ty ety)))
 
-      ;; variable has no constraints or type, probably an unused variable
-      (progn
-	(warn 'unused-variable :variable n :hint "Can't infer a type, and none declared")
-	nil))))
+	  ;; apply the constrained type
+	  (set-frame-property n 'type ty f)
+
+	  ty))))
 
 
 ;;; ---------- Type checking ----------
