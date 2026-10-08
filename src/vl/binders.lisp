@@ -208,40 +208,33 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 
 ;;; ---------- Typechecking ----------
 
+;;; We apply constraints to each variable in the environment when it
+;;; is declared and used within the body of the binder. We then solve
+;;; these constraints at the end (by calling
+;;; SOLVE-TYPE-CONSTRAINTS-AND-DECLARE) to compute the final type of
+;;; the form.
+;;;
+;;; The difference between LET and LET* is the way in which variables
+;;; are added to the environment: incrementally for LET*, all at once
+;;; after type-checking for LET.
+
 ;;; TODO: Need to consider representability here -- maybe in LUB?
 
-(defun constrain-initial-value (n nf f)
-  "Add any constraints on N from is initial value.
+(defun constrain-type-of-variable-from-initial-value (n nf f)
+  "Constrain the type of N based on its intial value.
 
-The types are computed in frame F and added to frame NF, which should be
-the frame declaring N."
+The type of any initial value is added as a constraint.
+The type is computed in a frame F and applied to a frame
+NF, which should be the one declaring N. (The two frames
+let us differentiate the behaviour of LET and LET*.)"
   (declare (optimize debug))
 
-  (if-let ((iv (get-frame-property n 'initial-value nf)))
-    ;; we have an initial value, use it for constraints
+  (if-let ((iv (get-frame-property n 'initial-value nf :default nil)))
     (let ((ity (in-frame f
 		 (compute-type iv))))
 
-      (if (or (subtype-p ity 'array)
-	      (subtype-p ity 'module))
-	  (progn
-	    ;; modules and arrays are fully elaborated and don't need to be inferred
-	    (set-frame-property n 'type ity nf)
-
-	    ;; modules are their own representation
-	    (when (subtype-p ity 'module)
-	      (set-frame-property n 'as 'module nf)))
-
-	  (progn
-	    ;; add the type to the constraints
-	    ;;(add-frame-type-constraint n ity nf)
-	    ;; TODO: Fix when we do more precise typing
-	    (unless (get-frame-property n 'type nf :default nil)
-	      (set-frame-property n 'type (get-compiler-flag 'default-variable-type) nf)))))
-
-    ;; otherwise use the default type
-    (unless (get-frame-property n 'type nf :default nil)
-      (set-frame-property n 'type (get-compiler-flag 'default-variable-type) nf))))
+      ;; add as a constraint
+      (add-frame-type-constraint n ity nf))))
 
 
 (defun compute-let-env ()
@@ -258,7 +251,7 @@ other bindings."
 
     (let ((f (current-frame)))
       (dolist (n (variables-declared-in-frame lenv))
-	(constrain-initial-value n lenv f)))))
+	(constrain-type-of-variable-from-initial-value n lenv f)))))
 
 
 (defun compute-let*-env ()
@@ -277,10 +270,19 @@ LET* adds bindings incrementally, so each can see those that went before."
 
 	(let ((f (current-frame)))
 	  (dolist (n (variables-declared-in-frame lenv))
-	    (constrain-initial-value n lenv f)
+	    (constrain-type-of-variable-from-initial-value n lenv f)
 
 	    ;; declare the variable ready for the next one
 	    (declare-variable n (get-frame-properties n lenv))))))))
+
+
+(defun compute-final-let-env ()
+  "Compute the final types of all the declarations in the curent frame."
+  (declare (optimize debug))
+
+  (let ((f (current-frame)))
+    (dolist (n (variables-declared-in-frame f))
+      (solve-type-constraints-and-declare n f))))
 
 
 (defpassmethod compute-type (let f &rest body)
@@ -289,8 +291,12 @@ LET* adds bindings incrementally, so each can see those that went before."
   (with-local-frame f
     (compute-let-env)
 
-    ;; the type is the type of the body
-    (compute-type (with-implicit-progn body))))
+    (let ((ty (compute-type (with-implicit-progn body))))
+      ;; finalise the types of the variables against the constraints
+      (compute-final-let-env)
+
+      ;; the type is the type of the body
+      ty)))
 
 
 (defpassmethod compute-type (let* f &rest body)
@@ -299,8 +305,12 @@ LET* adds bindings incrementally, so each can see those that went before."
   (with-local-frame f
     (compute-let*-env)
 
-    ;; the type is the type of the body
-    (compute-type (with-implicit-progn body))))
+    (let ((ty (compute-type (with-implicit-progn body))))
+      ;; finalise the types of the variables against the constraints
+      (compute-final-let-env)
+
+      ;; the type is the type of the body
+      ty)))
 
 
 (defpassmethod check-all-variables-typed (let f &rest body)
