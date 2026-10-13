@@ -1,55 +1,50 @@
-;; A UART
-;;
-;; Copyright (C) 2024--2025 Simon Dobson
-;;
-;; This file is part of verilisp, a Common Lisp DSL for hardware design
-;;
-;; verilisp is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-;;
-;; verilisp is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-;;
-;; You should have received a copy of the GNU General Public License
-;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
+;;;; A UART
+;;;;
+;;;; Copyright (C) 2024--2026 Simon Dobson
+;;;;
+;;;; This file is part of verilisp, a Common Lisp DSL for hardware design
+;;;;
+;;;; verilisp is free software: you can redistribute it and/or modify
+;;;; it under the terms of the GNU General Public License as published by
+;;;; the Free Software Foundation, either version 3 of the License, or
+;;;; (at your option) any later version.
+;;;;
+;;;; verilisp is distributed in the hope that it will be useful,
+;;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;;; GNU General Public License for more details.
+;;;;
+;;;; You should have received a copy of the GNU General Public License
+;;;; along with verilisp. If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-;; This is a Verilisp UART written in a "software style" but inspired
-;; by the "Documented Verilog UART" from
-;; https://github.com/cyrozap/osdvu/blob/master/uart.v
+;;;; This is a Verilisp UART written in a "software style" but inspired
+;;;; by the "Documented Verilog UART" from:
+;;;;
+;;;; https://github.com/cyrozap/osdvu/blob/master/uart.v
+;;;;
+;;;; whose copyright notice states:
 
-;; Copyright (C) 2010 Timothy Goddard (tim@goddard.net.nz)
-;;               2013 Aaron Dahlen
-;; Distributed under the MIT licence.
-;;
-;; Permission is hereby granted, free of charge, to any person obtaining a copy
-;; of this software and associated documentation files (the "Software"), to deal
-;; in the Software without restriction, including without limitation the rights
-;; to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-;; copies of the Software, and to permit persons to whom the Software is
-;; furnished to do so, subject to the following conditions:
-;;
-;; The above copyright notice and this permission notice shall be included in
-;; all copies or substantial portions of the Software.
-;;
-;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-;; AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-;; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-;; THE SOFTWARE.
-
-(defmacro/vl with-asserted (wire &body body)
-  "Perform BODY with WIRE set to 1, and the reset WIRE to 0."
-  `(progn
-     (setq ,wire 1)
-     ,@body
-     (setq ,wire 0)))
-
+;;;; Copyright (C) 2010 Timothy Goddard (tim@goddard.net.nz)
+;;;;               2013 Aaron Dahlen
+;;;; Distributed under the MIT licence.
+;;;;
+;;;; Permission is hereby granted, free of charge, to any person obtaining a copy
+;;;; of this software and associated documentation files (the "Software"), to deal
+;;;; in the Software without restriction, including without limitation the rights
+;;;; to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+;;;; copies of the Software, and to permit persons to whom the Software is
+;;;; furnished to do so, subject to the following conditions:
+;;;;
+;;;; The above copyright notice and this permission notice shall be included in
+;;;; all copies or substantial portions of the Software.
+;;;;
+;;;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;;;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;;;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+;;;; AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;;;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+;;;; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+;;;; THE SOFTWARE.
 
 (defmacro/vl wait (time counter)
   "Wait for TIME cycles using COUNTER to count the cycles."
@@ -64,8 +59,8 @@
 
 
 (defmodule/vl uart (clk rst
-			rx rx-byte received-p receiving-p receive-error-p
-			tx tx-byte transmit transmitting-p)
+		    rx rx-byte received-p receiving-p receive-error-p
+		    tx tx-byte transmit transmitting-p)
   (declare (type bit clk rst
 		 rx received-p receiving-p receive-error-p
 		 tx transmit transmitting-p)
