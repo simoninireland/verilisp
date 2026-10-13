@@ -199,6 +199,9 @@
 
 ;; ---------- Generalised place ----------
 
+;; We set the TYPE and INITIAL-VALUE properties explicitly, which
+;; LET would have done had we used a proper binding
+
 (test test-aref-dependencies
   "Test we can extract aref dependencies properly."
   (vl::with-new-frame
@@ -227,7 +230,8 @@
 (test test-aref-target
   "Test we can use array elements as targets."
   (vl::with-new-frame
-    (vl::declare-variable 'a '((initial-value (make-array '(16)
+    (vl::declare-variable 'a '((type (array (unsigned-byte 8) (16)))
+			       (initial-value (make-array '(16)
 					       :element-type (unsigned-byte 8)))))
     (vl::declare-variable 'b '((type (unsigned-byte 8))
 			       (initial-value 24)))
