@@ -92,7 +92,7 @@ If PASS-NAME exists already it is overridden."
   "Define a compiler nanopass called PASS-NAME.
 
 FORM-ARG should be a list of a single argument that names the
-form being operated on, plus any extraarguments to the pass.
+form being operated on, plus any extra arguments to the pass.
 
 The macro follows the same form as DEFGENERIC: a name and lambda list
 followed by a (possibly empty) alist of options for the construction
@@ -209,7 +209,11 @@ as described in DEFINE-RECURSION-SCHEMA."
 	       (destructuring-bind (,fun &rest ,args)
 		   ,form
 		 (with-current-form ,form
-		   (,form-level-f ,fun ,args ,@extra-args)))))
+		   (,form-level-f ,fun ,args ,@extra-args))))
+
+	     ;; add a catcher for odd cases
+	     (:method (,form ,@extra-args)
+	       (error 'unknown-form :form ,form)))
 
 	   ;; declare the function as a pass, with its extra argument names
 	   ,(if (null extra-args)
@@ -352,7 +356,7 @@ body of the method."
 	    ;; method has a body
 	    (if (top-level-function-method-p form)
 		;; method is for an atom
-		`(defmethod ,top-level-f ,form
+		`(defmethod ,top-level-f ,(append form extra-args)
 		   ,docstring
 
 		   ,@body)
