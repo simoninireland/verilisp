@@ -392,10 +392,12 @@ Returns a type expression.")
 (defpass check-all-variables-typed (form)
   (:documentation "Check that all variables in FORM have types.
 
-This shouldn't be needed: the type rules should ensure that all
-variables either have types declared ir types inferred (or both).
-But just to be sure, this pass checks that there are type
-attributes attached to all variables in all frames.")
+This pass resolves all type constraints going down the source tree,
+allowing inner declarations to affect (and be affected by) the types
+inferred for outer declarations (and vice versa). It also checks that
+all variables actually get types through this process.
+
+Methods are only required for binder forms.")
   (:schema over-arguments)
   (:queue typing)
 
@@ -456,15 +458,16 @@ assignment (first) position of a SETQ (or SETQ).
 Return the set of variables written to."))
 
 
-(defgeneric compute-type-setf (selector value &rest selargs)
+(defpass compute-type-setf (form tyval)
   (:documentation "Compute the type of an assignment.
 
 This function is called when forms of the type
-(SETF (SEL . SELARGS) VALUE) are encountered. The lambda
-list is the same as for functions defining new generalised places
-in Lisp (which Verilisp doesn't yet support).
+(SETF (SEL . SELARGS) VALUE) are encountered where TYVAL is the type
+inferred for VALUE. The lambda list is the same as for functions
+defining new generalised places in Lisp (which Verilisp doesn't yet
+support).
 
-Return the type of the application."))
+Return the type inferred for the place given the assignment."))
 
 
 ;;; ---------- Simple expressions ----------

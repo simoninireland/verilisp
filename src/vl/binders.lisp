@@ -233,6 +233,10 @@ let us differentiate the behaviour of LET and LET*.)"
     (let ((ity (in-frame f
 		 (compute-type iv))))
 
+      (if (subtype-p ity 'array)
+	  ;; record the explicit type for an array
+	  (set-frame-property n 'type ity nf))
+
       ;; add as a constraint
       (add-frame-type-constraint n ity nf))))
 
@@ -248,7 +252,6 @@ other bindings."
   ;; all the declarations in it within the parent environment, adding
   ;; any properties to the detached frame, and then re-attach it
   (with-detached-frame lenv
-
     (let ((f (current-frame)))
       (dolist (n (variables-declared-in-frame lenv))
 	(constrain-type-of-variable-from-initial-value n lenv f)))))
@@ -291,12 +294,7 @@ LET* adds bindings incrementally, so each can see those that went before."
   (with-local-frame f
     (compute-let-env)
 
-    (let ((ty (compute-type (with-implicit-progn body))))
-      ;; finalise the types of the variables against the constraints
-      (compute-final-let-env)
-
-      ;; the type is the type of the body
-      ty)))
+    (compute-type (with-implicit-progn body))))
 
 
 (defpassmethod compute-type (let* f &rest body)
@@ -305,17 +303,17 @@ LET* adds bindings incrementally, so each can see those that went before."
   (with-local-frame f
     (compute-let*-env)
 
-    (let ((ty (compute-type (with-implicit-progn body))))
-      ;; finalise the types of the variables against the constraints
-      (compute-final-let-env)
-
-      ;; the type is the type of the body
-      ty)))
+    (compute-type (with-implicit-progn body))))
 
 
 (defpassmethod check-all-variables-typed (let f &rest body)
   (with-local-frame f
-    (dolist (n (get-frame-variable-names f))
+    ;; resolve all the type constraints into actual types
+    (compute-final-let-env)
+
+    ;; make sure every variable got a type
+    ;; TODO: Check representability here too?
+    (dolist (n (variables-declared-in-frame f))
       (unless (get-frame-property n 'type f :default nil)
 	(error 'compiler-error :hint (format nil "Variable ~s has no type" n))))
 
