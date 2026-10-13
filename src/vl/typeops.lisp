@@ -136,6 +136,8 @@ This constraint will be used when inferring the final type of N."
   (declare (optimize debug))
 
   (let ((env (get-frame-declaring n (current-environment))))
+    (when (null env)
+      (error 'unknown-variable :variable n))
     (add-frame-type-constraint n ty env)))
 
 
