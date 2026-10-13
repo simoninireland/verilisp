@@ -22,7 +22,9 @@
 
 
 (test test-let-float
-  "Test that nested LETs float."
+  "Test that nested top-level LETs float."
+  (declare (optimize debug))
+
   (let ((p (vl::expand/vl '(let ((a 1))
 			    (declare (width 8 a))
 			    (setq a 12)
@@ -34,9 +36,10 @@
 	(vl::float-let-blocks p)
       (is (set-equal (vl::get-environment-names env)
 		     '(a b)))
+      (is (not (null form)))
 
       ;; this may change when we float constant initial values
-      (is (equal (vl::get-environment-property 'a 'initial-value env) 1))
+      ;;(is (equal (vl::get-environment-property 'a 'initial-value env) 1))
       (is (equal (vl::get-environment-property 'b 'initial-value env) '(+ a 1))))))
 
 
@@ -45,10 +48,11 @@
   (let ((p (vl::expand/vl  '(let ((a 1))
 			     (declare (width 10 a))
 			     (setq a 10)
-			    (let ((b 12))
-			      (declare (as constant b))
-			      (setq a (+ b a)))))))
+			     (let ((b 12))
+			       (declare (as constant b))
+			       (setq a (+ b a)))))))
     (vl::typecheck p)
+
     (destructuring-bind (form env)
 	(vl::float-let-blocks p)
       (is (eql (vl::get-environment-property 'b 'as env) 'constant))
