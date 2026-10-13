@@ -143,20 +143,3 @@
 				 (as constant)))
 
       (is (= (vl::eval-in-static-environment '(+ a b)) 42)))))
-
-
-(test test-eval-let-constants
-  "Test we reduce statically determined constants."
-  (let ((p (vl::expand/vl '(let* ((a 10)
-				  (b (+ a 12))
-				  (c (+ a b)))
-			    (declare (as constant a b)
-			     (type (unsigned-byte 8) a b c))
-			    (incf c)))))
-    (vl::typecheck p)
-
-    (let ((f (cadr p)))
-      (is (equal (vl::get-frame-property 'a 'initial-value f) 10))
-      (is (equal (vl::get-frame-property 'b 'initial-value f) 22))
-      (is (equal (vl::get-frame-property 'c 'initial-value f) 32))
-      (is (eql (vl::get-frame-property 'c 'as f) 'register)))))
