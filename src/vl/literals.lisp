@@ -22,6 +22,10 @@
 
 ;;; ---------- Integers ----------
 
+(defpassmethod simple-expression-p ((form integer))
+  t)
+
+
 (defpassmethod compute-type ((form integer))
   (let ((w (bits-for-integer form)))
     (if (< form 0)

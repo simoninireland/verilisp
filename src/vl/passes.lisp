@@ -480,12 +480,7 @@ Return the type inferred for the place given the assignment."))
 
 (defpass simple-expression-p (form)
   (:documentation "Test whether FORM is a simple expression.")
-  (:schema constant-form nil)
-
-  (:passmethod ((n integer))
-	       t)
-  (:passmethod ((s symbol))
-	       (variable-declared-p s)))
+  (:schema constant-form nil))
 
 
 ;;; ---------- Elaborating state machines ----------

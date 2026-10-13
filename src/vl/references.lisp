@@ -35,6 +35,10 @@
       form))
 
 
+(defpassmethod simple-expression-p ((form symbol))
+  t)
+
+
 (defpassmethod compute-type ((form symbol))
   (if-let ((f (get-frame-declaring form (current-frame))))
     `(type-of ,form ,f)
