@@ -80,11 +80,13 @@
     (error 'value-mismatch :expected "non-negative width"
 			   :got width
 			   :hint "Make sure width bits are positive"))
-  (when (> width (1+ start))
+  (when (and (static-p start)
+	     (> width (1+ (eval-in-static-environment start))))
     ;; excess width
+    ;; we can only check this when the start bit is known staically
     (error 'value-mismatch :expected "acceptable width"
 			   :got width
-			   :hint "Make sure width can be extrated starting from thebstart bit"))
+			   :hint "Make sure width can be extrated starting from the start bit"))
 
   width)
 
