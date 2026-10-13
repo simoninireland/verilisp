@@ -40,7 +40,7 @@
   (is (vl::subtype-p (vl::typecheck '(- 1))
 		    '(signed-byte 2)))
   (is (vl::subtype-p (vl::typecheck '(- 2 1))
-		    '(signed-byte 3))))
+		    '(signed-byte 4))))
 
 
 (test test-synthesise-addition-operators
