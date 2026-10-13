@@ -30,6 +30,9 @@
 
 ;;; ---------- PROGN ----------
 
+;; TODO: The processing of types and dependencies with recovery
+;; should be a recursion schema
+
 (defun compute-type-forms (forms)
   "Compute the type of a list of FORMS.
 
@@ -39,15 +42,20 @@ The type is the type of the last form."
   (destructuring-bind (form . rest)
       forms
 
-    (let ((ty (with-current-form form
-		(compute-type form))))
+    (with-recover-on-error
+	;; on error, proceed to the next form if there is one
+	(unless (null rest)
+	  (compute-type-forms rest))
 
-      (if (null rest)
-	  ;; if we're the last form, return the type
-	  ty
+      (let ((ty (with-current-form form
+		  (compute-type form))))
 
-	  ;; otherwise proceed to the next form
-	  (compute-type-forms rest)))))
+	(if (null rest)
+	    ;; if we're the last form, return the type
+	    ty
+
+	    ;; otherwise proceed to the next form
+	    (compute-type-forms rest))))))
 
 
 (defpassmethod compute-type (progn &rest body)
@@ -58,6 +66,32 @@ The type is the type of the last form."
 
       ;; the type of the form is the type of the last form in the body
       (compute-type-forms body)))
+
+
+(defun compute-dependency-forms (forms)
+  "Compute the dependencies over FORMS."
+  (declare (optimize debug))
+
+  (destructuring-bind (form . rest)
+      forms
+
+    (with-recover-on-error
+	;; on error, proceed to the next form if there is one
+	(unless (null rest)
+	  (compute-dependency-forms rest))
+
+      ;; compute the dependencies of the first form
+      (with-current-form form
+	(compute-dependencies form))
+
+      ;; proceed to the next form if there is one
+      (unless (null rest)
+	(compute-dependency-forms rest)))))
+
+
+(defpassmethod compute-dependencies (progn &rest body)
+   (unless (= (length body) 0)
+      (compute-dependency-forms body)))
 
 
 (defun simplify-progn-body (body)
@@ -159,7 +193,8 @@ This includes all the named variables, and excluses the * wildcard."
 
 
 (defpassmethod compute-dependencies (@ sensitivities &rest body)
-  (compute-dependencies (with-implicit-progn body)))
+  (unless (= (length body) 0)
+    (compute-dependency-forms body)))
 
 
 (defpassmethod simplify-progn (@ sensitivities &rest body)

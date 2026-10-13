@@ -228,18 +228,7 @@ MARK-VARIABLE-AS-READ and MARK-VARIABLE-AS-WRITTEN.")
   ;; return the original form (environments updated in place)
   (:post #'return-original-form)
 
-  (:passmethod (form))
-
-  (:passmethod ((form list))
-	       (destructuring-bind (fun &rest args)
-		   form
-
-		 (with-current-form form
-		   (with-recover-on-error
-		       ;; leave dependencies unchanged on error
-		       t
-
-		     (compute-dependencies/form fun args))))))
+  (:passmethod (form)))
 
 
 (defun add-dependencies (n deps)
