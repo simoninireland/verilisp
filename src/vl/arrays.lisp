@@ -24,7 +24,7 @@
 ;;; An array is accessed using AREF, which is a generic place suitable for SETF.
 
 
-;;; ---------- Array type ----------
+;;; ---------- Array type algebra ----------
 
 (defsubtype ((array lty &optional indices) array)
   t)
@@ -326,6 +326,8 @@ probably should, for those that are statically determined."
 			 :hint "Indices must match array dimension")))
 
 
+;; The name of this function is a bit strange, to avoid a clash
+;; with the ARRAY-ELEMENT-TYPE function in Common Lisp
 (defun array-type-element-type (ty)
   "Extract the element type of array TY."
   (ensure-array-type ty)
@@ -339,6 +341,7 @@ probably should, for those that are statically determined."
       ;; array has a specialiser
       (cadr ty)))
 
+
 (defun array-type-shape (ty)
   "Extract the shape of array TY."
   (ensure-array-type ty)
@@ -349,7 +352,7 @@ probably should, for those that are statically determined."
       (caddr ty)
 
       ;; otherwise fail
-      (error 'representation-mismatch :expected "a bounded array" :got ty :hint "Need a specified shape")))
+      (error 'representation-mismatch :variable (car ty) :expected "a bounded array" :got ty :hint "Need a specified shape")))
 
 
 (defpassmethod generalised-place-p (aref place &rest indices)
@@ -420,10 +423,16 @@ Return a list containing the final array and indices."
   (destructuring-bind (dplace dindices)
       (displaced-aref place indices)
 
-    (mapc #'ensure-fixed-width dindices)
-    (add-type-constraint dplace `array) ; TODO: add bounds on indices?
     (let ((ty (get-type dplace)))
       (array-type-element-type ty))))
+
+
+(defpassmethod compute-type-setf (aref place &rest indices)
+  (declare (ignore indices))
+
+  (let* ((ty (get-type place))
+	 (shape (array-type-shape ty)))
+    `(array tyval ,shape)))
 
 
 (defpassmethod compute-dependencies (aref place &rest indices)

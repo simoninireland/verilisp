@@ -29,7 +29,7 @@
 ;;; but we can also coerce one to the other, which Common Lisp doesn't allow.
 
 (defun compute-end-bit (start end width)
-  "Compute the end bit given START, END, and WIDTH."
+  "Compute the end bit given some of START, END, and WIDTH."
   (if (null end)
       (if width
 	  ;; no end set, extract from width if present
@@ -56,36 +56,8 @@
 	  end)))
 
 
-(defpassmethod generalised-place-p (bref place start &key end width)
-  t)
-
-
-(defpassmethod read-variables (bref place start &key end width)
-  (declare (optimize debug))
-
-  ;; include any variables read in PLACE, which might itself be a generalised place
-  ;; rather than being just a variable
-  (union-all (mapcar #'read-variables (remove-nulls (list place start end width)))))
-
-
-(defpassmethod read-variables-setf (bref place start &key end width)
-  ;; do not include variables read in PLACE
-  (union-all (mapcar #'read-variables (remove-nulls (list start end width)))))
-
-
-(defpassmethod written-variables-setf (bref place start &key end width)
-  (list place))
-
-
-(defpassmethod compute-type (bref place start &key end width)
-  (declare (optimize debug))
-
-  ;; check syntax
-  (when (and (not (null width))
-	     (not (null end)))
-    (error 'syntax-error :hint "Provide at most one of :END and :WIDTH)"))
-
-  ;; extract width
+(defun compute-width (start end width)
+  "Compute the width given some of START, END, and WIDTH."
   (if (null width)
       (if (null end)
 	  ;; default to accessing the single START bit
@@ -109,11 +81,48 @@
 			   :got width
 			   :hint "Make sure width bits are positive"))
 
-  ;; recurse into the place
-  (compute-type place)
+  width)
 
-  ;; type depends on the number of bits extracted
-  `(unsigned-byte ,width))
+
+(defpassmethod generalised-place-p (bref place start &key end width)
+  t)
+
+
+(defpassmethod read-variables (bref place start &key end width)
+  (declare (optimize debug))
+
+  ;; include any variables read in PLACE, which might itself be a generalised place
+  ;; rather than being just a variable
+  (union-all (mapcar #'read-variables (remove-nulls (list place start end width)))))
+
+
+(defpassmethod read-variables-setf (bref place start &key end width)
+  ;; do not include variables read in PLACE
+  (union-all (mapcar #'read-variables (remove-nulls (list start end width)))))
+
+
+(defpassmethod written-variables-setf (bref place start &key end width)
+  (list place))
+
+
+(defpassmethod compute-type-setf (bref place start &key end width)
+  (compute-type `(bref ,place ,start :end ,end :width ,width)))
+
+
+(defpassmethod compute-type (bref place start &key end width)
+  (declare (optimize debug))
+
+  ;; check syntax
+  (when (and (not (null width))
+	     (not (null end)))
+    (error 'syntax-error :hint "Provide at most one of :END and :WIDTH)"))
+
+  (let ((w (compute-width start end width)))
+    ;; recurse into the place
+    (compute-type place)
+
+    ;; type depends on the number of bits extracted
+    `(unsigned-byte ,w)))
 
 
 (defpassmethod simple-expression-p (bref place start &key end width)

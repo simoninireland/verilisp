@@ -173,17 +173,12 @@ generalised places."
 (defpassmethod compute-type (setf place val)
   (declare (optimize debug))
 
-  (let ((typlace (compute-type place))
-	(tyval (compute-type val)))
-    (ensure-subtype typlace tyval)
-
-    ;; TODO: This needs to work on the type of the assigned place, at the
-    ;; moment it'll fail for arrays
-
-    ;; constrain the written variable to be as wide as the value assigned
+  (let* ((tyval (compute-type val))
+	 (typlace (compute-type-setf place tyval)))
     (let ((w (car (written-variables-setf place))))
-      (add-type-constraint w tyval))
+      (add-type-constraint w typlace))
 
+    ;; the type of the assignment is the type assigned
     tyval))
 
 
