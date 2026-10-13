@@ -392,7 +392,7 @@ one or more of the variables involved need to have explicit types
 declared form them to short-circuit inference."))
 
 
-(define-condition coercion-mismatch (vl-warning)
+(define-condition coercion-mismatch (vl-error)
   ((expected
     :documentation "The type we tried to coerce to."
     :initarg :expected
@@ -408,7 +408,7 @@ declared form them to short-circuit inference."))
 				       c str)))
   (:documentation "Condition signalled when a coercion can't happen.
 
-Coercion only currently works between fixed-width types."))
+Coercion only currently works between come pairs of types."))
 
 
 (define-condition precision-mismatch (vl-warning)
@@ -431,9 +431,9 @@ This happens when a value is coerced to a type with too few bits to represent
 it faithfully."))
 
 
-(define-condition access-mismatch (vl-warning)
+(define-condition access-mismatch (vl-error)
   ((variable
-    :documentation "The variablebeing accessed."
+    :documentation "The variable being accessed."
     :initarg :variable
     :reader accessed-variable))
   (:report (lambda (c str)
@@ -445,7 +445,7 @@ it faithfully."))
 This typically happens when trying to assign a value to a constant."))
 
 
-(define-condition bitfield-mismatch (vl-warning)
+(define-condition bitfield-mismatch (vl-error)
   ((pattern
     :documentation "The bitfield pattern."
     :initarg :pattern
