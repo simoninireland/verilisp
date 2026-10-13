@@ -101,7 +101,8 @@
 (test test-with-bitfields-extensive
   "Test a more extensive example of with-bitfields."
   (let ((p (vl::expand/vl `(module test (clk)
-				   (declare (direction in clk))
+				   (declare (type bit clk)
+					    (direction in clk))
 				   (let ((ctrl 0)
 					 (a 0))
 				     (declare (type (unsigned-byte 6) ctrl)
