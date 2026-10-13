@@ -276,7 +276,7 @@
   (with-new-frame
     (vl::declare-variable 'a '((initial-value 7)))
 
-    (vl::constrain-initial-value 'a (current-frame) (current-frame))
+    (vl::constrain-type-of-variable-from-initial-value 'a (current-frame) (current-frame))
     (vl::solve-type-constraints-and-declare 'a (current-frame))
     (is (subtype-p (vl::get-environment-property 'a 'type (current-frame))
 		   '(unsigned-byte 3)))))
@@ -290,7 +290,7 @@
     ;; simulate assigning to the variable
     (vl::add-type-constraint 'a '(unsigned-byte 8))
 
-    (vl::constrain-initial-value 'a (current-frame) (current-frame))
+    (vl::constrain-type-of-variable-from-initial-value 'a (current-frame) (current-frame))
     (vl::solve-type-constraints-and-declare 'a (current-frame))
     (is (equal (vl::get-environment-property 'a 'type (current-frame))
 	       '(unsigned-byte 8))))
@@ -302,7 +302,7 @@
       (vl::add-type-constraint 'a '(unsigned-byte 8))
       (vl::add-type-constraint 'a '(unsigned-byte 16))
 
-      (vl::constrain-initial-value 'a (current-frame) (current-frame))
+      (vl::constrain-type-of-variable-from-initial-value 'a (current-frame) (current-frame))
       (vl::solve-type-constraints-and-declare 'a (current-frame))
       (is (equal (vl::get-environment-property 'a 'type (current-frame))
 		 '(unsigned-byte 16))))
@@ -313,7 +313,7 @@
       ;; simulate assignment with a union type
       (vl::add-type-constraint 'a '(or (unsigned-byte 8) (signed-byte 16)))
 
-      (vl::constrain-initial-value 'a (current-frame) (current-frame))
+      (vl::constrain-type-of-variable-from-initial-value 'a (current-frame) (current-frame))
       (vl::solve-type-constraints-and-declare 'a (current-frame))
       (is (vl::get-environment-property 'a 'type (current-frame))
 	  '(signed-byte 16))))
@@ -351,8 +351,8 @@
 	(vl::declare-variable 'b '((initial-value a)))
 	(let ((inner (current-frame)))
 	  ;; LET-style assignment
-	  (vl::constrain-initial-value 'a outer (empty-environment))
-	  (vl::constrain-initial-value 'b inner outer)
+	  (vl::constrain-type-of-variable-from-initial-value 'a outer (empty-environment))
+	  (vl::constrain-type-of-variable-from-initial-value 'b inner outer)
 
 	  ;; simulate an assignment to A
 	  (vl::add-type-constraint 'a `(type-of b ,inner))
