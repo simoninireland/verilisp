@@ -101,7 +101,7 @@
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((clk 0)
 						       (a 0))
 						     (declare (as wire clk))
-						     (@ ((posedge clk))
+						     (@ (posedge clk)
 						      (setf a 1)))))
 		    '(unsigned-byte 1)))
 
