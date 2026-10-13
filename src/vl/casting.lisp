@@ -46,7 +46,13 @@
 				 :hint "Casting to the empty type can't succeed"))
 
 	  (t
+	   ;; leave for a late check in the CHECK-ALL-VARIABLES-TYPED pass
 	   ty))))
+
+
+(defpassmethod check-all-variables-typed (the ty val)
+  ;; we can only check the casts make sense after inference is complete
+  (ensure-subtype val ty))
 
 
 (defpassmethod read-variables (the ty val)
