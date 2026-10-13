@@ -46,7 +46,7 @@ This essentially strips any bound and returns the unbounded bare type tag."
 (defun make-fixed-width-bounded-type (ty bound)
   "Set BOUND as the bound on TY.
 
-If TY has a bound, it is repalced; if it is unbounded, a
+If TY has a bound, it is replaced; if it is unbounded, a
 bouded version is created."
   (let ((tag (unbounded-fixed-width-type ty)))
     `(,tag ,bound)))
