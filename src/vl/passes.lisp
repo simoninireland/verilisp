@@ -269,7 +269,10 @@ A dependency is a variable that's read in assigning values to N."
 
 
 (defun mark-variable-as-written (n)
-  "Annotate N as having been written to."
+  "Annotate N as having been written to.
+
+If N is not writeable, an error is signalled."
+  (ensure-writeable n)
   (set-variable-property n 'written t))
 
 
@@ -395,9 +398,10 @@ Returns a type expression.")
 This pass resolves all type constraints going down the source tree,
 allowing inner declarations to affect (and be affected by) the types
 inferred for outer declarations (and vice versa). It also checks that
-all variables actually get types through this process.
+all variables actually get types through this process, and that any
+casts are correct after inference.
 
-Methods are only required for binder forms.")
+Methods are only required for binder, casting, and corercing forms.")
   (:schema over-arguments)
   (:queue typing)
 
