@@ -43,6 +43,10 @@
     (error 'unknown-variable :variable form)))
 
 
+(defpassmethod compute-type-setf ((form symbol))
+  tyval)
+
+
 (defpassmethod read-variables ((form (eql nil)))
   nil)
 
