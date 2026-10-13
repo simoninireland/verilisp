@@ -30,30 +30,34 @@
 
 ;;; ---------- PROGN ----------
 
+(defun compute-type-forms (forms)
+  "Compute the type of a list of FORMS.
+
+The type is the type of the last form."
+  (declare (optimize debug))
+
+  (destructuring-bind (form . rest)
+      forms
+
+    (let ((ty (with-current-form form
+		(compute-type form))))
+
+      (if (null rest)
+	  ;; if we're the last form, return the type
+	  ty
+
+	  ;; otherwise proceed to the next form
+	  (compute-type-forms rest)))))
+
+
 (defpassmethod compute-type (progn &rest body)
   (declare (optimize debug))
 
-  (labels ((compute-type-forms (forms)
-	     (declare (optimize debug))
+  (if (= (length body) 0)
+      nil
 
-	     (destructuring-bind (form . rest)
-		 forms
-
-	       (let ((ty (with-current-form form
-			   (compute-type form))))
-
-		 (if (null rest)
-		     ;; if we're the last form, return the type
-		     ty
-
-		     ;; otherwise proceed to the next form
-		     (compute-type-forms rest))))))
-
-    (if (= (length body) 0)
-	nil
-
-	;; the type of the form is the type of the last form in the body
-	(compute-type-forms body))))
+      ;; the type of the form is the type of the last form in the body
+      (compute-type-forms body)))
 
 
 (defun simplify-progn-body (body)
@@ -115,7 +119,11 @@ block, and are represented by the symbol *."
       (compute-type sensitivities))
 
   ;; check the body in the outer environment
-  (compute-type (with-implicit-tagbody body)))
+  (if (= (length body) 0)
+      nil
+
+      ;; the type of the form is the type of the last form in the body
+      (compute-type-forms body)))
 
 
 (defun read-variables-sensitivities (sensitivities)
