@@ -81,7 +81,7 @@
   (if (in-expression-context-p)
       ;; in expression, synthesise as a conditional expression
       (if (and (simple-expression-p condition)
-	       (simple-expression-p condition)
+	       (simple-expression-p then)
 	       (or (null else)
 		   (and (= (length else) 1)
 			(simple-expression-p (car else)))))
