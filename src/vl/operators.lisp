@@ -52,13 +52,8 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 ;;; -
 
 (defpassmethod compute-type (- &rest args)
-  (if (= (length args) 1)
-      ;; unary negation
-      (compute-type `(- 0 ,@args))
-
-      ;; general subtraction
-      ;; we force the result to be of type SIGNED-BYTE
-      (lub (compute-type `(+ ,@args)) '(signed-byte 1))))
+  ;; we force the result to be signed
+  (lub (compute-type `(+ ,@args)) '(signed-byte 1)))
 
 
 (defpassmethod simple-expression-p (- &rest args)
