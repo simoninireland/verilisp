@@ -218,8 +218,6 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 ;;; are added to the environment: incrementally for LET*, all at once
 ;;; after type-checking for LET.
 
-;;; TODO: Need to consider representability here -- maybe in LUB?
-
 (defun constrain-type-of-variable-from-initial-value (n nf f)
   "Constrain the type of N based on its intial value.
 
@@ -233,12 +231,18 @@ let us differentiate the behaviour of LET and LET*.)"
     (let ((ity (in-frame f
 		 (compute-type iv))))
 
-      (if (subtype-p ity 'array)
-	  ;; record the explicit type for an array
-	  (set-frame-property n 'type ity nf))
+      (cond ((subtype-p ity 'array)
+	     ;; record the explicit type for an array
+	     (set-frame-property n 'type ity nf))
 
-      ;; add as a constraint
-      (add-frame-type-constraint n ity nf))))
+	    ((subtype-p ity 'module)
+	     ;; set representation and type
+	     (set-frame-property n 'as 'module nf)
+	     (set-frame-property n 'type ity nf))
+
+	    (t
+	     ;; add as a constraint
+	     (add-frame-type-constraint n ity nf))))))
 
 
 (defun compute-let-env ()
