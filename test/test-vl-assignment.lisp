@@ -38,7 +38,7 @@
 
 (test test-assignment-to-constant
   "Test we can't assign to a constant."
-  (signals (not-synthesisable)
+  (signals (dsl::unknown-form)
     (vl::typecheck (vl::expand/vl '(let ((a 12))
 				    (setf 24 a))))))
 
@@ -112,7 +112,7 @@
 
 (test test-typecheck-setq-generalised-place
   "Test we catch the common mistake of using SETQ when we mean SETF."
-  (signals (vl::not-synthesisable)
+  (signals (vl::syntax-error)
     (vl::with-new-frame
       (vl::typecheck (vl::expand/vl '(let ((a 0))
 				      (setq (bref a 0) 1)))))))
