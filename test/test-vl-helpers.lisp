@@ -98,4 +98,4 @@
 					      8)))))
 	(is (vl::subtype-p ty '(unsigned-byte 4)))))
 
-    (is (= errors 3)))) ;; one from dependencies, two from constraints
+    (is (= errors 2)))) ;; one from dependencies, one from unknown variable
