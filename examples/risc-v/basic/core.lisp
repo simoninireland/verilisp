@@ -29,22 +29,23 @@
 	   (type (unsigned-byte 5) leds-out)
 	   (ignorable rxd txd))
 
-  (let* (clk reset
+  (let* (clk
+	 reset
 
-	     ;; plug in to the output to visualise
-	     leds
+	 ;; plug in to the output to visualise
+	 leds
 
-	     ;; core state
-	     (mem (make-array '(256) :element-type (unsigned-byte 32)
-				     :initial-contents (:file "firmware.hex")))
-	     pc instr
+	 ;; core state
+	 (mem (make-array '(256) :element-type (unsigned-byte 32)
+				 :initial-contents (:file "firmware.hex")))
+	 pc instr
 
-	     ;; clock management
-	     (cw (make-instance 'clockworks :clk-in clk-in
-					    :reset-in 0
-					    :clk clk
-					    :reset reset
-					    :slow 19)))
+	 ;; clock management
+	 (cw (make-instance 'clockworks :clk-in clk-in
+					:reset-in 0
+					:clk clk
+					:reset reset
+					:slow 19)))
     (declare (type bit clk reset)
 	     (type (unsigned-byte 5) leds)
 	     (type (unsigned-byte 32) pc instr))
@@ -178,6 +179,4 @@
 				   (JALR-p
 				    (+ rs1 Iimm))
 				   (t
-				    (+ pc 4)))))
-
-		  (go fetch-instruction)))))))))
+				    (+ pc 4)))))))))))))
