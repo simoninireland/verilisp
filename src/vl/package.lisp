@@ -45,6 +45,7 @@
    #:signed-byte-p
    #:type-of
    #:closure
+   #:width
 
    ;; environments
    #:*global-environment*
