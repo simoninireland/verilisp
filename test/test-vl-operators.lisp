@@ -21,18 +21,35 @@
 (in-suite verilisp/vl)
 
 
+;;; ---------- Type algebra ----------
+
+(test test-fixed-width-compute
+  "Test we can compute type expressions in widths."
+  (with-new-frame
+    (vl::declare-variable 'a '((type (unsigned-byte 5))
+			       (initial-value 2)
+			       (as constant)))
+
+    ;; simple width calculations
+    (is (vl::subtype-p `(unsigned-byte a) '(unsigned-byte 2)))
+    (is (vl::subtype-p `(unsigned-byte (+ a 1)) '(unsigned-byte 3)))
+
+    ;; bitwidth expressions
+    (is (vl::subtype-p `(unsigned-byte (width '(unsigned-byte 5))) '(unsigned-byte 5)))))
+
+
 ;;; ---------- Addition and subtraction ----------
 
 (test test-add-widths
   "Test we can determine the widths of additions."
   (is (vl::subtype-p (vl::typecheck '(+ 1 1))
-		    '(unsigned-byte 2)))
+		     '(unsigned-byte 2)))
   (is (vl::subtype-p (vl::typecheck '(+ 15 2))
-		    '(unsigned-byte 5)))
+		     '(unsigned-byte 5)))
   (is (not (vl::subtype-p (vl::typecheck '(+ 15 -2))
-			 '(unsigned-byte 5))))
-  (is (vl::subtype-p (vl::typecheck '(+ 15 -2))
-		    '(signed-byte 6))))
+			  '(unsigned-byte 5))))
+  (is (vl::subtype-p (vl::typescheck '(+ 15 -2))
+		     '(signed-byte 6))))
 
 
 (test test-width-subtractions

@@ -107,45 +107,44 @@ first use LISPIFY to generate proper Lisp for evaluation."
       ;; expand the static enviroment and close over it
       (let* ((ext (make-environment-alist env))
 	     (ns (alist-keys ext)))
+
 	`(let* ,ext
 	   (declare (ignorable ,@ns)) ;; don't warn about un-used variables
 
 	   ,form))))
 
 
-;;; ---------- Closure against specific sub-environments ----------
-
-;;; These functions close a form against a specific sub-environment of
-;;; the current global environment.
-
-
-(defun close-form-in-constant-environment (form)
-  "Close FORM as Lisp in the constant part of the current environment.
-
-The environment is filtered to include only the constant elements
-of the environment, as identified by CONSTANT-P. In other words, the
-form is placed in an environment with no non-constant information."
-  (let ((constantenv (filter-environment (lambda (n env)
-					   (constant-p n))
-					 (current-frame))))
-    (close-form-in-environment form constantenv)))
-
-
-(defun close-form-in-static-environment (form)
-  "Close FORM as Lisp in the static part of the current environment.
-
-The environment is filtered to include only the static elements of
-the environment, as identified by STATIC-CONSTANT-P. In other words,
-the form is placed into an environment that is known at compile time."
-  (let ((staticenv (filter-environment (lambda (n env)
-					 (static-constant-p n))
-				       (current-frame))))
-    (close-form-in-environment form staticenv)))
-
-
 ;;; ---------- Lisp evaluation ----------
 
 ;; These functions evaluate Lisp expressions.
+
+(defun filter-current-environment (pred)
+  "Filter the current environment using PRED."
+  (filter-environment (lambda (n env)
+			(declare (ignore env))
+			(funcall pred n))
+		      (current-environment)))
+
+
+(defun eval-lisp-in-environment (form env)
+  "Evaluate Lisp FORM in ENV."
+  (let ((closed-form (close-form-in-environment form env)))
+    (with-muffled-warnings
+      ;; any warnings caused by this evaluation will be silently
+      ;; ignored; any errors will be propagated
+      (eval closed-form))))
+
+
+(defun eval-lisp-in-current-environment (form &optional pred)
+  "Evaluate Lisp FORM in the current environment.
+
+If PRED is non-nil it should designate a function to select the
+names in the current environment that are added to the closure."
+  (let ((env (if pred
+		 (filter-current-environment pred)
+		 (current-environment))))
+    (eval-lisp-in-environment form env)))
+
 
 (defun eval-lisp-in-static-environment (form)
   "Evaluate Lisp FORM in the static part of the current environment.
@@ -157,17 +156,7 @@ compile time.
 
 FORM should be in Lisp: to evaluate Verilisp forms use
 EVAL-IN-STATIC-ENVIRONMENT."
-  (declare (optimize debug))
-
-  (let ((closed-form (close-form-in-static-environment form)))
-    (handler-bind
-	((warning (lambda (c)
-		    (declare (ignore c))
-		    (muffle-warning))))
-
-      ;; any warnings caused by this evaluation will be silently
-      ;; ignored; any errors will be propagated
-      (eval closed-form))))
+  (eval-lisp-in-current-environment form #'static-p))
 
 
 ;;; ---------- Verilisp evaluation ----------

@@ -28,6 +28,51 @@
 ;;; constrained to be this.)
 
 
+;;; ---------- Type algebra width helpers ----------
+
+(defun close-form-in-environment-with-type-functions (form env)
+  "Return FORM closed with the type functions and the environment ENV.
+
+ENV should be filtered if required, for example to only include static
+declarations.
+
+The type functions override any declarations from ENV."
+  (let* ((tfs '((width (ty)
+		 "Return the number of bits needed to represent TY."
+		 (bitwidth ty))))
+	 (tfs-closed-form `(flet ,tfs
+			     ,form)))
+
+    (close-form-in-environment tfs-closed-form env)))
+
+
+(defun eval-in-type-environment (form)
+  "Evaluate FORM in an environment suitable for evaluating type bounds.
+
+This is basically the static environment with some extra functions
+allowed in type bound expressions, in addition to the basic Lisp
+environment."
+  (let* ((env (filter-current-environment #'static-p))
+	 (closed-form (close-form-in-environment-with-type-functions form env)))
+
+    (with-muffled-warnings
+      ;; any warnings caused by this evaluation will be silently
+      ;; ignored; any errors will be propagated
+      (eval closed-form))))
+
+
+(defun eval-type-bound (b)
+  "Evaluate B as a type bound.
+
+A bound can be any statically constant integer expression, as
+computed in the current static environment."
+  (let ((bound (eval-in-type-environment b)))
+    (unless (integerp bound)
+      (error 'value-mismatch :expected 'integer :got b :got "Ensure type bound is an integer"))
+
+    bound))
+
+
 ;;; ---------- Type algebra ----------
 
 ;;; Subtypes take account of the width constraints of types when specified.
@@ -73,8 +118,8 @@ or (SIGNED-BYTE *)."
 
 	(t
 	 ;; RHS bound must be at least the LHS bound
-	 (let ((wa (eval-in-static-environment a))
-	       (wb (eval-in-static-environment b)))
+	 (let ((wa (eval-type-bound a))
+	       (wb (eval-type-bound b)))
 	   (<= wa wb)))))
 
 
@@ -87,8 +132,8 @@ or (SIGNED-BYTE *)."
 	 nil)
 
 	(t
-	 (let ((wa (eval-in-static-environment a))
-	       (wb (eval-in-static-environment b)))
+	 (let ((wa (eval-type-bound a))
+	       (wb (eval-type-bound b)))
 	   ;; RHS bound must be strictly larger than the LHS bound
 	   (< wa wb)))))
 
@@ -105,8 +150,8 @@ or (SIGNED-BYTE *)."
 
 	(t
 	 ;; RHS bound must be at least the LHS bound
-	 (let ((wa (eval-in-static-environment a))
-	       (wb (eval-in-static-environment b)))
+	 (let ((wa (eval-type-bound a))
+	       (wb (eval-type-bound b)))
 	   (<= wa wb)))))
 
 
@@ -139,8 +184,8 @@ or (SIGNED-BYTE *)."
 	 'unsigned-byte)
 
 	(t
-	 (let ((wa (eval-in-static-environment a))
-	       (wb (eval-in-static-environment b)))
+	 (let ((wa (eval-type-bound a))
+	       (wb (eval-type-bound b)))
 	   `(unsigned-byte ,(max wa wb))))))
 
 
@@ -165,8 +210,8 @@ or (SIGNED-BYTE *)."
 	 'signed-byte)
 
 	(t
-	 (let ((wa (eval-in-static-environment a))
-	       (wb (eval-in-static-environment b)))
+	 (let ((wa (eval-type-bound a))
+	       (wb (eval-type-bound b)))
 	   `(signed-byte ,(max wa wb))))))
 
 
@@ -190,8 +235,8 @@ or (SIGNED-BYTE *)."
 	 t)
 
 	(t
-	 (let ((wa (eval-in-static-environment a))
-	       (wb (eval-in-static-environment b)))
+	 (let ((wa (eval-type-bound a))
+	       (wb (eval-type-bound b)))
 	   (if (< wa wb)
 	       ;; unsigned fits into signed
 	       `(signed-byte ,wb)
@@ -216,10 +261,10 @@ or (SIGNED-BYTE *)."
 ;; Simplification rules evaluate the width
 
 (deflub ((unsigned-byte a) nil)
-  (let ((w (eval-in-static-environment a)))
+  (let ((w (eval-type-bound a)))
     `(unsigned-byte ,w)))
 (deflub ((signed-byte a) nil)
-  (let ((w (eval-in-static-environment a)))
+  (let ((w (eval-type-bound a)))
     `(signed-byte ,w)))
 
 
@@ -229,14 +274,14 @@ or (SIGNED-BYTE *)."
   (when (unbounded-bound-p tyargs)
     (error 'not-representable :type (construct-type tytag tyargs)))
 
-  (eval-in-static-environment (car tyargs)))
+  (eval-type-bound (car tyargs)))
 
 
 (defmethod bitwidth/form ((tytag (eql 'signed-byte)) tyargs)
   (when (unbounded-bound-p tyargs)
     (error 'not-representable :type (construct-type tytag tyargs)))
 
-  (eval-in-static-environment (car tyargs)))
+  (eval-type-bound (car tyargs)))
 
 
 ;;; Abbreviations for fixed-width types
