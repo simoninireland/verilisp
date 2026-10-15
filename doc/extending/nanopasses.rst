@@ -1,5 +1,7 @@
 .. _extending-nanopasses:
 
+.. cl:package:: verilisp/core
+
 The standard nanopasses
 =======================
 
@@ -29,7 +31,7 @@ Typing
 .. cl:generic:: compute-type
    :nospecializers:
 
-.. cl:generic:: apply-type-constraints
+.. cl:generic:: check-all-variables-typed
    :nospecializers:
 
 

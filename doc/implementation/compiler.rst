@@ -62,13 +62,13 @@ uses.
 .. cl:generic:: compute-type
    :nospecializers:
 
-.. cl:generic:: apply-type-constraints
+.. cl:generic:: check-all-variables-typed
    :nospecializers:
 
-The third stage is *elaboration*, which transforms the code the
+The third stage is *transformation*, which transforms the code the
 programmer wrote into something more appropriate for synthesis.
 
-.. cl:generic:: transform
+.. cl:generic:: elaborate-state-machines
    :nospecializers:
 
 .. cl:generic:: float-let-blocks
@@ -128,8 +128,6 @@ Helper functions
 .. cl:function:: variable-read-p
 
 .. cl:function:: variable-written-p
-
-.. cl:function:: add-local-frame-to-decls
 
 .. cl:function:: get-local-frame
 

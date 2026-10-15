@@ -11,6 +11,7 @@ Some notes on the implementation of Verilisp. These aren't needed to
 
     implementation/top-level
     implementation/compiler
+    implementation/type-system
     implementation/subtypes
     implementation/tagbody
     implementation/constraints

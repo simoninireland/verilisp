@@ -1,5 +1,7 @@
 .. _extending-passes
 
+.. cl:package:: verilisp/dsl
+
 Passes
 ======
 

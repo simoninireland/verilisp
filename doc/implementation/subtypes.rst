@@ -1,14 +1,12 @@
 .. _implementation-subtypes:
 
-.. cl:package:: verilisp/core
+.. cl:package:: verilisp/dsl
 
 Type operations
 ===============
 
-Verilisp re-uses Common Lisp's type system, which is very flexible and
-provides a lot of features for defining and comparing types. It also
-adds some type operations, and replaces others, to provide the
-functionality Verilisp needs.
+
+
 
 
 Sub-typing
@@ -27,11 +25,6 @@ need.
 .. cl:function:: subtype-p
 
 The actual tests are provided generically.
-
-.. cl:generic:: subtype-type
-   :nospecializers:
-
-:code:`subtype-type` should only be accessed by calling :code:`subtype-p`.
 
 The disadvantage of this approach is the Verilisp implementation needs
 to use a non-standard type comparison function. The two functions'
@@ -76,18 +69,6 @@ The type lattice is completed with the :code:`t` (top) and :code:`nil`
 (bottom) types.
 
 
-Representability
-----------------
-
-The "top" and "bottom" types of the lattice aren't useful types on
-hardware, which doesn't support polymorphism. Similarly, the unbounded
-``unsigned-byte`` is useful as an abstraction but not in practice.
-Only a sub-class of all available types are *representable* on
-hardware.
-
-.. cl:function:: representable-type-p
-
-
 Least upper-bounds (LUBs) of types
 ----------------------------------
 
@@ -100,12 +81,6 @@ both types.
 Verilisp provides two functions for computing LUBs.
 
 .. cl:function:: lub
-
-
-As with sub-types, the LUB calculations are provided generically.
-
-.. cl:generic:: lub-type
-   :nospecializers:
 
 
 Note that since the LUB relationship is symmetrical, we need to make

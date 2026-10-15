@@ -16,7 +16,7 @@ Maths operators
 +===============+==============================+====================+
 | ``+``         + ``(+ 1 2 a)``                +                    |
 +---------------+------------------------------+--------------------+
-| ``-``         + ``(- 1 2 a)`` or ``(- 3)``   + Unary or n-ary     |
+| ``-``         + ``(- 1 2 a)`` or ``(- 3)``   + N-ary or unary     |
 +---------------+------------------------------+--------------------+
 | ``*``         + ``(* 1 2 a)``                +                    |
 +---------------+------------------------------+--------------------+
@@ -79,6 +79,7 @@ not. For example, after
       (setq a 8)
       (setq b (a >> 2)))
 
+
 ``b`` has value 2 (8 shifted right two places), but after
 
 .. code:: lisp
@@ -89,7 +90,9 @@ not. For example, after
       (setq a -8)
       (setq b (a >> 2)))
 
+
 ``b`` has value -2: the sign is preserved across the shift.
+
 
 .. note::
 
@@ -100,16 +103,7 @@ not. For example, after
    Verilisp does not need.
 
    If you for some reason want to logically right-shift a value whose
-   type is ``signed-byte`` you should cast it before shifting:
-
-   .. code:: lisp
-
-   (let (a b)
-      (declare (type (signed-byte 8) a)
-	       (type (unsigned-byte 8) b))
-
-      (setq a -8)
-      (setq b ((the '(unsigned-byte 8) a) >> 2)))
+   type is ``SIGNED-BYTE`` you should cast it before shifting.
 
 
 Logical and comparison operators
