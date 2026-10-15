@@ -40,6 +40,11 @@
 		       '(unsigned-byte 6)))))
 
 
+(test test-fixed-width-bounds-integers
+  "Test non-integer bound expressions are caught."
+  (signals value-mismatch
+    (vl::subtype-p '(unsigned-byte "hello") 'bit)))
+
 
 ;;; ---------- Addition and subtraction ----------
 
