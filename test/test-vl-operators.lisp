@@ -90,6 +90,13 @@
 		     '(unsigned-byte 5))))
 
 
+(test test-width-shifts-complicated
+  "Test we can compute mopre complicated shifts."
+  (let ((p (vl:expand/vl '(let ((a 2))
+			   (<< 1 a)))))
+    (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 3)))))
+
+
 (test test-synthesise-shift-operators
   "Test we can synthesise shift operators."
   (dolist (op '(<< >>))

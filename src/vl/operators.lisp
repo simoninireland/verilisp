@@ -114,8 +114,8 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 
     ;; the width is the width of the value plus the width of
     ;; maximum number that can be in the offset
-    `(unsigned-byte ,(+ (bitwidth tyval)
-			(1- (coerce (expt 2 (bitwidth tyoffset)) 'unsigned-byte))))))
+    `(unsigned-byte (+ (width ',tyval)
+		       (- 1 (expt 2 (ceiling (width ',tyoffset))))))))
 
 
 (defpassmethod simple-expression-p (<< &rest args)
@@ -144,6 +144,7 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 
     ;; type is the same as the value, since
     ;; shifting right can only make it smaller
+    ;; TODO: Is this the right approach? -- or should we shrink the value?
     tyval))
 
 
@@ -173,9 +174,6 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 ;; LOGAND is the prototype
 
 (defpassmethod compute-type (logand l r)
-  (ensure-fixed-width (compute-type l))
-  (ensure-fixed-width (compute-type r))
-
   'bit)
 
 
@@ -247,9 +245,6 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 ;;; AND
 
 (defpassmethod compute-type (and &rest args)
-  (dolist (a args)
-    (ensure-boolean (compute-type a)))
-
   'bit)
 
 
