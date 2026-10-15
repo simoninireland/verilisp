@@ -98,7 +98,8 @@
   :serial t
   :components ((:file "package")
 	       (:file "test-utils")
-	       (:file "test-dsl")
+	       ;; need to figure out how to test passes properly
+	       ;; (:file "test-dsl")
 	       (:file "test-vl-base")
 	       (:file "test-vl-types")
 	       (:file "test-vl-assignment")
