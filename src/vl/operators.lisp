@@ -36,9 +36,13 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 ;;; +
 
 (defpassmethod compute-type (+ &rest args)
-  ;; note that the + here refers to the + type, not the + operator
-  (let ((tys (mapcar #'compute-type args)))
-    `(+ ,@tys)))
+  (let* ((tys (mapcar #'compute-type args))
+	 (wtys (mapcar (lambda (ty)
+			 `(width ',ty))
+		       tys))
+	 (n (length tys)))
+
+    `(closure (unsigned-byte (+ (max ,@wtys) (- ,n 1))) ,(current-environment))))
 
 
 (defpassmethod simple-expression-p (+ &rest args)
@@ -75,9 +79,11 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 ;;; *
 
 (defpassmethod compute-type (* &rest args)
-  ;; note that the * here refers to the * type, not the * operator
-  (let ((tys (mapcar #'compute-type args)))
-    `(* ,@tys)))
+  (let* ((tys (mapcar #'compute-type args))
+	 (wtys (mapcar (lambda (ty)
+			 `(width ',ty))
+		       tys)))
+    `(closure (unsigned-byte ',@wtys) ,(current-environment))))
 
 
 (defpassmethod simple-expression-p (* &rest args)
