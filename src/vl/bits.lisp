@@ -83,10 +83,10 @@
   (when (and (static-p start)
 	     (> width (1+ (eval-in-static-environment start))))
     ;; excess width
-    ;; we can only check this when the start bit is known staically
+    ;; we can only check this when the start bit is known statically
     (error 'value-mismatch :expected "acceptable width"
 			   :got width
-			   :hint "Make sure width can be extrated starting from the start bit"))
+			   :hint "Make sure width can be extracted starting from the start bit"))
 
   width)
 
