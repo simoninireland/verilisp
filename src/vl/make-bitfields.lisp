@@ -82,11 +82,6 @@ The BASE used can be 2, 8, 10, or 16."
     `(closure (unsigned-byte (* (width ',tybs) ,times)) ,(current-environment))))
 
 
-(defpassmethod compute-type (extend-bits bs times)
-  (let ((tybs (compute-type bs)))
-    (ensure-fixed-width tybs)))
-
-
 (defpassmethod read-variables (extend-bits bs times)
   (union-all (mapcar #'read-variables (list bs times))))
 
