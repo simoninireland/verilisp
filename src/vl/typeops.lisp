@@ -120,6 +120,26 @@ This is used only in computing LUBs involving TYPE-OF types.")
   (lub `(type-of ,a ,f) ty1))
 
 
+;;; ---------- Closure types ----------
+
+(defsubtype ((closure ty1 env) (&type ty2))
+  (in-environment env
+    (subtype-p ty1 ty2)))
+
+(defsubtype ((&type ty1) (closure ty2 env))
+  (in-environment env
+    (subtype-p ty1 ty2)))
+
+
+(deflub ((closure ty1 env) (&type ty2))
+  (in-environment env
+    (lub ty1 ty2)))
+
+(deflub ((&type ty1) (closure ty2 env))
+  (in-environment env
+    (lub ty1 ty2)))
+
+
 ;;; ---------- Type constraints ----------
 
 (defun add-frame-type-constraint (n ty env)
@@ -259,6 +279,13 @@ This used internally."
     (destructuring-bind (n &optional (f (current-frame)))
 	tyargs
       (let ((ty (solve-type-constraints-and-declare n f)))
+	(bitwidth ty))))
+
+  ;; closure types
+  (:method ((tytag (eql 'closure)) tyargs)
+    (destructuring-bind (ty env)
+	tyargs
+      (in-environment env
 	(bitwidth ty)))))
 
 
