@@ -43,6 +43,8 @@
    #:fixed-width-p
    #:unsigned-byte-p
    #:signed-byte-p
+   #:type-of
+   #:closure
 
    ;; environments
    #:*global-environment*

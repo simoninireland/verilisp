@@ -124,3 +124,22 @@ adding *n* unsigned numbers is the width of the widest number plus
    never actually need 9 bits. (Actually the compiler could optimise
    this expression to a literal ``251`` and realise that its type
    could be ``(UNSIGNED-BYTE 8)``.)
+
+
+Lisp types used in Verilisp
+---------------------------
+
+
+Types unique to Verilisp
+------------------------
+
+Verilisp'#s type system also includes a small number of types that are
+unique to Verilisp.
+
+
+.. toctree::
+   :maxdepth: 1
+
+   type-of-types
+   width-types
+   closure-types
