@@ -270,8 +270,6 @@ This used internally."
 
   ;; intersection types
   (:method ((tytag (eql 'and)) tyargs)
-    (declare (optimize debug))
-
     (apply #'+ (mapcar #'bitwidth tyargs)))
 
   ;; types of variables
