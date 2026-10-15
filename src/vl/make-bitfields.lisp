@@ -24,8 +24,12 @@
 ;;; ---------- make-bitfields ----------
 
 (defpassmethod compute-type (make-bitfields &rest pats)
-  (let ((tys (mapcar #'compute-type pats)))
-    `(and ,@tys)))
+  (let* ((tys (mapcar #'compute-type pats))
+	 (wtys (mapcar (lambda (ty)
+			 `(width ',ty))
+		       tys)))
+
+    `(unsigned-byte (+ ,@wtys))))
 
 
 (defun synthesise-fixed-width-constant (c width &optional (base 2))
@@ -73,7 +77,7 @@ The BASE used can be 2, 8, 10, or 16."
   (let ((tybs (compute-type bs))
 	(n (ensure-static times)))
 
-    `(and ,@(n-copies tybs n))))
+    `(unsigned-byte (*(width ',tybs) ,n))))
 
 
 (defpassmethod compute-type (extend-bits bs times)

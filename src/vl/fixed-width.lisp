@@ -39,7 +39,7 @@ declarations.
 The type functions override any declarations from ENV."
   (let* ((tfs '((width (ty)
 		 "Return the number of bits needed to represent TY."
-		 (bitwidth ty))))
+		 (bitwidth (lub ty)))))
 	 (tfs-closed-form `(flet ,tfs
 			     ,form)))
 
@@ -52,6 +52,8 @@ The type functions override any declarations from ENV."
 This is basically the static environment with some extra functions
 allowed in type bound expressions, in addition to the basic Lisp
 environment."
+  (declare (optimize debug))
+
   (let* ((env (filter-current-environment #'static-p))
 	 (closed-form (close-form-in-environment-with-type-functions form env)))
 

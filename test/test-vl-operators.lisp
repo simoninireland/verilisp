@@ -35,7 +35,10 @@
     (is (vl::subtype-p `(unsigned-byte (+ a 1)) '(unsigned-byte 3)))
 
     ;; bitwidth expressions
-    (is (vl::subtype-p `(unsigned-byte (width '(unsigned-byte 5))) '(unsigned-byte 5)))))
+    (is (vl::subtype-p `(unsigned-byte (width '(unsigned-byte 5))) '(unsigned-byte 5)))
+    (is (vl::subtype-p (vl::lub '(unsigned-byte (* (width '(unsigned-byte 2)) 3)))
+		       '(unsigned-byte 6)))))
+
 
 
 ;;; ---------- Addition and subtraction ----------

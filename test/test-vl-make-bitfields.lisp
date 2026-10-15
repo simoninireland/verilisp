@@ -36,9 +36,9 @@
   "Test we can extend bitfields."
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(vl::make-bitfields
 						  #2r101
-						  (vl::extend-bits #2r0 5))))
 		    '(unsigned-byte 8)))
-
+						  (vl::extend-bits #2r0 5))))
+d
   ;; repeats must be statically known, but pattern can be variable
   (is (vl::subtype-p (vl::typecheck (vl::expand/vl '(let ((a 8))
 						  (vl::make-bitfields (vl::extend-bits a 5)))))
