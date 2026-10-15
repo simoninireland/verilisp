@@ -62,9 +62,18 @@ This forgets everything apart from core Verilisp."
   (current-frame))
 
 
+;; The next two macros are identical in implementation but
+;; different semantically.
+
 (defmacro in-frame (f &body body)
   "Run BODY in an environment consisting solely of F."
   `(let ((*current-frame* ,f))
+     ,@body))
+
+
+(defmacro in-environment (env &body body)
+  "Run BODY in an environment consisting solely of ENV."
+  `(let ((*current-frame* ,env))
      ,@body))
 
 
@@ -72,13 +81,13 @@ This forgets everything apart from core Verilisp."
   "Run BODY in the core environment.
 
 This should only be used during system loading."
-  `(in-frame *core-environment*
+  `(in-environment *core-environment*
      ,@body))
 
 
 (defmacro in-global-environment (&body body)
   "Run BODY in the global environment."
-  `(in-frame *global-environment*
+  `(in-environment *global-environment*
      ,@body))
 
 

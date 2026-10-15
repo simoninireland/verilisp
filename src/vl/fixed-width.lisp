@@ -449,13 +449,6 @@ Otherwise, return NIL."
   (subtype-p ty '(or unsigned-byte signed-byte)))
 
 
-(defun bounded-fixed-width-p (ty)
-  "Test whether TY is a fixed-width type with a concrete bound."
-  (and (fixed-width-p ty)
-       (not (or (atom ty)
-		(eql (cadr ty) '*)))))
-
-
 (defun signed-byte-p (ty)
   "Test whether TY is a signed fixed-width type."
   (and (subtype-p ty 'signed-byte)
