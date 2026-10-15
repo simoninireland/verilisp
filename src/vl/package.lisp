@@ -50,11 +50,14 @@
    #:empty-environment
    #:add-frames
    #:in-frame
+   #:in-environment
    #:in-core-environment
    #:in-global-environment
    #:with-frame
    #:with-new-frame
    #:with-local-frame
+
+   ;; variables and other things in environments
    #:declare-variable
    #:variable-declared-p
    #:get-frame-names
@@ -66,8 +69,6 @@
    #:get-initial-value
 
    ;; evaluating expressions in environments
-   #:close-form-in-environment
-   #:close-form-in-static-environment
    #:eval-in-static-environment
    #:ensure-static
    #:eval-if-static
@@ -112,40 +113,45 @@
    #:until
    #:forever
 
-   ;; pass queues
+   ;; standard pass queues
    #:expanding
    #:typing
    #:transforming
    #:synthesising
 
-   ;; passes
+   ;; nanopasses
    #:add-frames
-   #:add-local-frame-to-decls
-   #:get-local-frame
    #:expand-macros
-   #:expand-macros-in-environment
-   #:declare-annotation
    #:compute-dependencies
-   #:add-dependencies
-   #:traverse-dependencies
    #:infer-representation
    #:compute-type
-   #:apply-type-constraints
+   #:check-all-variables-typed
    #:typecheck
    #:read-variables
    #:read-variables-setf
    #:written-variables-setf
-   #:mark-variable-as-read
-   #:mark-variable-as-written
-   #:variable-read-p
-   #:variable-written-p
    #:rewrite-variables
    #:generalised-place-p
-   #:expand-state-machines
+   #:simple-expression-p
+   #:elaborate-state-machines
    #:float-let-blocks
    #:simplify-progn
    #:synthesise
    #:lispify
+
+   ;; code helper functions
+   #:expand-macros-in-environment
+   #:add-local-frame-to-decls
+   #:get-local-frame
+   #:declare-annotation
+   #:add-dependencies
+   #:traverse-dependencies
+   #:mark-variable-as-read
+   #:mark-variables-as-read
+   #:mark-variable-as-written
+   #:mark-variables-as-written
+   #:variable-read-p
+   #:variable-written-p
 
    ;; loader
    #:clear-global-environment
@@ -159,7 +165,7 @@
    #:macrolet/vl
    #:expand/vl
    #:typecheck/vl
-   #:elaborate/vl
+   #:transform/vl
    #:synthesise/vl
 
    ;; base conditions
