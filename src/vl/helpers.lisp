@@ -36,6 +36,16 @@ are reported as NOT-SYNTHESISABLE errors."
        (error 'not-synthesisable :underlying-condition c))))
 
 
+(defmacro with-muffled-warnings (&body body)
+  "Muffle any warnings signalled in BODY."
+  (with-gensyms (c)
+    `(handler-bind
+	 ((warning (lambda (,c)
+		     (declare (ignore ,c))
+		     (muffle-warning))))
+       ,@body)))
+
+
 ;;; ---------- Implicit forms ----------
 
 ;;; We avoid adding extra layers of PROGN or TAGBODY unnecessarily.
