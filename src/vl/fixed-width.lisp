@@ -39,7 +39,7 @@ declarations.
 The type functions override any declarations from ENV."
   (let* ((tfs '((width (ty)
 		 "Return the number of bits needed to represent TY."
-		 (bitwidth (lub ty)))))
+		 (bitwidth ty))))
 	 (tfs-closed-form `(flet ,tfs
 			     ,form)))
 
@@ -51,16 +51,22 @@ The type functions override any declarations from ENV."
 
 This is basically the static environment with some extra functions
 allowed in type bound expressions, in addition to the basic Lisp
-environment."
+environment.
+
+Any errors are signalled as NOT-STATIC. This may mask other problems,
+such as the use of undeclared variables, that might benefot from a
+more detailed condition. (That is however hard to do portably.)"
   (declare (optimize debug))
 
   (let* ((env (filter-current-environment #'static-p))
 	 (closed-form (close-form-in-environment-with-type-functions form env)))
 
-    (with-muffled-warnings
-      ;; any warnings caused by this evaluation will be silently
-      ;; ignored; any errors will be propagated
-      (eval closed-form))))
+    (handler-case
+	(with-muffled-warnings
+	  (eval closed-form))
+
+      (error ()
+	(error 'not-static :hint "Ensure type bound is statically determinable")))))
 
 
 (defun eval-type-bound (b)
@@ -410,6 +416,10 @@ Otherwise, return NIL."
   (lub `(+ ,@tys) ty))
 
 
+(defmethod bitwidth/form ((tytag (eql '+)) tyargs)
+  (bitwidth (compute-addition-type tyargs)))
+
+
 (defun compute-multiplication-type (tys)
   "Return the type arising from multiplying values of the types TYS together."
   (declare (optimize debug))
@@ -434,12 +444,15 @@ Otherwise, return NIL."
   (declare (optimize debug))
 
   (let ((wty (compute-multiplication-type tys)))
-    (break)
     (lub wty ty)))
 
 
 (deflub ((&type ty) (* &rest tys))
   (lub `(* ,@tys) ty))
+
+
+(defmethod bitwidth/form ((tytag (eql '*)) tyargs)
+  (bitwidth (compute-multiplication-type tyargs)))
 
 
 ;;; ---------- Tests ----------
@@ -487,21 +500,3 @@ Unbounded types aren't representable."
 	   (deconstruct-type ty)
 	 (declare (ignore tag))
 	 (unbounded-bound-p bound))))
-
-
-;;; ---------- Widths ----------
-
-(defmethod bitwidth/form ((tytag (eql 'unsigned-byte)) tyargs)
-  (if (not (or (null tyargs)
-	       (eql (car tyargs) '*)))
-      (car tyargs)))
-
-
-(defmethod bitwidth/form ((tytag (eql 'signed-byte)) tyargs)
-  (if (not (or (null tyargs)
-	       (eql (car tyargs) '*)))
-      (car tyargs)))
-
-
-(defmethod bitwidth/form ((tytag (eql 'bit)) tyargs)
-  1)
