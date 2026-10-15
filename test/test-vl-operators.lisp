@@ -48,7 +48,7 @@
 		     '(unsigned-byte 5)))
   (is (not (vl::subtype-p (vl::typecheck '(+ 15 -2))
 			  '(unsigned-byte 5))))
-  (is (vl::subtype-p (vl::typescheck '(+ 15 -2))
+  (is (vl::subtype-p (vl::typecheck '(+ 15 -2))
 		     '(signed-byte 6))))
 
 
