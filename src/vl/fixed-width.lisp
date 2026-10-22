@@ -50,12 +50,13 @@ The type functions override any declarations from ENV."
   "Evaluate FORM in an environment suitable for evaluating type bounds.
 
 This is basically the static environment with some extra functions
-allowed in type bound expressions, in addition to the basic Lisp
-environment.
+that are allowed in type bound expressions, in addition to the basic
+Lisp environment.
 
-Any errors are signalled as NOT-STATIC. This may mask other problems,
-such as the use of undeclared variables, that might benefot from a
-more detailed condition. (That is however hard to do portably.)"
+Verilisp errors are signalled; any underlying Lisp errors are signalled
+as NOT-STATIC. This may mask other problems, such as the use of
+undeclared variables, that might benefit from a more detailed
+condition -- but this is hard to do portably."
   (declare (optimize debug))
 
   (let* ((env (filter-current-environment #'static-p))
@@ -65,8 +66,13 @@ more detailed condition. (That is however hard to do portably.)"
 	(with-muffled-warnings
 	  (eval closed-form))
 
-      (error ()
-	(error 'not-static :hint "Ensure type bound is statically determinable")))))
+      (vl-error (c)
+	;; pass through Verilisp errors (often about circular dependencies)
+	(error c))
+
+      (error (c)
+	;; assume any other errors are because of the calculation
+	(error 'not-static :hint (format nil  "Ensure type bound is statically determinable ~a" c))))))
 
 
 (defun eval-type-bound (b)
@@ -131,21 +137,6 @@ or (SIGNED-BYTE *)."
 	   (<= wa wb)))))
 
 
-(defsubtype ((unsigned-byte a) (signed-byte b))
-  (cond ((unbounded-bound-p b)
-	 ;; unbounded RHS, always matches
-	 t)
-	((unbounded-bound-p a)
-	 ;; unbounded LHS but not unbounded RHS, never matches
-	 nil)
-
-	(t
-	 (let ((wa (eval-type-bound a))
-	       (wb (eval-type-bound b)))
-	   ;; RHS bound must be strictly larger than the LHS bound
-	   (< wa wb)))))
-
-
 ;; signed < signed
 
 (defsubtype ((signed-byte a) (signed-byte b))
@@ -169,7 +160,23 @@ or (SIGNED-BYTE *)."
   t)
 
 
-;; signed < unsigned never happens
+(defsubtype ((unsigned-byte a) (signed-byte b))
+  (cond ((unbounded-bound-p b)
+	 ;; unbounded RHS, always matches
+	 t)
+	((unbounded-bound-p a)
+	 ;; unbounded LHS but not unbounded RHS, never matches
+	 nil)
+
+	(t
+	 (let ((wa (eval-type-bound a))
+	       (wb (eval-type-bound b)))
+	   ;; RHS bound must be strictly larger than the LHS bound
+	   (< wa wb)))))
+
+
+;; signed < unsigned is always NIL and so can be left to the default
+
 
 ;; (LUB unsigned unsigned)
 
@@ -233,24 +240,21 @@ or (SIGNED-BYTE *)."
   'signed-byte)
 
 (deflub ((unsigned-byte a) (signed-byte b))
-  (cond ((or (null b)
-	     (eql b '*))
-	 ;; unbounded RHS
-	 t)
-	((or (null a)
-	     (eql a '*))
-	 ;; unbounded LHS but not unbounded RHS
-	 t)
+  (if (or (null b)
+	  (eql b '*)
+	  (null a)
+	  (eql a '*))
+      ;; unbounded either side
+      'signed-byte
 
-	(t
-	 (let ((wa (eval-type-bound a))
-	       (wb (eval-type-bound b)))
-	   (if (< wa wb)
-	       ;; unsigned fits into signed
-	       `(signed-byte ,wb)
+      (let ((wa (eval-type-bound a))
+	    (wb (eval-type-bound b)))
+	(if (< wa wb)
+	    ;; unsigned fits into signed
+	    `(signed-byte ,wb)
 
-	       ;; expand signed to accommodate unsigned
-	       `(signed-byte ,(1+ wa)))))))
+	    ;; expand to accommodate unsigned
+	    `(signed-byte ,(1+ wa))))))
 
 
 ;; (LUB signed unsigned)
@@ -266,6 +270,37 @@ or (SIGNED-BYTE *)."
   (lub `(unsigned-byte ,b) `(signed-byte ,a)))
 
 
+;; widen types
+
+(defun widen-type (ty b)
+  "Widen fixed-width type TY by B bits."
+  (ensure-fixed-width ty)
+
+  (destructuring-bind (tag bound)
+      (deconstruct-type (lub ty))
+    (if (unbounded-bound-p bound)
+	;; unbounded type can't be widened
+	tag
+
+	`(,tag ,(+ (car bound) b)))))
+
+
+(defsubtype ((widen ty1 b) (&type ty2))
+  (subtype-p (widen-type ty1 b) ty2))
+(defsubtype ((&type ty1) (widen ty2 b))
+  (subtype-p ty1 (widen-type ty2 b)))
+
+
+(deflub ((widen ty1 b) (&type ty2))
+  (lub (widen-type ty1 b) ty2))
+
+(deflub ((&type ty1) (widen ty2 b))
+  (lub `(widen ,ty2 ,b) ty1))
+
+(defmethod bitwidth/form ((tytag (eql 'widen)) tyargs)
+  (bitwidth (lub `(widen ,@tyargs))))
+
+
 ;; Simplification rules evaluate the width
 
 (deflub ((unsigned-byte a) nil)
@@ -277,8 +312,6 @@ or (SIGNED-BYTE *)."
 
 
 (defmethod bitwidth/form ((tytag (eql 'unsigned-byte)) tyargs)
-  (declare (optimize debug))
-
   (when (unbounded-bound-p tyargs)
     (error 'not-representable :type (construct-type tytag tyargs)))
 

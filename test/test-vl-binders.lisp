@@ -102,7 +102,7 @@
 							  (b 100))
 						     (declare (width 8 b))
 						     (+ b 1)
-						  (+ b a b))))
+						     (+ b a b))))
 		    '(unsigned-byte 10))))
 
 
@@ -468,7 +468,7 @@
 			    (setq a 1)
 			    (setq b (+ b 1))))))
 
-    (signals circular-type-dependencies
+    (signals type-defaulted
       (vl::typecheck p))))
 
 

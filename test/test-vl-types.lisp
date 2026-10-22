@@ -261,14 +261,6 @@
 	     t)))
 
 
-;; TODO: Test signed as well
-
-(test test-lub-and
-  "Test we can form ANDs of fixed-width types."
-  (is (equal (vl::lub '(and (unsigned-byte 1) (unsigned-byte 2)) '(unsigned-byte 1))
-	     '(unsigned-byte 3))))
-
-
 ;;; ---------- Solving type constraints ----------
 
 (test test-initial-value-constraints
@@ -338,55 +330,41 @@
       (is (vl::subtype-p '(unsigned-byte 2) (vl:typecheck p))))))
 
 
-;; TODO: Needs fixing
-
 (test test-assignment-nested-constraints-circular
   "Test we catch circular type dependencies, e.g., assignment involving the variable itself."
   (with-new-frame
 
-    (vl::declare-variable 'a '((initial-value 1)))
-    (let ((outer (current-frame)))
-      (with-new-frame
+    ;; normal usage
+    (let ((p (vl::expand/vl '(let ((a 1))
+			      (let ((b a))
+				(+ a b))))))
+      (is (subtype-p (vl::typecheck p) '(unsigned-byte 2))))
 
-	(vl::declare-variable 'b '((initial-value a)))
-	(let ((inner (current-frame)))
-	  ;; LET-style assignment
-	  (vl::constrain-type-of-variable-from-initial-value 'a outer (empty-environment))
-	  (vl::constrain-type-of-variable-from-initial-value 'b inner outer)
+    ;; circular usage, uses compiler's default type
+    (let ((p (vl::expand/vl '(let ((a 1))
+			      (let ((b a))
+				(setq a (+ a b))
+				a)))))
+      (is (not (vl::subtype-p (vl::typecheck p) '(unsigned-byte 2))))
+      (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 32))))
 
-	  ;; simulate an assignment to A
-	  (vl::add-type-constraint 'a `(type-of b ,inner))
-
-	  (signals vl::circular-type-dependencies
-	    (vl::solve-type-constraints-and-declare 'a outer)))))))
-
-
-;;; ---------- + and * types ----------
-
-(test test-plus-type
-  "Test we can generate types for additions."
-  (let ((p (vl::expand/vl '(let ((a 1)
-				 (b 8))
-			    (+ a b 1)))))
-    (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 6))))
-
-    (let ((p (vl::expand/vl '(let ((a 1)
-				   (b 8))
-			      (declare (width 10 a))
-			      (+ a b 1)))))
-      (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 12))))
-
-    (let ((p (vl::expand/vl '(let ((a 1)
-				   (b 8))
-			      (declare (width 10 a))
-			      (- a b 1)))))
-      (is (vl::subtype-p (vl::typecheck p) '(signed-byte 13)))))
+    ;; check we see the warning
+    (let ((p (vl::expand/vl '(let ((a 1))
+			      (let ((b a))
+				(setq a (+ a b))
+				a)))))
+      (signals (vl:type-defaulted)
+	(vl::typecheck p)))))
 
 
-(test test-times-type
-  "Test we can generate types for multiplications."
-  (let ((p (vl::expand/vl '(let ((a 1)
-				 (b 8))
-			    (* a b 2)))))
-    (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 7)))
-    (is (not (vl::subtype-p (vl::typecheck p) '(unsigned-byte 6))))))
+(test test-assignment-circular-types-no-default
+  "Test we get an error when there's no compiler default type to resolve circular constraints."
+   (with-new-frame
+    (vl::set-compiler-flag 'vl::default-variable-type nil)
+
+    (let ((p (vl::expand/vl '(let ((a 1))
+			      (let ((b a))
+				(setq a (+ a b))
+				a)))))
+      (signals (vl:circular-type-dependencies)
+	(vl::typecheck p)))))

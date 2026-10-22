@@ -205,6 +205,7 @@
    #:duplicate-macro
    #:direction-mismatch
    #:type-mismatch
+   #:type-defaulted
    #:precision-mismatch
    #:bitfield-mismatch
    #:unreachable-code

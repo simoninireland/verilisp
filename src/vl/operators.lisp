@@ -37,12 +37,9 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 
 (defpassmethod compute-type (+ &rest args)
   (let* ((tys (mapcar #'compute-type args))
-	 (wtys (mapcar (lambda (ty)
-			 `(width ',ty))
-		       tys))
 	 (n (length tys)))
 
-    `(closure (unsigned-byte (+ (max ,@wtys) (- ,n 1))) ,(current-environment))))
+    `(widen (or ,@tys) ,(- n 1))))
 
 
 (defpassmethod simple-expression-p (+ &rest args)
@@ -56,8 +53,14 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 ;;; -
 
 (defpassmethod compute-type (- &rest args)
-  ;; we force the result to be signed
-  (lub (compute-type `(+ ,@args)) '(signed-byte 1)))
+  (let* ((tys (mapcar #'compute-type args))
+	 (wtys (mapcar (lambda (ty)
+			 `(width ',ty))
+		       tys))
+	 (n (length tys)))
+
+    ;; we force the result to be signed
+    `(closure (signed-byte (+ (max ,@wtys) ,(- n 1))) ,(current-environment))))
 
 
 (defpassmethod simple-expression-p (- &rest args)
@@ -83,7 +86,10 @@ A SYNTAX-ERROR error is signalled if the arguments are wrong."
 	 (wtys (mapcar (lambda (ty)
 			 `(width ',ty))
 		       tys)))
-    `(closure (unsigned-byte ',@wtys) ,(current-environment))))
+
+    ;; the or type ensures we get the same signedness as the arguments
+    ;; with the sum of the widths
+    `(closure (or ,@tys (unsigned-byte (+ ,@wtys))) ,(current-environment))))
 
 
 (defpassmethod simple-expression-p (* &rest args)

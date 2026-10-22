@@ -74,8 +74,8 @@
     (let ((p (vl::expand/vl '(let ((a 10))
 			      (declare (type (unsigned-byte 5) a))
 			      (setq a 120)))))
-      (vl::subtype-p (vl::typecheck p)
-		     '(unsigned-byte 7)))))
+      (is (vl::subtype-p (vl::typecheck p)
+			 '(unsigned-byte 7))))))
 
 
 (test test-assignment-too-wide-widenable-updated

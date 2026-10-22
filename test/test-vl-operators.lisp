@@ -57,15 +57,17 @@
   (is (not (vl::subtype-p (vl::typecheck '(+ 15 -2))
 			  '(unsigned-byte 5))))
   (is (vl::subtype-p (vl::typecheck '(+ 15 -2))
+		     '(signed-byte 6)))
+  (is (vl::subtype-p (vl::typecheck '(+ 15 -2))
 		     '(signed-byte 6))))
 
 
 (test test-width-subtractions
   "Test we can extract the widths of subtractions."
   (is (vl::subtype-p (vl::typecheck '(- 1))
-		    '(signed-byte 2)))
+		     '(signed-byte 2)))
   (is (vl::subtype-p (vl::typecheck '(- 2 1))
-		    '(signed-byte 4))))
+		     '(signed-byte 4))))
 
 
 (test test-synthesise-addition-operators

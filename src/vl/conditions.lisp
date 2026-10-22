@@ -371,7 +371,7 @@ caused by the assignment."))
 
 (define-condition circular-type-dependencies (vl-error)
   ((variable
-    :documentation "The variable being defined."
+    :documentation "The variable being declared."
     :initarg :variable
     :reader declaring-variable)
    (involved
@@ -383,13 +383,34 @@ caused by the assignment."))
 					       (declaring-variable c)
 					       (involved-types c))
 				       c str)))
-  (:documentation "Condition signalled when circular type dependencies are encountered.
+  (:documentation "Condition signalled when circular type dependencies are unresolved.
 
 This happens when the type inference algorithm can't find a solution
 to to the types implied by the uses of a variable. This can indicate
 an inconsistency in the variable's use, or (more likely) means that
 one or more of the variables involved need to have explicit types
-declared form them to short-circuit inference."))
+declared for them to short-circuit inference."))
+
+
+(define-condition type-defaulted (vl-warning)
+  ((variable
+    :documentation "The variable being declared."
+    :initarg :variable
+    :reader declaring-variable)
+   (defaulted-to
+    :documentation "The type used as default."
+    :initarg :defaulted-to
+    :reader default-type))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Variable ~a assigned default type ~a"
+					       (declaring-variable c)
+					       (default-type c))
+				       c str)))
+  (:documentation "Condition signalled when a default type is used.
+
+This most commonly happens as a final step in resolving circular type
+dependencies, when the compiler's default type is used to resolve a
+set of dependencies that is otherwise impossible to solve."))
 
 
 (define-condition coercion-mismatch (vl-error)

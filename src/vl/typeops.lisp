@@ -104,17 +104,18 @@ This is used only in computing LUBs involving TYPE-OF types.")
     (lub ty1 ty2)
 
     ;; type hasn't been solved, solve it
-    (if (assoc a *variables-being-constrained*)
+    (progn
+      (when (assoc a *variables-being-constrained*)
 	;; circular dependencies
 	(let ((constraints (get-frame-property a 'type-constraints f :default nil)))
 	  (error 'circular-type-dependencies :variable a
 					     :involved constraints
-					     :hint "Declare types for one or more of the variables involved"))
+					     :hint "Declare types for one or more of the variables involved")))
 
-	;; solve the constraints
-	(let ((*variables-being-constrained* (cons (list a f)
-						   *variables-being-constrained*)))
-	  (lub (solve-type-constraints-and-declare a f) ty2)))))
+      ;; solve the constraints
+      (let ((*variables-being-constrained* (cons (list a f)
+						 *variables-being-constrained*)))
+	(lub (solve-type-constraints-and-declare a f) ty2)))))
 
 (deflub ((&type ty1) (type-of a f))
   (lub `(type-of ,a ,f) ty1))
@@ -178,8 +179,12 @@ This constraint will be used when inferring the final type of N."
 Return the inferred type."
   (declare (optimize debug))
 
+  (when (member n *variables-being-constrained* :key #'car)
+    (error 'circular-type-dependencies :variable n :involved constraints))
+
   (let ((*variables-being-constrained* (cons (list n f)
 					     *variables-being-constrained*)))
+
     (apply #'lub constraints)))
 
 
@@ -196,40 +201,69 @@ deleted to prevent re-solving."
   (declare (optimize debug))
 
   (let* ((cs (get-frame-property n 'type-constraints f :default nil))
-	 (ety (get-frame-property n 'type f :default nil)))
+	 (ety (get-frame-property n 'type f :default nil))
+	 (ty (if (null cs)
+	       ;; no constraints (and therefore no initial value), is there an explicit type?
+	       (if ety
+		   ;; explicit type provided, use it
+		   ety
 
-    (if (null cs)
-	;; no constraints (and therefore no initial value), is there an explicit type?
-	(if ety
-	    ;; explicit type provided, use it
-	    (progn
-	      (set-frame-property n 'type ety f)
-	      ety)
+		   ;; no explicit type either, use the compiler's default type
+		   ;; if it has one
+		   (if-let ((dty (get-compiler-flag 'default-variable-type)))
+		     dty
 
-	    ;; no explicit type either, use the compiler's default type
-	    (let ((dty (get-compiler-flag 'default-variable-type)))
-	      (set-frame-property n 'type dty f)
-	      dty))
+		     ;; no default type either, fail
+		     ;; TODO: This needs to be a different condition
+		     (error 'compiler-error :hint (format nil "No explicit type, constraints, or default type for variable ~s" n))))
 
-	;; we have constraints, solve them
-	(let ((ty (solve-type-constraints n f cs)))
-	  ;; remove the constraints so we don't re-solve them
-	  (set-frame-property n 'type-constraints nil f)
+	       ;; we have constraints, solve them
+	       (handler-case
+		   (let ((sty (solve-type-constraints n f cs)))
+		     ;; remove the constraints so we don't re-solve them
+		     (set-frame-property n 'type-constraints nil f)
 
-	  ;; check for compatibility with any explicit type given
-	  (when ety
-	    (unless (subtype-p ty ety)
-	      (warn 'type-mismatch :expected ety
-				   :got ty
-				   :hint "Check the declared type is appropriate")
+		     (if ety
+			 ;; we have an explicit type, check inferred type for compatibility
+			 (progn
+			   (unless (subtype-p sty ety)
+			     (warn 'type-mismatch :expected ety
+						  :got sty
+						  :hint "Check the declared type is appropriate"))
 
-	      ;; retain the explicit type
-	      (setq ty ety)))
+			   ;; retain the explicit type, /not/ the inferred one
+			   ety)
 
-	  ;; apply the constrained type
-	  (set-frame-property n 'type ty f)
+			 ;; no explicit type to compare against, use the inferred type
+			 sty))
 
-	  ty))))
+		 (circular-type-dependencies ()
+		   ;; see if we have an explicit type we can use
+		   (if ety
+		       (progn
+			 ;; yes, use that (with a warning)
+			 (warn 'type-defaulted :variable n :defaulted-to ety)
+
+			 ;; use the explcit type
+			 ety)
+
+		       ;; no explicit type, try the compiler default
+		       (if-let ((dty (get-compiler-flag 'default-variable-type)))
+			 (progn
+			   ;; we have a compiler default, use that (with a warning)
+			   (warn 'type-defaulted :variable n :defaulted-to dty)
+
+			   ;; use the default type
+			   dty)
+
+			 ;; no default type either, fail
+			 (error 'circular-type-dependencies :variable n :involved cs
+							    :hint "Add explicit types for some or all variables"))))))))
+
+    ;; record the inferred type
+    (set-frame-property n 'type ty f)
+
+    ty))
 
 
 ;;; ---------- Type checking ----------
@@ -274,6 +308,8 @@ This used internally."
 
   ;; types of variables
   (:method ((tytag (eql 'type-of)) tyargs)
+    (declare (optimize debug))
+
     (destructuring-bind (n &optional (f (current-frame)))
 	tyargs
       (let ((ty (solve-type-constraints-and-declare n f)))
