@@ -293,12 +293,13 @@ LET* adds bindings incrementally, so each can see those that went before."
 
 	(when (subtype-p ty 'array)
 	  ;; migrate array type information into properties for easier access
+	  ;; TODO: This should live in arrays.lisp, and/or be a generic function
 	  (destructuring-bind (make-array shape &key initial-element
-					initial-contents
-					element-type
-					displaced-to
-					displaced-index-offset
-					displaced-offset)
+						  initial-contents
+						  element-type
+						  displaced-to
+						  displaced-index-offset
+						  displaced-offset)
 	      (get-initial-value n)
 	    (declare (ignore make-array initial-element initial-contents element-type))
 
@@ -313,8 +314,8 @@ LET* adds bindings incrementally, so each can see those that went before."
 		(set-frame-property n 'array-displaced-offset displaced-index-offset f))
 	      (when displaced-offset
 		;; offset to a position
-		 (set-frame-property n 'array-displaced-by 'position f)
-		 (set-frame-property n 'array-displaced-offset displaced-offset f)))
+		(set-frame-property n 'array-displaced-by 'position f)
+		(set-frame-property n 'array-displaced-offset displaced-offset f)))
 
 	    (set-frame-property n 'array-element-type element-type f)))))))
 
@@ -582,44 +583,44 @@ don't need their own storage."
   "Synthesise a register N within a LET block."
   (declare (optimize debug))
 
-  (let ((v (get-initial-value n)))
-    (let ((type (get-type n)))
+  (let ((v (get-initial-value n))
+	(type (get-type n)))
 
-      ;; only synthesise a declaration for a things that aren't
-      ;; displaced arrays (which will be transformed)
-      (when (or (not (array-type-p type))
-		(not (displaced-array-p v)))
+    ;; only synthesise a declaration for a things that aren't
+    ;; displaced arrays (which will be transformed)
+    (when (or (not (array-type-p type))
+	      (not (displaced-array-p v)))
 
-	(let ((width (if (array-type-p type)
-			 ;; width is the width of the element type
-			 (bitwidth (array-type-element-type type))
+      (let ((width (if (array-type-p type)
+		       ;; width is the width of the element type
+		       (bitwidth (array-type-element-type type))
 
-			 ;; width is of the type itself
-			 (bitwidth type))))
+		       ;; width is of the type itself
+		       (bitwidth type))))
 
-	  (as-literal "reg ")
-	  ;; (if (and (fixed-width-p type)
-	  ;;	       (not (unsigned-byte-p type)))
-	  ;;	  (as-literal "signed "))
+	(as-literal "reg ")
+	;; (if (and (fixed-width-p type)
+	;;	       (not (unsigned-byte-p type)))
+	;;	  (as-literal "signed "))
 
-	  (when (or (not (numberp width))
-		    (> width 1))
-	    ;; we have a width (or a width expression)
-	    (as-literal "[ ")
-	    (synthesise width)
-	    (as-literal " - 1 : 0 ] "))
-	  (synthesise n)
+	(when (or (not (numberp width))
+		  (> width 1))
+	  ;; we have a width (or a width expression)
+	  (as-literal "[ ")
+	  (synthesise width)
+	  (as-literal " - 1 : 0 ] "))
+	(synthesise n)
 
-	  (if v
-	      (if (make-array-form-p v)
-		  ;; synthesise the array bounds and initialisation
-		  (synthesise-array-init n v)
+	(if v
+	    (if (make-array-form-p v)
+		;; synthesise the array bounds and initialisation
+		(synthesise-array-init n v)
 
-		  ;; synthesise the assignment to the initial value
-		  (progn
-		    (as-literal " = ")
-		    (synthesise v))))
-	  (as-literal ";"))))))
+		;; synthesise the assignment to the initial value
+		(progn
+		  (as-literal " = ")
+		  (synthesise v))))
+	(as-literal ";")))))
 
 
 (defun synthesise-wire (n)

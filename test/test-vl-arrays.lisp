@@ -331,30 +331,44 @@
 
 (test test-array-displaced
   "Test we can displace an array into another."
-  (let ((p (vl::expand/vl '(let* ((a (make-array (10) :element-type (unsigned-byte 8)))
-				  (b (make-array (2) :displaced-to a :displaced-index-offset 0))
+  (let ((p (vl::expand/vl '(let* ((a (make-array (10)
+				      :element-type (unsigned-byte 8)))
+				  (b (make-array (2)
+				      :displaced-to a
+				      :displaced-index-offset 0))
 				  c)
 			    (setq c (aref b 0))))))
     (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 8))))
 
   ;; displaced arrays can't have initial elements
-  (let ((p (vl::expand/vl '(let* ((a (make-array (10) :element-type (unsigned-byte 8)))
-				  (b (make-array (2) :displaced-to a :displaced-index-offset 0 :initial-element 5)))
+  (let ((p (vl::expand/vl '(let* ((a (make-array (10)
+				      :element-type (unsigned-byte 8)))
+				  (b (make-array (2) :
+				      displaced-to a
+				      :displaced-index-offset 0
+				      :initial-element 5)))
 			    (setq c (aref b 0))))))
     (signals syntax-error
       (vl::typecheck p)))
 
   ;; displaced arrays can't have element types given
-  (let ((p (vl::expand/vl '(let* ((a (make-array (10) :element-type (unsigned-byte 8)))
-				  (b (make-array (2) :element-type bit :displaced-to a :displaced-index-offset 0))
+  (let ((p (vl::expand/vl '(let* ((a (make-array (10)
+				      :element-type (unsigned-byte 8)))
+				  (b (make-array (2)
+				      :element-type bit
+				      :displaced-to a :
+				      displaced-index-offset 0))
 				  c)
 			    (setq c (aref b 0))))))
     (signals syntax-error
       (vl::typecheck p)))
 
   ;; ...but instead inherit their underlying array's element type
-  (let ((p (vl::expand/vl '(let* ((a (make-array (10) :element-type (unsigned-byte 8)))
-				  (b (make-array (2) :displaced-to a :displaced-index-offset 4))
+  (let ((p (vl::expand/vl '(let* ((a (make-array (10)
+				      :element-type (unsigned-byte 8)))
+				  (b (make-array (2)
+				      :displaced-to a
+				      :displaced-index-offset 4))
 				  c)
 			    (setq c (aref b 0))))))
     (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 8)))))
@@ -364,39 +378,62 @@
   "Test that the underlying array is large enough to accommodate the displaced array."
   ;; vector cases
   ;; success
-  (let ((p (vl::expand/vl '(let* ((a (make-array '(12) :element-type (unsigned-byte 8)))
-				  (b (make-array '(5) :displaced-to a :displaced-index-offset 5)))
+  (let ((p (vl::expand/vl '(let* ((a (make-array '(12)
+				      :element-type (unsigned-byte 8)))
+				  (b (make-array '(5)
+				      :displaced-to a
+				      :displaced-index-offset 5)))
 			    (aref b 0)))))
     (is (vl::typecheck p)))
 
   ;;failure
   (signals syntax-error
-    (let ((p (vl::expand/vl '(let* ((a (make-array '(12) :element-type (unsigned-byte 8)))
-				    (b (make-array '(5) :displaced-to a :displaced-index-offset 10)))
+    (let ((p (vl::expand/vl '(let* ((a (make-array '(12)
+					:element-type (unsigned-byte 8)))
+				    (b (make-array '(5)
+					:displaced-to a
+					:displaced-index-offset 10)))
 			      (aref b 0)))))
       (vl::typecheck p)))
 
   ;; multi-dimensional cases
   ;; success
-  (let ((p (vl::expand/vl '(let* ((a (make-array '(12 12) :element-type (unsigned-byte 8)))
-				    (b (make-array '(10 10) :displaced-to a :displaced-index-offset 10)))
+  (let ((p (vl::expand/vl '(let* ((a (make-array '(12 12)
+				      :element-type (unsigned-byte 8)))
+				    (b (make-array '(10 10)
+					:displaced-to a :
+					displaced-index-offset 10)))
 			      (aref b 0)))))
     (is (vl::typecheck p))
 
     ;; failure
     (signals syntax-error
-      (let ((p (vl::expand/vl '(let* ((a (make-array '(12 12) :element-type (unsigned-byte 8)))
-				      (b (make-array '(10 10) :displaced-to a :displaced-index-offset 50)))
+      (let ((p (vl::expand/vl '(let* ((a (make-array '(12 12)
+					  :element-type (unsigned-byte 8)))
+				      (b (make-array '(10 10)
+					  :displaced-to a
+					  :displaced-index-offset 50)))
 				(aref b 0)))))
 	(vl::typecheck p)))))
 
 
 (test test-synthesise-array-displaced
   "Test we correct for displaced arrays."
-  (let ((p (vl::expand/vl '(let* ((a (make-array (10) :element-type (unsigned-byte 8)))
-				  (b (make-array (2) :displaced-to a :displaced-index-offset 5))
+  (let ((p (vl::expand/vl '(let* ((a (make-array (10)
+				      :element-type (unsigned-byte 8)))
+				  (b (make-array (2)
+				      :displaced-to a
+				      :displaced-index-offset 5))
 				  c)
 			    (setf (aref b 0) 10)
 			    (setq c (aref b 0))))))
 
-    (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 8)))))
+    ;; make sure we address trough to the correct element type
+    (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 8)))
+
+    ;; these are a bit fragile...
+    (let ((s (with-output-to-string (str)
+	       (vl::synthesise/vl p str))))
+      (format t s)
+      (is (str:containsp "a[ 5 ]" s))
+      (is (not (str:containsp "b" s))))))

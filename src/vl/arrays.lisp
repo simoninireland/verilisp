@@ -71,6 +71,15 @@
   (lub `(member ,ty2 ,mem) ty1))
 
 
+(defmethod bitwidth/form ((tytag (eql 'member)) tyargs)
+  (declare (optimize debug))
+
+  (if (subtype-p (car tyargs) 'array)
+      (bitwidth (array-type-element-type (lub (car tyargs))))
+
+      (call-next-method)))
+
+
 ;;; ---------- Array initialisation data ----------
 
 (defun valid-array-shape-p (shape)
@@ -452,7 +461,7 @@ Return a list containing the final array and indices."
     ;; TODO: need to handle conformat displacement too
     (let* ((offset (get-environment-property place 'array-displaced-offset (current-environment)))
 	   (realindices (list (+ (car indices) offset))))
-      (break)
+
       ;; recurse in case the target is displaced as well
       (displaced-aref displaced-to realindices))
 
