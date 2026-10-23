@@ -142,7 +142,7 @@
 
 	    ;; the state machine
 	    (@ (posedge clk)
-	       (tagbody
+	       (forever
 		fetch-instruction
 		  ;; State 0: fetch the next instruction
 		  (if reset
@@ -173,10 +173,14 @@
 		      (setq leds aluOut)))
 
 		  ;; update PC
-		  (when (not system-p)
-		    (setq pc (cond (JAL-p
-				    (+ pc Jimm))
-				   (JALR-p
-				    (+ rs1 Iimm))
-				   (t
-				    (+ pc 4)))))))))))))
+		  (if system-p
+		      ;; halt the core
+		      (while 1)
+
+		      ;; update the program counter
+		      (setq pc (cond (JAL-p
+				      (+ pc Jimm))
+				     (JALR-p
+				      (+ rs1 Iimm))
+				     (t
+				      (+ pc 4)))))))))))))
