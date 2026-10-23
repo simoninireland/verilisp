@@ -62,3 +62,17 @@ are reported as NOT-SYNTHESISABLE errors."
   (if (eql (car body) 'tagbody)
       body
       `(tagbody ,@body)))
+
+
+;;; ---------- Compatibility ----------
+
+(defmacro unquote (form)
+  "Remove any leading quote from the data in FORM.
+
+This is mainly used to preserve compatability with Lisp, where
+some forms need to be quoted. We *allow* them to be quoted in
+Verilisp, but don't *require* it."
+  `(if (and (not (null ,form))
+	    (listp ,form)
+	    (eql (car ,form) 'quote))
+       (setq ,form (cadr ,form))))

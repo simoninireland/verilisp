@@ -195,6 +195,7 @@
    #:value-mismatch
    #:access-mismatch
    #:shape-mismatch
+   #:index-mismatch
    #:coercion-mismatch
    #:no-local-frame
 

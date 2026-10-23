@@ -496,6 +496,29 @@ shape for the array. Usually this can be fixed by simply reformatting
 the data, and/or making sure there's the right amount of it."))
 
 
+(define-condition index-mismatch (vl-error)
+  ((shape
+    :documentation "The expected shape."
+    :initarg :expected
+    :reader shape)
+   (indices
+    :documentation "The indices"
+    :initarg :indices
+    :reader indices))
+  (:report (lambda (c str)
+	     (format-condition-context (format nil "Indices ~a don't match shape ~a"
+					       (indices c)
+					       (shape c))
+				       c str)))
+  (:documentation "Condition signalled when an array is badly indexed.
+
+This means that the indices passed to an AREF operation don't match
+the shape of the array.
+
+This is a compile-time check: it doesn't generally check for out-of-bounds
+errors, only for the wrong number of indices."))
+
+
 (define-condition unreachable-code (vl-warning)
   ((label
     :documentation "The state with the unreachable code."

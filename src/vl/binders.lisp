@@ -303,6 +303,8 @@ LET* adds bindings incrementally, so each can see those that went before."
 	      (get-initial-value n)
 	    (declare (ignore make-array initial-element initial-contents element-type))
 
+	    (unquote shape)
+
 	    (set-frame-property n 'array-shape shape f)
 	    (when displaced-to
 	      (set-frame-property n 'array-displaced-to displaced-to f)

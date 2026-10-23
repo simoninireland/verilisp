@@ -199,63 +199,62 @@
 
 ;; ---------- Generalised place ----------
 
-;; We set the TYPE and INITIAL-VALUE properties explicitly, which
-;; LET would have done had we used a proper binding
-
 (test test-aref-dependencies
   "Test we can extract aref dependencies properly."
   (vl::with-new-frame
-    (vl::declare-variable 'a '((type (array (unsigned-byte 8) (16)))
-			       (initial-value (make-array '(16)
-					       :element-type (unsigned-byte 8)))))
-    (vl::declare-variable 'b '((type (unsigned-byte 8))
-			       (initial-value 24)))
-    (vl::declare-variable 'c '((type (unsigned-byte 8))
-			       (initial-value 0)))
-    (vl::declare-variable 'd '((type (unsigned-byte 8))
-			       (initial-value 0)
-			       (as constant)))
-
-    (let ((p (vl::expand/vl '(progn
+    (let ((p (vl::expand/vl '(let ((a (make-array '(16)
+					:element-type (unsigned-byte 8)))
+				   (b 24)
+				   (c 0)
+				   (d 0))
+			      (declare (as constant d))
 			      (setq b (+ (aref a 23) 19))
 			      (setq c (+ (aref a d) b))))))
+
       (vl::typecheck p)
 
-      (is (set-equal (vl::variable-property 'b 'depends-on)
-		     '(a)))
-      (is (set-equal (vl::variable-property 'c 'depends-on)
-		     '(a d b))))))
+      (with-frame (cadr p)
+	(is (set-equal (vl::variable-property 'b 'depends-on)
+		       '(a)))
+	(is (set-equal (vl::variable-property 'c 'depends-on)
+		       '(a d b)))))))
 
 
 (test test-aref-target
   "Test we can use array elements as targets."
+  ;; single setf
   (vl::with-new-frame
-    (vl::declare-variable 'a '((type (array (unsigned-byte 8) (16)))
-			       (initial-value (make-array '(16)
-					       :element-type (unsigned-byte 8)))))
-    (vl::declare-variable 'b '((type (unsigned-byte 8))
-			       (initial-value 24)))
-    (vl::declare-variable 'c '((type (unsigned-byte 8))
-			       (initial-value 0)))
+    (let ((p (vl::expand/vl '(let ((a (make-array '(16)
+				       :element-type (unsigned-byte 8)))
+				   (b 24)
+				   (c 0))
+			      (setf (aref a 1) b)))))
 
-    (let ((p (vl::expand/vl '(setf (aref a 1) b))))
       (vl::typecheck p)
+      (with-frame (cadr p)
+	(is (set-equal (vl::variable-property 'a 'depends-on)
+		       '(b)))
+	(is (null (vl::variable-property 'b 'depends-on)))))
 
-      (is (set-equal (vl::variable-property 'a 'depends-on)
-		     '(b)))
-      (is (null (vl::variable-property 'b 'depends-on))))
+    ;; additional setf
+    (let ((p (vl::expand/vl '(let ((a (make-array '(16)
+				       :element-type (unsigned-byte 8)))
+				   (b 24)
+				   (c 0))
+			      (setf (aref a 1) b)
+			      (setf (aref a 1) (aref a c))))))
 
-    (let ((p (vl::expand/vl '(setf (aref a 1) (aref a c)))))
       (vl::typecheck p)
+      (with-frame (cadr p)
+	(is (set-equal (vl::variable-property 'a 'depends-on)
+		       '(a b c)))
 
-      (is (set-equal (vl::variable-property 'a 'depends-on)
-		     '(a b c)))) ; b from the previous form
+	;; check read-write within the environment
+	(let ((rws (vl::read-variables '(setf (aref a 1) b))))
+	  (is (set-equal rws '(b))))
 
-    (let ((rws (vl::read-variables '(setf (aref a 1) b))))
-      (is (set-equal rws '(b))))
-
-    (let ((rws (vl::read-variables '(setf (aref a 1) (aref a c)))))
-      (is (set-equal rws '(a c))))))
+	(let ((rws (vl::read-variables '(setf (aref a 1) (aref a c)))))
+	  (is (set-equal rws '(a c))))))))
 
 
 ;; ---------- Initialisation ----------
@@ -327,6 +326,66 @@
     (vl::run-module-late-initialisation)))
 
 
+;;; ---------- Multi-dimensional arrays ----------
+
+(test test-array-bad-indices
+  "Test we catch the wrong number of indices."
+  (let ((p (vl::expand/vl '(let ((a (make-array (10 10)
+				     :element-type (unsigned-byte 8))))
+			    (setf (aref a 1) 1)))))
+    (signals index-mismatch
+      (vl::typecheck p)))
+
+    (let ((p (vl::expand/vl '(let ((a (make-array (10)
+				     :element-type (unsigned-byte 8))))
+			    (setf (aref a 1 1) 1)))))
+      (signals index-mismatch
+	(vl::typecheck p))))
+
+
+(test test-array-synthesise-two-d
+  "Test we can change the indices of a 2d array to 1d."
+  (let ((p (vl::expand/vl '(let ((a (make-array (10 10)
+				     :element-type (unsigned-byte 8))))
+			    (setf (aref a 1 1) 1)))))
+    (vl::typecheck p)
+
+    ;; this is fragile...
+    (let ((s (with-output-to-string (str)
+	       (vl::synthesise/vl p str))))
+      (is (str:containsp "((1 * 10) + 1)" s)))))
+
+
+(test test-array-synthesise-three-d
+  "Test we can change the indices of a 3d array to 1d."
+  (let ((p (vl::expand/vl '(let ((a (make-array (10 10 20)
+				     :element-type (unsigned-byte 8))))
+			    (setf (aref a 1 2 3) 1)))))
+    (vl::typecheck p)
+
+    ;; this is fragile...
+    (let ((s (with-output-to-string (str)
+	       (vl::synthesise/vl p str))))
+      (is (str:containsp "((1 * 10 * 20) + (2 * 20) + 3)" s)))))
+
+
+(test test-array-synthesise-three-d-computed-shape
+  "Test we can change the indices of a 3d array to 1d when the shape ofn the array is computed from constants."
+  (let ((p (vl::expand/vl '(let* ((d1 10)
+				  (d2 (+ d1 1))
+				  (a (make-array (d1 d2 (+ d2 5))
+				      :element-type (unsigned-byte 8))))
+			    (declare (as constant d1 d2))
+			    (setf (aref a 1 2 3) 1)))))
+    (vl::typecheck p)
+
+    ;; this is fragile...
+    (let ((s (with-output-to-string (str)
+	       (vl::synthesise/vl p str))))
+      (is (str:containsp "a[ 0 : (d1 * d2 * (d2 + 5)) - 1 ]" s))
+      (is (str:containsp "((1 * d2 * (d2 + 5)) + (2 * (d2 + 5)) + 3)" s)))))
+
+
 ;;; ---------- Array displacement ----------
 
 (test test-array-displaced
@@ -343,8 +402,8 @@
   ;; displaced arrays can't have initial elements
   (let ((p (vl::expand/vl '(let* ((a (make-array (10)
 				      :element-type (unsigned-byte 8)))
-				  (b (make-array (2) :
-				      displaced-to a
+				  (b (make-array (2)
+				      :displaced-to a
 				      :displaced-index-offset 0
 				      :initial-element 5)))
 			    (setq c (aref b 0))))))
@@ -356,8 +415,8 @@
 				      :element-type (unsigned-byte 8)))
 				  (b (make-array (2)
 				      :element-type bit
-				      :displaced-to a :
-				      displaced-index-offset 0))
+				      :displaced-to a
+				      :displaced-index-offset 0))
 				  c)
 			    (setq c (aref b 0))))))
     (signals syntax-error
@@ -401,9 +460,9 @@
   (let ((p (vl::expand/vl '(let* ((a (make-array '(12 12)
 				      :element-type (unsigned-byte 8)))
 				    (b (make-array '(10 10)
-					:displaced-to a :
-					displaced-index-offset 10)))
-			      (aref b 0)))))
+					:displaced-to a
+					:displaced-index-offset 10)))
+			      (aref b 0 5)))))
     (is (vl::typecheck p))
 
     ;; failure
@@ -413,7 +472,7 @@
 				      (b (make-array '(10 10)
 					  :displaced-to a
 					  :displaced-index-offset 50)))
-				(aref b 0)))))
+				(aref b 0 5)))))
 	(vl::typecheck p)))))
 
 

@@ -120,18 +120,6 @@ having the correct length as given in SHAPE."
 
 ;;; ---------- Array construction ----------
 
-(defmacro unquote (place)
-  "Remove any leading quote from the data in PLACE.
-
-This is mainly used to preserve compatability with Lisp, where
-these forms need to be quoted. We *allow* them to be quoted in
-Verilisp, but don't *require* it."
-  `(if (and (not (null ,place))
-	    (listp ,place)
-	    (eql (car ,place) 'quote))
-       (setq ,place (cadr ,place))))
-
-
 ;; (defun array-element-width (form)
 ;;   "Return the width of the elements of array constructor FORM."
 ;;   (if-let ((m (member :element-type (cdr form))))
@@ -304,13 +292,20 @@ Otheriwse it is read as a literal list."
 			       conformal
 			       displaced-offset)
       (cdr v)
-    ;; skip an initial quote, allowed for Lisp compatability
+    ;; skip an initial quote, allowed for Lisp compatibility
     (unquote shape)
     (unquote initial-contents)
 
-    ;; 1d arrays only for now
+    ;; TODO: displaced arrays
+
+    ;; synthesise overall size
     (as-literal "[ 0 : ")
-    (synthesise (car shape))
+    (if (= (length shape) 1)
+	;; one-dimensional, synthesise as-is
+	(synthesise (car shape))
+
+	;; multi-dimensional, synthesise the expansion
+	(as-list shape :before "(" :after ")" :sep " * "))
     (as-literal " - 1 ]")
 
     ;; intialisation data, if any
@@ -388,7 +383,7 @@ Lisp arrays are always represented row-major."
   ;; https://novaspec.org/cl/f_array-row-major-index
   (apply #'+ (maplist (lambda (x y)
 			(* (car x) (apply #'* (cdr y))))
-		      indices
+		      (mapcar #'eval-in-static-environment indices)
 		      ds)))
 
 
@@ -427,6 +422,8 @@ Lisp arrays are always represented row-major."
       ;; otherwise fail
       (error 'representation-mismatch :variable (car ty) :expected "a bounded array" :got ty :hint "Need a specified shape")))
 
+
+;;; ---------- Array element access (aref) ----------
 
 (defpassmethod generalised-place-p (aref place &rest indices)
   t)
@@ -486,10 +483,7 @@ Return a list containing the final array and indices."
   (destructuring-bind (dplace dindices)
       (displaced-aref place indices)
 
-    ;; (get-environment-property dplace 'array-element-type (current-environment))
-    `(member (type-of ,dplace ,(current-environment)) ,dindices)
-
-    ))
+    `(member (type-of ,dplace ,(current-environment)) ,dindices)))
 
 
 (defpassmethod compute-type-setf (aref place &rest indices)
@@ -497,7 +491,18 @@ Return a list containing the final array and indices."
 
   (let* ((ty (get-type place))
 	 (shape (array-type-shape ty)))
+
     `(array ,tyval ,shape)))
+
+
+;; TODO: Should we check indices are within bounds if possible? It isn't
+;; generally, but there are useful special cases that it might be
+;; worth catching
+
+(defpassmethod check-all-variables-typed (aref place &rest indices)
+  (let ((shape (get-environment-property place 'array-shape (current-environment))))
+    (unless (= (length shape) (length indices))
+      (error 'index-mismatch :expected shape :indices indices))))
 
 
 (defpassmethod compute-dependencies (aref place &rest indices)
@@ -512,11 +517,39 @@ Return a list containing the final array and indices."
   (every #'simple-expression-p args))
 
 
+(defun synthesise-array-indices (indices ds)
+  "Synthesise the INDICES along dimensions DS as a single index.
+
+This uses the same algorithm as INDEX-FROM-INDICES-AND-SHAPE, but
+generates code instead of computing the value."
+  (flet ((synthesise-index (x y)
+	   (if (= (length x) 1)
+	       (synthesise (car x))
+
+	       (synthesise `(* ,(car x) ,@(cdr y))))
+
+	   (if (not (null (cdr y)))
+	       (as-literal " + "))))
+
+    (as-literal "(")
+    (maplist #'synthesise-index indices ds)
+    (as-literal ")")))
+
+
 (defpassmethod synthesise (aref place &rest indices)
+  (declare (optimize debug))
+
   (destructuring-bind (realplace realindices)
       (displaced-aref place indices)
 
-    (synthesise realplace)
-    (as-literal "[ ")
-    (as-list realindices)
-    (as-literal " ]")))
+    (let ((realshape (get-environment-property realplace 'array-shape (current-environment))))
+
+      (synthesise realplace)
+      (as-literal "[ ")
+      (if (= (length realshape) 1)
+	  ;; one-dimensional, synthesise as-is
+	  (synthesise (car realindices))
+
+	  ;; multi-dimensional, synthesise the expansion
+	  (synthesise-array-indices realindices realshape))
+      (as-literal " ]"))))
