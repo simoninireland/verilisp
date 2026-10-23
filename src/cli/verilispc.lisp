@@ -46,7 +46,7 @@
 			  ("mismatch"  type-mismatch direction-mismatch coercion-mismatch
 				       representation-mismatch precision-mismatch bitfield-mismatch)
 			  ("declare"   unrecognised-declaration)
-			  ("infer"     type-inferred)
+			  ("infer"     type-inferred type-defaulted)
 			  ("resources" resources-created)
 			  ("reach"     unreachable-code)
 			  ("use"       unused-variable used-variable))
@@ -369,7 +369,7 @@ The header will need to be preceded by an appropriate comment string."
     (uiop:quit 1)))
 
 
-;;; Helper macro
+;;; Helper macros
 
 (defmacro with-error-handling (&body body)
   "Run BODY in an environment that handles warnings and errors appropriately.
@@ -495,5 +495,5 @@ to skip files with errors."
 
 			(synthesise/vl module str))))))))
 
-    ;; if we get here we didn't bail-out earlier, so do a successful exit
+    ;; if we get here we didn't bail-out earlier, do a successful exit
     (uiop:quit 0)))
