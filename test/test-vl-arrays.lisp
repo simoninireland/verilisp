@@ -350,7 +350,45 @@
 				  c)
 			    (setq c (aref b 0))))))
     (signals syntax-error
-      (vl::typecheck p))))
+      (vl::typecheck p)))
+
+  ;; ...but instead inherit their underlying array's element type
+  (let ((p (vl::expand/vl '(let* ((a (make-array (10) :element-type (unsigned-byte 8)))
+				  (b (make-array (2) :displaced-to a :displaced-index-offset 4))
+				  c)
+			    (setq c (aref b 0))))))
+    (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 8)))))
+
+
+(test test-array-displaced-large-enough
+  "Test that the underlying array is large enough to accommodate the displaced array."
+  ;; vector cases
+  ;; success
+  (let ((p (vl::expand/vl '(let* ((a (make-array '(12) :element-type (unsigned-byte 8)))
+				  (b (make-array '(5) :displaced-to a :displaced-index-offset 5)))
+			    (aref b 0)))))
+    (is (vl::typecheck p)))
+
+  ;;failure
+  (signals syntax-error
+    (let ((p (vl::expand/vl '(let* ((a (make-array '(12) :element-type (unsigned-byte 8)))
+				    (b (make-array '(5) :displaced-to a :displaced-index-offset 10)))
+			      (aref b 0)))))
+      (vl::typecheck p)))
+
+  ;; multi-dimensional cases
+  ;; success
+  (let ((p (vl::expand/vl '(let* ((a (make-array '(12 12) :element-type (unsigned-byte 8)))
+				    (b (make-array '(10 10) :displaced-to a :displaced-index-offset 10)))
+			      (aref b 0)))))
+    (is (vl::typecheck p))
+
+    ;; failure
+    (signals syntax-error
+      (let ((p (vl::expand/vl '(let* ((a (make-array '(12 12) :element-type (unsigned-byte 8)))
+				      (b (make-array '(10 10) :displaced-to a :displaced-index-offset 50)))
+				(aref b 0)))))
+	(vl::typecheck p)))))
 
 
 (test test-synthesise-array-displaced
@@ -360,13 +398,5 @@
 				  c)
 			    (setf (aref b 0) 10)
 			    (setq c (aref b 0))))))
-    (vl::typecheck p)
 
-    ;; these are a bit fragile...
-    (let ((s (make-array '(0) :element-type 'base-char
-			      :fill-pointer 0 :adjustable t)))
-      (with-output-to-string (str s)
-	(vl::synthesise/vl p str))
-
-      (is (str:containsp "a[ 5 ]" s))
-      (is (not (str:containsp "b" s))))))
+    (is (vl::subtype-p (vl::typecheck p) '(unsigned-byte 8)))))

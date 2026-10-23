@@ -143,4 +143,5 @@ unique to Verilisp.
    type-of-types
    width-types
    widen-types
+   member-types
    closure-types

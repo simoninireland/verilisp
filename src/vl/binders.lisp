@@ -289,7 +289,34 @@ LET* adds bindings incrementally, so each can see those that went before."
 
   (let ((f (current-frame)))
     (dolist (n (variables-declared-in-frame f))
-      (solve-type-constraints-and-declare n f))))
+      (let ((ty (solve-type-constraints-and-declare n f)))
+
+	(when (subtype-p ty 'array)
+	  ;; migrate array type information into properties for easier access
+	  (destructuring-bind (make-array shape &key initial-element
+					initial-contents
+					element-type
+					displaced-to
+					displaced-index-offset
+					displaced-offset)
+	      (get-initial-value n)
+	    (declare (ignore make-array initial-element initial-contents element-type))
+
+	    (set-frame-property n 'array-shape shape f)
+	    (when displaced-to
+	      (set-frame-property n 'array-displaced-to displaced-to f)
+	      (setq element-type `(member ,displaced-to))
+
+	      (when displaced-index-offset
+		;; offset by a fixed index
+		(set-frame-property n 'array-displaced-by 'index f)
+		(set-frame-property n 'array-displaced-offset displaced-index-offset f))
+	      (when displaced-offset
+		;; offset to a position
+		 (set-frame-property n 'array-displaced-by 'position f)
+		 (set-frame-property n 'array-displaced-offset displaced-offset f)))
+
+	    (set-frame-property n 'array-element-type element-type f)))))))
 
 
 (defpassmethod compute-type (let f &rest body)
@@ -535,7 +562,7 @@ by LET and MODULE forms."
 ;;; TODO: All this should live in arrays.lisp
 
 (defun displaced-array-p (form)
-  "Test whetehr FORM is a MAKE-ARRAY for a displaced array.
+  "Test whether FORM is a MAKE-ARRAY for a displaced array.
 
 Displaced arrays are simply renamings of underlying arrays and so
 don't need their own storage."

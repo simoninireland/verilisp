@@ -26,6 +26,8 @@
 
 ;;; ---------- Array type algebra ----------
 
+;; array types
+
 (defsubtype ((array lty &optional indices) array)
   t)
 
@@ -38,21 +40,35 @@
   `(array ,(lub lty rty)))
 
 
-;;; ---------- Dope vector ----------
+;; member types
 
-;;; A dope vector is the representation of the metadata of an array. Unlike
-;;; in most situations, in Verilisp they only exist at compile time.
+;; TODO: These could be improved with better pattern-matching in DEFSUBTYPE and LUB
 
-(defclass ArrayDopeVector ()
-  ((dimensions
-    :initarg :dimensions
-    :reader dimensions
-    :documentation "The dimensions of the array.")
-   (element-type
-    :initarg :element-type
-    :reader element-type
-    :documentation "The element type of the array."))
-  (:documentation "A dope vector of metadata for an array."))
+(defsubtype ((member ty1 &optional mem) (&type ty2))
+  (if (subtype-p ty1 'array)
+      (subtype-p (array-type-element-type (lub ty1)) ty2)
+
+      (call-next-method)))
+
+
+(defsubtype ((&type ty1) (member ty2 &optional mem))
+  (if (subtype-p ty2 'array)
+      (subtype-p ty1 (array-type-element-type (lub ty2))))
+
+  (call-next-method))
+
+
+(deflub ((member ty1 &optional mem) (&type ty2))
+  (declare (optimize debug))
+
+  (if (subtype-p ty1 'array)
+      (lub (array-type-element-type (lub ty1)) ty2)
+
+      (call-next-method)))
+
+
+(deflub ((&type ty1) (member ty2 &optional mem))
+  (lub `(member ,ty2 ,mem) ty1))
 
 
 ;;; ---------- Array initialisation data ----------
@@ -68,7 +84,7 @@ The dimensions must be statically determined."
 (defun ensure-valid-array-shape (shape)
   "Ensure SHAPE is a valid array shape."
   (unless (valid-array-shape-p shape)
-    (error 'not-synthesisable :hint "Arrays dimensions must be known statically")))
+    (error 'not-static :hint "Arrays dimensions must be known statically")))
 
 
 (defun data-has-shape-p (data shape)
@@ -82,6 +98,7 @@ having the correct length as given in SHAPE."
 	     (and (every #'listp data)
 		  (every (rcurry #'data-has-shape-p ds) data))
 
+	     ;; no shape given, accept it
 	     t))))
 
 
@@ -106,14 +123,20 @@ Verilisp, but don't *require* it."
        (setq ,place (cadr ,place))))
 
 
-(defun array-element-width (form)
-  "Return the width of the elements of array constructor FORM."
-  (if-let ((m (member :element-type (cdr form))))
-    ;; use the element width of there is one
-    (bitwidth (safe-cadr m) '())
+;; (defun array-element-width (form)
+;;   "Return the width of the elements of array constructor FORM."
+;;   (if-let ((m (member :element-type (cdr form))))
+;;     ;; use the element width of there is one
+;;     (bitwidth (safe-cadr m) '())
 
-    ;; otherwise the default
-    *default-register-width*))
+;;     ;; otherwise see if there's a default type
+;;     (if-let ((dty (get-compiler-flag 'default-variable-type)))
+;;       (progn
+;;	(warn 'type-defaulted :variable )
+
+;;	)
+;;       (error ))
+;;     *default-register-width*))
 
 
 (defpassmethod read-variables (make-array shape &key (initial-element 0)
@@ -141,7 +164,7 @@ Verilisp, but don't *require* it."
   (unquote element-type)
   (unquote initial-contents)
 
-  ;; check shape
+  ;; check shape is valid (and must be static)
   (ensure-valid-array-shape shape)
 
   ;; initial contents must either match the size of the array
@@ -166,7 +189,7 @@ Verilisp, but don't *require* it."
 		 ;; check shape
 		 (ensure-data-has-shape initial-contents shape)))
 
-	  (error 'syntax-error :hint "Make sure initial conmtents are an array")))
+	  (error 'syntax-error :hint "Make sure initial contents are an array")))
 
   ;; initialise type from the initial element unless an explicit element type is provided
   (unless element-type
@@ -175,17 +198,27 @@ Verilisp, but don't *require* it."
 
   ;; TODO: need to constrain the element types too
   (when displaced-to
-    ;; if displaced, that needs to be an array too
-    (add-type-constraint displaced-to `(array ,element-type))
-
-    ;; TODO: Handle conformant displaced arrays too
-
     ;; mustn't have initial values or element types
     ;; TODO: This isn't actually true....
     (when (or initial-element initial-contents)
       (error 'syntax-error :hint "Displaced arrays can't be initialised"))
     (when element-type
-      (error 'syntax-error :hint "Displaced arrays inherit their element type")))
+      (error 'syntax-error :hint "Displaced arrays inherit their element type"))
+
+    ;; find the type of the underlying array
+    (setq element-type `(member (type-of ,displaced-to ,(current-environment))))
+
+    ;; TODO: Handle conformant displaced arrays too
+
+    ;; if the displacement is an index, the size of the target
+    ;; array must be at least as large as the total size of
+    ;; this array plus the offset
+    (when displaced-index-offset
+      (let ((tty (get-type displaced-to)))
+	(unless (> (array-type-total-size tty)
+		   (+ (array-shape-total-size shape)
+		      displaced-index-offset))
+	  (error 'syntax-error :hint "Ensure underlying array is large enough to hold the displaced array")))))
 
   `(array ,element-type ,shape))
 
@@ -288,17 +321,35 @@ Otheriwse it is read as a literal list."
 	   (synthesise-array-init-from-value n initial-element shape)))))
 
 
-;;; ---------- Array access ----------
+;;; ---------- Array type access ----------
 
 (defun array-type-p (ty)
   "Test whether TY is an array type."
   (subtype-p ty 'array))
 
 
+(defun vector-type-p (ty)
+  "Test whether TY is a one-dimensional array."
+  (and (array-type-p ty)
+       (= (length (array-type-shape ty)) 1)))
+
+
 (defun ensure-array-type (ty)
   "Ensure TY is an array type"
   (unless (array-type-p ty)
     (error 'type-mismatch :expected 'array :got ty)))
+
+
+(defun array-shape-total-size (ds)
+  "Compute the total number of elements in dimensions DS."
+  (foldr #'* (mapcar #'eval-in-static-environment ds) 1))
+
+
+(defun array-type-total-size (ty)
+  "Return the total number of elements in array type TY.
+
+The total size is the product of all the dimensions."
+  (array-shape-total-size (array-type-shape ty)))
 
 
 (defun valid-array-index-p (ty indices)
@@ -317,6 +368,19 @@ probably should, for those that are statically determined."
 		(subtype-p (compute-type i)
 			   'unsigned-byte))
 	      indices)))
+
+
+(defun index-from-indices-and-shape (indices ds)
+  "Return the one-dimensional index of INDICES into an array of the given SHAPE.
+
+Lisp arrays are always represented row-major."
+  ;; this is taken pretty much directly from the Lisp hyperspec's reference definition
+  ;; of the ARRAY-ROW-MAJOR-INDEX function
+  ;; https://novaspec.org/cl/f_array-row-major-index
+  (apply #'+ (maplist (lambda (x y)
+			(* (car x) (apply #'* (cdr y))))
+		      indices
+		      ds)))
 
 
 (defun ensure-valid-array-index (ty indices)
@@ -368,7 +432,7 @@ probably should, for those that are statically determined."
 ;;; are passed a displaced array. The Lisp semantics would then have any
 ;;; assignments passed-through to the argument value. Handling this would
 ;;; require that we provide dope vectors for array values, which makes them
-;;; ore complicated that Verilog's arrays -- but perhaps that's fine.
+;;; more complicated that Verilog's arrays -- but perhaps that's fine.
 
 (defun displaced-aref (place indices)
   "Dereference through a displaced array PLACE, correcting INDICES.
@@ -383,26 +447,16 @@ Return a list containing the final array and indices."
   ;; can only currently assign directly to variables (no indirect references)
   (ensure-symbol place)
 
-  (if-let ((iv (get-initial-value place)))
-    ;; deconstruct the initial value looking for displacement
-    (destructuring-bind (shape &key initial-element
-				 initial-contents
-				 element-type
-				 displaced-to
-				 (displaced-index-offset 0)
-				 displaced-offset)
-	(cdr iv)
+  (if-let ((displaced-to (get-environment-property place 'array-displaced-to (current-environment))))
+    ;; array is displaced into another, correct the indices
+    ;; TODO: need to handle conformat displacement too
+    (let* ((offset (get-environment-property place 'array-displaced-offset (current-environment)))
+	   (realindices (list (+ (car indices) offset))))
+      (break)
+      ;; recurse in case the target is displaced as well
+      (displaced-aref displaced-to realindices))
 
-      (if displaced-to
-	  ;; array is displaced into another, correct
-	  (let ((realindices (list (+ (car indices) displaced-index-offset))))
-	    ;; recurse in case the target is displaced as well
-	    (displaced-aref displaced-to realindices))
-
-	  ;; array is not displaced, return as-is
-	  (list place indices)))
-
-    ;; otherwise, assume the indices are as-is
+    ;; array is not displaced, return as-is
     (list place indices)))
 
 
@@ -423,8 +477,10 @@ Return a list containing the final array and indices."
   (destructuring-bind (dplace dindices)
       (displaced-aref place indices)
 
-    (let ((ty (get-type dplace)))
-      (array-type-element-type ty))))
+    ;; (get-environment-property dplace 'array-element-type (current-environment))
+    `(member (type-of ,dplace ,(current-environment)) ,dindices)
+
+    ))
 
 
 (defpassmethod compute-type-setf (aref place &rest indices)
@@ -432,7 +488,7 @@ Return a list containing the final array and indices."
 
   (let* ((ty (get-type place))
 	 (shape (array-type-shape ty)))
-    `(array tyval ,shape)))
+    `(array ,tyval ,shape)))
 
 
 (defpassmethod compute-dependencies (aref place &rest indices)
