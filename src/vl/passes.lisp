@@ -381,6 +381,11 @@ Returns a type expression.")
 	   form)))
 
 
+;; TODO: This pass shuld probably be renamed as CHECK-TYPES or something
+;; because it's acquired all the extra functions needed after inference
+;;
+;; Or add another pass for the post-inference stuff?
+
 (defpass check-all-variables-typed (form)
   (:documentation "Check that all variables in FORM have types.
 
