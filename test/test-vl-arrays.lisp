@@ -434,6 +434,6 @@
     ;; these are a bit fragile...
     (let ((s (with-output-to-string (str)
 	       (vl::synthesise/vl p str))))
-      (format t s)
+
       (is (str:containsp "a[ 5 ]" s))
       (is (not (str:containsp "b" s))))))
