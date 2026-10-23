@@ -369,7 +369,7 @@ The header will need to be preceded by an appropriate comment string."
     (uiop:quit 1)))
 
 
-;;; Helper macros
+;;; Helper macro
 
 (defmacro with-error-handling (&body body)
   "Run BODY in an environment that handles warnings and errors appropriately.
@@ -388,22 +388,6 @@ explicitly disabled."
 
      ;; decide whether to bail out
      (continue-or-fail)))
-
-
-(defmacro with-ignore-file-with-errors (&body body)
-  "Run BODY in an environment offering an IGNORE-FILE-WITH-ERRORS restart.
-
-This restart is used by the handlers establish by WITH-ERROR-HANDLING
-to skip files with errors."
-  `(restart-case
-       (progn
-	 ,@body)
-
-     (ignore-file-with-errors ()
-       :report "Ignore this file and continue"
-
-       (format *error-output* "Skipping the rest of ~a~%" fn)
-       nil)))
 
 
 ;;; ---------- Entry point ----------
@@ -425,13 +409,9 @@ to skip files with errors."
       ;; load all the source files in order
       (let ((*package* (find-package :verilisp/cli/compiling)))
 	(dolist (fn files)
-	  (with-ignore-file-with-errors
-	      ;; use standard input if - appears as a filename
-	      ;; TBD
-
-	      (info "Loading ~a~%" fn)
-	    (load fn :if-does-not-exist t)
-	    (record-new-modules fn)))))
+	  (info "Loading ~a~%" fn)
+	  (load fn :if-does-not-exist t)
+	  (record-new-modules fn))))
 
     (with-error-handling
 	;; generate elaborated Lisp if requested
@@ -447,14 +427,13 @@ to skip files with errors."
 		    (*print-base* 10)
 		    (*package* (find-package :verilisp/cli/compiling)))
 		(dolist (mm (get-modules-for-synthesis))
-		  (with-ignore-file-with-errors
-		      (destructuring-bind (modname module)
-			  mm
-			(let ((fn (get-module-source-file-name modname)))
-			  (format str ";; ")
-			  (format str (filename-header fn)))
-			(pprint module str)
-			(format str "~%~%"))))))))
+		  (destructuring-bind (modname module)
+		      mm
+		    (let ((fn (get-module-source-file-name modname)))
+		      (format str ";; ")
+		      (format str (filename-header fn)))
+		    (pprint module str)
+		    (format str "~%~%")))))))
 
     (with-error-handling
 	(if *output-file*
@@ -467,33 +446,31 @@ to skip files with errors."
 
 	      (info "Compiling all modules to ~a~%" *output-file*)
 	      (dolist (mm (get-modules-for-synthesis))
-		(with-ignore-file-with-errors
-		    (destructuring-bind (modname module)
-			mm
-		      (info "Compiling ~a~%" modname)
-		      (let ((fn (get-module-source-file-name modname)))
-			(format str "// ")
-			(format str (filename-header fn))
-			(format str "~%"))
+		(destructuring-bind (modname module)
+		    mm
+		  (info "Compiling ~a~%" modname)
+		  (let ((fn (get-module-source-file-name modname)))
+		    (format str "// ")
+		    (format str (filename-header fn))
+		    (format str "~%"))
 
-		      (synthesise/vl module str)
-		      (format str "~%")))))
+		  (synthesise/vl module str)
+		  (format str "~%"))))
 
 	    ;; generate the Verilog for each module
 	    (dolist (mm (get-modules-for-synthesis))
-	      (with-ignore-file-with-errors
-		  (destructuring-bind (modname module)
-		      mm
-		    (let ((fn (filename-for-module modname)))
-		      (info "Compiling ~a to ~a~%" modname fn)
-		      (with-open-file (str fn :direction :output
-					      :if-exists :supersede)
-			(format str "// ")
-			(format str (file-header))
-			(format str (filename-header fn))
-			(format str "~%")
+	      (destructuring-bind (modname module)
+		  mm
+		(let ((fn (filename-for-module modname)))
+		  (info "Compiling ~a to ~a~%" modname fn)
+		  (with-open-file (str fn :direction :output
+					  :if-exists :supersede)
+		    (format str "// ")
+		    (format str (file-header))
+		    (format str (filename-header fn))
+		    (format str "~%")
 
-			(synthesise/vl module str))))))))
+		    (synthesise/vl module str)))))))
 
     ;; if we get here we didn't bail-out earlier, do a successful exit
     (uiop:quit 0)))
