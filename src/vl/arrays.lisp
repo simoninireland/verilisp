@@ -120,22 +120,6 @@ having the correct length as given in SHAPE."
 
 ;;; ---------- Array construction ----------
 
-;; (defun array-element-width (form)
-;;   "Return the width of the elements of array constructor FORM."
-;;   (if-let ((m (member :element-type (cdr form))))
-;;     ;; use the element width of there is one
-;;     (bitwidth (safe-cadr m) '())
-
-;;     ;; otherwise see if there's a default type
-;;     (if-let ((dty (get-compiler-flag 'default-variable-type)))
-;;       (progn
-;;	(warn 'type-defaulted :variable )
-
-;;	)
-;;       (error ))
-;;     *default-register-width*))
-
-
 (defpassmethod read-variables (make-array shape &key (initial-element 0)
 					  initial-contents
 					  element-type
@@ -483,7 +467,7 @@ Return a list containing the final array and indices."
   (destructuring-bind (dplace dindices)
       (displaced-aref place indices)
 
-    `(member (type-of ,dplace ,(current-environment)) ,dindices)))
+    `(member (type-of ,dplace ,(get-frame-declaring dplace (current-environment))) ,dindices)))
 
 
 (defpassmethod compute-type-setf (aref place &rest indices)
