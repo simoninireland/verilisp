@@ -47,10 +47,12 @@
    #:min-null
    #:mapn
    #:n-copies
+   #:filter
    #:filter-by-predicates
    #:sublist
    #:find-if-list
    #:alist-keys
+   #:alist-values
    #:successive-pairs
    #:adjacent-pairs
 
