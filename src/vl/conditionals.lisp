@@ -121,10 +121,55 @@
 
 ;;; ---------- case ----------
 
+(defmethod into-arguments ((fun (eql 'case)) args &key pass-name option extra)
+  (declare (ignore option))
+
+  (destructuring-bind (condition &rest clauses)
+      args
+    (let ((new-clauses (mapcar (lambda (clause)
+				 (destructuring-bind (value &rest body)
+				     clause
+
+				   ;; we don't recurse into the values
+				   ;; of the arms because these have
+				   ;; to be statically known
+				   (list value (apply pass-name
+						      (cons (with-implicit-progn
+							      body)
+							    extra)))))
+			       clauses)))
+
+      `(,fun ,(apply pass-name (cons condition extra))
+	     ,@new-clauses))))
+
+
+(defmethod over-arguments ((fun (eql 'case)) args &key pass-name option extra)
+  (declare (ignore option))
+
+  (destructuring-bind (condition &rest clauses)
+      args
+
+    ;; condition
+    (apply pass-name (cons condition extra))
+
+    ;; clause bodies
+    (dolist (clause clauses)
+      (destructuring-bind (value &rest body)
+	  clause
+	(declare (ignore value))
+
+	(apply pass-name
+	       (cons (with-implicit-progn
+		       body)
+		     extra))))))
+
+
 (defun compute-type-clause (clause)
   "Typecheck case CLAUSE.
 
 Return the type of the clause body."
+  (declare (optimize debug))
+
   (destructuring-bind (val &rest body)
       clause
 
@@ -148,27 +193,6 @@ The type is the union of the clause types."
 (defpassmethod compute-type (case condition &rest clauses)
   (let ((ty (compute-type condition)))
     (compute-type-clauses clauses)))
-
-
-(defun constrain-clause (ty clause)
-  "Apply type constraints to a CLAUSE of a case.
-
-Each test element must be testable against TY."
-  (declare (optimize debug))
-
-  (destructuring-bind (val &rest body)
-      clause
-
-    (if (not (eql val 't))
-	;; multiple test elements, make sure they're all appropriate
-	(dolist (v (safe-list val))
-
-	  ;; all comparison forms must be static constants
-	  (ensure-static v)
-
-	  ;; check subtyping against comparison
-	  (let ((tyval (compute-type v)))
-	    (ensure-subtype tyval ty))))))
 
 
 (defun synthesise-clause (clause)
