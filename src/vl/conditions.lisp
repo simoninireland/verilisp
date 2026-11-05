@@ -257,18 +257,18 @@ This can be ignored if the re-definition is deliberate."))
 
 
 (define-condition duplicate-state (vl-error)
-  ((states
-    :documentation "The state labels."
-    :initarg :states
-    :reader states))
+  ((new-state
+    :documentation "The label of the new state being declared."
+    :initarg :state-label
+    :reader state-label))
   (:report (lambda (c str)
-	     (format-condition-context (format nil "Duplicate state label in ~a"
-					       (states c))
+	     (format-condition-context (format nil "Re-defining state label ~a"
+					       (state-label c))
 				       c str)))
   (:documentation "Condition signalled when state labels are not unique.
 
-State labels need to be unique within a single state machine (TAGBODY form).
-They do not need to be globally unique."))
+State labels need to be unique within a single state machine (nested
+TAGBODY forms). They do not need to be globally unique."))
 
 
 (define-condition not-importable (vl-error)
