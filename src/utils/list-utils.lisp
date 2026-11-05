@@ -251,7 +251,15 @@ L may be an atom or a list, including NIL."
 	  (iota n)))
 
 
-;;; ---------- Filtering on multiple predicates ----------
+;;; ---------- Filtering on predicates ----------
+
+(defun filter (l pred)
+  "Return a copy of L containing only trhe values that match PRED.
+
+This is just the opposite of REMOVE-IF. The predicate and list are
+the opposite way around to match FILTER-BY-PREDICATES."
+  (remove-if (compose #'not pred) l))
+
 
 (defun filter-by-predicates (l &rest predicates)
   "Return sub-lists of L matching PREDICATES.
@@ -417,6 +425,11 @@ decision.
 (defun alist-keys (al)
   "Return the keys in alist AL."
   (mapcar #'car al))
+
+
+(defun alist-values (al)
+  "Return the values in alist AL."
+  (mapcar #'cdr al))
 
 
 (defun merge-alists (a1 a2 &key merge)
