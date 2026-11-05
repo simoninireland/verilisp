@@ -477,14 +477,22 @@ Return the type inferred for the place given the assignment."))
 ;;; bits out of the expressions and into assignments to wires.
 
 (defpass simple-expression-p (form)
-  (:documentation "Test whether FORM is a simple expression.")
+  (:documentation "Test whether FORM is a simple expression.
+
+A simple expression  one that can be synthesised directly into Verilog.
+These are considerably less general that Lisp's expressions.")
   (:schema constant-form nil))
 
 
 ;;; ---------- Elaborating state machines ----------
 
 (defpass elaborate-state-machines (form)
-  (:documentation "Expand TAGBODY-based state machines into CASE- and IF-based machines.")
+  (:documentation "Expand TAGBODY-based state machines into CASE-based machines.
+
+This pass removes all TAGBODY and GO forms and replaces them with a state
+machine based around a CASE form and an explicit state variable to track the
+state the machine is in. Repeatedly evaluating this CASE form will run the
+machine, one state per call.")
   (:schema into-arguments)
   (:queue transforming)
 
