@@ -48,7 +48,10 @@
 
     ;; process body
     (let ((newbody (with-local-frame f
-		     (apply pass-name (cons (with-implicit-progn body) extra)))))
+		     (apply pass-name
+			    (cons (with-implicit-progn
+				    body)
+				  extra)))))
       `(,fun ,f
 	     ,@newbody))))
 
