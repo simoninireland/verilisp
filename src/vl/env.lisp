@@ -354,11 +354,7 @@ Return the updated environment."
 
 
 (defun compiler-flag-kind-p (n env)
-  "Rest whether N is a compiler flag declared in ENV.
-
-Compiler flags will always /be/ declared because they're set initially
-in the core environment. They can be re-declared (shadowed) in
-shallower frames."
+  "Rest whether N is a compiler flag declared in ENV."
   (eql (get-kind n env) 'compiler-flag))
 
 
