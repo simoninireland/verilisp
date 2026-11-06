@@ -268,13 +268,13 @@ A COMPILER-ERROR is signalled for invalid flags."
     (error 'compiler-error :hint (format nil "~a isn't a recognised compiler flag" flag))))
 
 
-(defun get-compiler-flag (flag)
+(defun get-compiler-flag (flag &key default)
   "Return the current compiler FLAG.
 
 The flag is always looked-up in the current environment to allow for
 local overriding."
   (ensure-compiler-flag flag)
-  (get-environment-property flag 'initial-value (current-environment)))
+  (get-environment-property flag 'initial-value (current-environment) :default default))
 
 
 (defun set-compiler-flag (flag v)
