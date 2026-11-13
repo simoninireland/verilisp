@@ -23,7 +23,7 @@
 
 ;;; ---------- Recursion schemata ----------
 
-(defmethod into-arguments ((fun (eql 'module)) args &key pass-name option extra)
+(defmethod into-arguments ((fun (eql 'module)) args &key pass-name extra &allow-other-keys)
   (destructuring-bind (modname f &rest body)
       args
 
@@ -36,12 +36,14 @@
 
     ;; process body
     (let ((newbody (with-local-frame f
-		     (apply pass-name (cons (with-implicit-progn body) extra)))))
+		     (apply pass-name (cons (with-implicit-progn
+					      body)
+					    extra)))))
       `(module ,modname  ,f
 	 ,@newbody))))
 
 
-(defmethod over-arguments ((fun (eql 'module)) args &key pass-name option extra)
+(defmethod over-arguments ((fun (eql 'module)) args &key pass-name extra &allow-other-keys)
   (destructuring-bind (modname f &rest body)
       args
 
@@ -53,14 +55,16 @@
 
     ;; process body
     (with-local-frame f
-      (apply pass-name (cons (with-implicit-progn body) extra)))))
+      (apply pass-name (cons (with-implicit-progn
+			       body)
+			     extra)))))
 
 
 ;;; This schema is specific to EXPAND-MACROS and will be applied
 ;;; before the ADD-FRAMES pass, so needs to work on decls as lists, not
 ;;; as frames
 
-(defmethod into-arguments-macros ((fun (eql 'module)) args &key pass-name option extra)
+(defmethod into-arguments-macros ((fun (eql 'module)) args &key pass-name extra &allow-other-keys)
   (destructuring-bind (modname decls &rest body)
       args
 
@@ -70,10 +74,12 @@
 					(apply pass-name (cons (cadr decl) extra)))
 				  decl))
 			    decls))
-	  (newbody (apply pass-name (cons (with-implicit-progn body) extra))))
+	  (newbody (apply pass-name (cons (with-implicit-progn
+					    body)
+					  extra))))
 
       `(module ,modname ,newdecls
-	 ,@newbody))))
+	 ,newbody))))
 
 
 ;;; ---------- Module types----------
@@ -355,7 +361,8 @@ F should be the module's local frame."
 	(add-type-constraint n ty)))
 
     ;; typecheck the body of the module in its environment
-    (compute-type (with-implicit-progn body))
+    (compute-type (with-implicit-progn
+		    body))
 
     ;; return the interface type
     (build-module-interface-type-from-frame f)))

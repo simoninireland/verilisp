@@ -233,7 +233,10 @@ as described in DEFINE-RECURSION-SCHEMA."
 				  `(:option ,schema-options)
 				  `(:option ,(car schema-options))))
 			,@(if extra-args
-			      `(:extra (list ,@extra-args)))))
+			      `(:extra (list ,@extra-args)))
+			:pass ,(if extra-args
+				   `(rcurry ',pass-name ,@extra-args)
+				   `',pass-name)))
 
 	     ;; explicit methods for forms
 	     ,@(mapcar (lambda (m)

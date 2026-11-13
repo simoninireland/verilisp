@@ -30,14 +30,14 @@
 ;;; The place in SETQ has to be a vriable, not a place, so we can dispense
 ;;; with recursing into it.
 
-(defmethod into-arguments ((fun (eql 'setq)) args &key pass-name option extra)
+(defmethod into-arguments ((fun (eql 'setq)) args &key pass-name extra &allow-other-keys)
   (destructuring-bind (n v)
       args
     (let ((nv (apply pass-name `(,v ,@extra))))
       `(setq ,n ,nv))))
 
 
-(defmethod over-arguments ((fun (eql 'setq)) args &key pass-name option extra)
+(defmethod over-arguments ((fun (eql 'setq)) args &key pass-name extra &allow-other-keys)
   (destructuring-bind (n v)
       args
     (apply pass-name `(,v ,@extra))))
@@ -172,6 +172,9 @@ generalised places."
 
 (defpassmethod compute-type (setf place val)
   (declare (optimize debug))
+
+  (unless (simple-expression-p val)
+    (error 'not-synthesisable :hint "Ensure assignment value is a simple expression"))
 
   (let* ((tyval (compute-type val))
 	 (typlace (compute-type-setf place tyval)))

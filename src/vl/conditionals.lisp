@@ -121,9 +121,7 @@
 
 ;;; ---------- case ----------
 
-(defmethod into-arguments ((fun (eql 'case)) args &key pass-name option extra)
-  (declare (ignore option))
-
+(defmethod into-arguments ((fun (eql 'case)) args &key pass-name extra &allow-other-keys)
   (destructuring-bind (condition &rest clauses)
       args
     (let* ((pass-f (if extra
@@ -136,7 +134,7 @@
 				    ;; we don't recurse into the values
 				    ;; of the arms because these have
 				    ;; to be statically known
-				    (cons value
+				    (list value
 					  (funcall pass-f
 						   (with-implicit-progn
 						     body)))))
@@ -146,9 +144,7 @@
 	     ,@new-clauses))))
 
 
-(defmethod over-arguments ((fun (eql 'case)) args &key pass-name option extra)
-  (declare (ignore option))
-
+(defmethod over-arguments ((fun (eql 'case)) args &key pass-name extra &allow-other-keys)
   (destructuring-bind (condition &rest clauses)
       args
 
@@ -179,13 +175,14 @@ Return the type of the clause body."
       clause
 
     ;; clause tests must be static
-    ;; This is more general that in Common Lisp, where they must
-    ;; be literals. Verilisp accepts variables that are annotated as being
-    ;; constants
+    ;; This is more general that in Common Lisp, where they must be
+    ;; literals. Verilisp accepts variables that are annotated as
+    ;; being constants
     (dolist (v (safe-list val))
       (ensure-static v))
 
-    (compute-type (with-implicit-progn body))))
+    (compute-type (with-implicit-progn
+		    body))))
 
 
 (defun compute-type-clauses (clauses)

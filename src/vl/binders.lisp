@@ -31,10 +31,8 @@
 
 ;;; into-arguments
 
-(defun into-arguments-let (fun args &key pass-name option extra)
+(defun into-arguments-let (fun args &key pass-name extra &allow-other-keys)
   "The commonality for LET and LET* schemata."
-  (declare (ignore option))
-
   (destructuring-bind (f &rest body)
       args
 
@@ -53,20 +51,18 @@
 				    body)
 				  extra)))))
       `(,fun ,f
-	     ,@newbody))))
+	     ,newbody))))
 
 
-(defmethod into-arguments ((fun (eql 'let)) args &key pass-name option extra)
-  (into-arguments-let 'let args :pass-name pass-name :option option :extra extra))
-(defmethod into-arguments ((fun (eql 'let*)) args &key pass-name option extra)
-  (into-arguments-let 'let* args :pass-name pass-name :option option :extra extra))
+(defmethod into-arguments ((fun (eql 'let)) args &key pass-name extra option pass)
+  (into-arguments-let 'let args :pass-name pass-name :option option :extra extra :pass pass))
+(defmethod into-arguments ((fun (eql 'let*)) args &key pass-name extra option pass)
+  (into-arguments-let 'let* args :pass-name pass-name :option option :extra extra :pass pass))
 
 
 ;;; over-arguments
 
-(defmethod over-arguments ((fun (eql 'let)) args &key pass-name option extra)
-  (declare (ignore option))
-
+(defmethod over-arguments ((fun (eql 'let)) args &key pass-name extra &allow-other-keys)
   (destructuring-bind (f &rest body)
       args
 
@@ -81,8 +77,8 @@
       (apply pass-name (cons (with-implicit-progn body) extra)))))
 
 
-(defmethod over-arguments ((fun (eql 'let*)) args &key pass-name option extra)
-  (over-arguments 'let args :pass-name pasiname :option option :extra extra))
+(defmethod over-arguments ((fun (eql 'let*)) args &key pass-name option extra pass)
+  (over-arguments 'let args :pass-name pasiname :option option :extra extra :pass pass))
 
 
 ;;; into-arguments-macros
@@ -91,13 +87,11 @@
 ;;; before the ADD-FRAMES pass, so need to work on decls as lists, not
 ;;; as frames
 
-(defun into-arguments-macros-let (fun args &key pass-name option extra)
+(defun into-arguments-macros-let (fun args &key pass-name extra &allow-other-keys)
   "The commonality for LET and LET* schemata.
 
 Because this is called in the expansion pass the first argument will
 be a list of declarations, not a frame (which is applied later)."
-  (declare (ignore option) (optimize debug))
-
   (destructuring-bind (decls &rest body)
       args
 
@@ -113,10 +107,10 @@ be a list of declarations, not a frame (which is applied later)."
 	     ,@newbody))))
 
 
-(defmethod into-arguments-macros ((fun (eql 'let)) args &key pass-name option extra)
-  (into-arguments-macros-let 'let args :pass-name pass-name :option option :extra extra))
-(defmethod into-arguments-macros ((fun (eql 'let*)) args &key pass-name option extra)
-  (into-arguments-macros-let 'let* args :pass-name pass-name :option option :extra extra))
+(defmethod into-arguments-macros ((fun (eql 'let)) args &key pass-name option extra pass)
+  (into-arguments-macros-let 'let args :pass-name pass-name :option option :extra extra :pass pass))
+(defmethod into-arguments-macros ((fun (eql 'let*)) args &key pass-name option extra pass)
+  (into-arguments-macros-let 'let* args :pass-name pass-name :option option :extra extra :pass pass))
 
 
 ;;; ---------- Representations----------
@@ -331,7 +325,8 @@ LET* adds bindings incrementally, so each can see those that went before."
   (with-local-frame f
     (compute-let-env)
 
-    (compute-type (with-implicit-progn body))))
+    (compute-type (with-implicit-progn
+		    body))))
 
 
 (defpassmethod compute-type (let* f &rest body)
@@ -340,7 +335,8 @@ LET* adds bindings incrementally, so each can see those that went before."
   (with-local-frame f
     (compute-let*-env)
 
-    (compute-type (with-implicit-progn body))))
+    (compute-type (with-implicit-progn
+		    body))))
 
 
 (defpassmethod check-all-variables-typed (let f &rest body)
@@ -452,12 +448,14 @@ LET* adds bindings incrementally, so each can see those that went before."
 			       rewrite))
 
 	 ;; re-write the body with these new re-writes
-	 (rwbody (rewrite-variables (with-implicit-progn body) rwrewrite)))
+	 (rwbody (rewrite-variables (with-implicit-progn
+				      body)
+				    rwrewrite)))
 
     ;; rewrite the form to use re-written decls and the body
     ;; re-written respecting shadowing
     `(let ,f
-       ,@rwbody)))
+       ,rwbody)))
 
 
 ;;; TODO: Change rules for LET*

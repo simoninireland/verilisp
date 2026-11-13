@@ -50,11 +50,6 @@
       (error 'dsl-error :hint (format nil "No recursion schema ~s defined" schema-name))))
 
 
-;; TODO: Change the PASS-NAME and EXTRA options to actually
-;; build the pass function appropriately, ready to be applied
-;; directly. This can be done with (rcurry pass-name extra) when EXTRA
-;; is non-NIL.
-
 (defmacro define-recursion-schema (schema-name schema-args &body body)
   "Define a new recursion schema.
 
@@ -66,6 +61,10 @@ three keyword arguments:
 - :PASS-NAME containing the pass name
 - :OPTION containing the rest of the list after the schema name in the :SCHEMA clause
 - :EXTRA containing the extra argument names of the pass.
+- :PASS containing a function designator for the pass
+
+PASS incorporates PASS-NAME and EXTRA (if present), and can simply be
+passed the form to be evaluated using FUNCALL or APPLY.
 
 The body should perform the recursion (or whatever), probably
 composing PASS-NAME and EXTRA arguments with the SCHEMA-ARGS."
@@ -81,10 +80,11 @@ composing PASS-NAME and EXTRA arguments with the SCHEMA-ARGS."
 
     `(progn
        ;; wrap the schema up in a generic function
-       (defgeneric ,schema-name ,(append schema-args '(&key pass-name option extra))
+       (defgeneric ,schema-name ,(append schema-args
+				  '(&key pass-name option extra pass))
 	 (:documentation ,docstring)
 
-	 (:method ,(append schema-args '(&key pass-name option extra))
+	 (:method ,(append schema-args '(&key pass-name option extra pass))
 	   (declare (ignorable ,@schema-args pass-name option extra))
 
 	   ,@body))

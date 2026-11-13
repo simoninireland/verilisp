@@ -158,7 +158,7 @@ A SYMBOL-MACROLET/VL form should appear only within a DECLAREMACRO/VL form."
 
 ;;; SYMBOL-MACROLET can appear within Verilisp code as well.
 
-(defmethod into-arguments-macros ((fun (eql 'symbol-macrolet)) args &key pass-name option extra)
+(defmethod into-arguments-macros ((fun (eql 'symbol-macrolet)) args &key pass-name extra &allow-other-keys)
   (declare (optimize debug))
 
   (destructuring-bind (decls &rest body)
@@ -172,4 +172,6 @@ A SYMBOL-MACROLET/VL form should appear only within a DECLAREMACRO/VL form."
 				       (declare (ignore f))
 				       form))))
 
-      (apply pass-name (cons (with-implicit-progn body) extra)))))
+      (apply pass-name (cons (with-implicit-progn
+			       body)
+			     extra)))))
