@@ -49,19 +49,34 @@ are reported as NOT-SYNTHESISABLE errors."
 ;;; ---------- Implicit forms ----------
 
 ;;; We avoid adding extra layers of PROGN or TAGBODY unnecessarily.
+;;;
+;;; Note that these are named like macros but are actually functions.
 
 (defun with-implicit-progn (body)
-  "Return the forms in BODY as an implicit PROGN form."
-  (if (eql (car body) 'progn)
-      body
-      `(progn ,@body)))
+  "Return the forms in BODY as an implicit PROGN form.
+
+The value returned is always a single form."
+  (if (= (length body) 1)
+      ;; a singleton body can be returned as-is
+      (car body)
+
+      ;; otherwise wrap the body in a PROGN
+      `(progn
+	 ,@body)))
 
 
 (defun with-implicit-tagbody (body)
-  "Return the forms in BODY as an implicit TAGBODY form."
-  (if (eql (car body) 'tagbody)
-      body
-      `(tagbody ,@body)))
+  "Return the forms in BODY as an implicit TAGBODY form.
+
+The value returned is always a single form."
+  (if (and (= (length body) 1)
+	   (eql (safe-car (safe-car body)) 'tagbody))
+      ;; a singleton TAGBODY form can be returned as-is
+      (car body)
+
+      ;; otherwise wrap the body in a TAGBODY
+      `(tagbody
+	  ,@body)))
 
 
 ;;; ---------- Compatibility ----------
