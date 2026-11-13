@@ -126,20 +126,23 @@
 
   (destructuring-bind (condition &rest clauses)
       args
-    (let ((new-clauses (mapcar (lambda (clause)
-				 (destructuring-bind (value &rest body)
-				     clause
+    (let* ((pass-f (if extra
+		       (apply #'rcurry pass-name extra)
+		       pass-name))
+	   (new-clauses (mapcar (lambda (clause)
+				  (destructuring-bind (value &rest body)
+				      clause
 
-				   ;; we don't recurse into the values
-				   ;; of the arms because these have
-				   ;; to be statically known
-				   (list value (apply pass-name
-						      (cons (with-implicit-progn
-							      body)
-							    extra)))))
-			       clauses)))
+				    ;; we don't recurse into the values
+				    ;; of the arms because these have
+				    ;; to be statically known
+				    (cons value
+					  (funcall pass-f
+						   (with-implicit-progn
+						     body)))))
+				clauses)))
 
-      `(,fun ,(apply pass-name (cons condition extra))
+      `(,fun ,(funcall pass-f condition)
 	     ,@new-clauses))))
 
 
@@ -149,19 +152,21 @@
   (destructuring-bind (condition &rest clauses)
       args
 
-    ;; condition
-    (apply pass-name (cons condition extra))
+    (let* ((pass-f (if extra
+		       (apply #'rcurry pass-name extra)
+		       pass-name)))
+      ;; condition
+      (funcall pass-name condition)
 
-    ;; clause bodies
-    (dolist (clause clauses)
-      (destructuring-bind (value &rest body)
-	  clause
-	(declare (ignore value))
+      ;; clause bodies
+      (dolist (clause clauses)
+	(destructuring-bind (value &rest body)
+	    clause
+	  (declare (ignore value))
 
-	(apply pass-name
-	       (cons (with-implicit-progn
-		       body)
-		     extra))))))
+	  (funcall pass-f
+		   (with-implicit-progn
+		     body)))))))
 
 
 (defun compute-type-clause (clause)
