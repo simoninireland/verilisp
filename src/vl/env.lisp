@@ -263,11 +263,15 @@ An UNKNOWN-VARIABLE error is signalled if N is undefined."
 
 If there is no property associated with N then NIL will be
 returned: this can be changed by defining the :DEFAULT argument."
-  (if-let ((p (assoc prop (get-environment-properties n env))))
-    (cadr p)
+  (if (name-declared-p n env)
+      (if-let ((p (assoc prop (get-environment-properties n env))))
+	(cadr p)
 
-    ;; property doesn't exist, return the default
-    default))
+	;; property doesn't exist, return the default
+	default)
+
+      ;; name isn't declared, return default
+      default))
 
 
 (defun set-environment-properties (n props env)
