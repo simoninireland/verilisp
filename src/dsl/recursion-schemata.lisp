@@ -50,6 +50,11 @@
       (error 'dsl-error :hint (format nil "No recursion schema ~s defined" schema-name))))
 
 
+;; TODO: Change the PASS-NAME and EXTRA options to actually
+;; build the pass function appropriately, ready to be applied
+;; directly. This can be done with (rcurry pass-name extra) when EXTRA
+;; is non-NIL.
+
 (defmacro define-recursion-schema (schema-name schema-args &body body)
   "Define a new recursion schema.
 
