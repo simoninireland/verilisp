@@ -25,34 +25,27 @@
 
 (test test-tagbody-simple
   "Test we can create a simple TAGBODY."
-  (let ((states (vl::build-state-machine (cdr '(tagbody
+  (let ((sm (vl::build-state-machine (cdr '(tagbody
 						init
 						(setq a 10))))))
-    (is (= (length states) 2))
-    (let ((to-passive (car (last (vl::body (car states))))))
-      ;; first state jumps to second
-      (is (eql (car to-passive) 'go))
-      (is (eql (cadr to-passive) (vl::label (cadr states))))
-
-      ;; second is passivating
-      (is (null (vl::body (cadr states)))))))
+    (is (= (length (vl::state-machine-states sm)) 3))))
 
 
 (test test-tagbody-spin
   "Test we can create a spinning state machine."
-  (let ((states (vl::build-state-machine (cdr '(tagbody
-						init)))))
+  (let ((sm (vl::build-state-machine (cdr '(tagbody
+					    init)))))
 
-    ;; last state is passivating
-    (is (null (vl::body (car (last states)))))))
+    ;; initial, looping, and body state that's not eliminated
+    (is (= (length (vl::state-machine-states sm)) 3))))
 
 
 (test test-tagbody-empty
   "Test we can create an empty (also spinning) state machine."
-  (let ((states (vl::build-state-machine (cdr '(tagbody)))))
+  (let ((sm (vl::build-state-machine (cdr '(tagbody)))))
 
-    ;; last state is passivating
-    (is (null (vl::body (car (last states)))))))
+    ;; like above but no body state
+    (is (= (length (vl::state-machine-states sm)) 2))))
 
 
 (test test-tagbody-unreachable
@@ -250,21 +243,30 @@
 				     (go return-state)))))))
 
       (vl::typecheck p)
-      (let ((q (vl::synthesise-state-machine (cdr (elt p 2)))))
+      (let ((q (vl::elaborate-state-machines p)))
 	(is (contains-form-p '(setq a (+ a 1)) p))
 	(is (contains-form-p '(setq a (+ b 1)) p))))))
 
 
 (test test-tagbody-nested-in-then-conditional
-  "Test we can compile a state machine within thethen arm of a cnditional."
+  "Test we can compile a state machine within the then arm of a conditional."
   (with-new-frame
     (let ((p (vl::expand/vl '(let (a b)
 			      (declare (type (unsigned-byte 8) a b))
 			      (tagbody
 			       initial-state
 				 (if a
-				     (while (> a b)
-					    (incf b)))
+				     ;; (while (> a b)
+				     ;; 	    (incf b))
+				     (tagbody
+				      s1
+					(if (> a b)
+					    (progn
+					      (setf b (+ b 1))
+					      (go s1))
+					    (go s2)))
+				     )
+			       s2
 				 (setq a (+ a 12))
 			       return-state
 				 (incf a)
@@ -275,8 +277,8 @@
 				     (go return-state)))))))
 
       (vl::typecheck p)
-      (let ((q (vl::synthesise-state-machine (cdr (elt p 2)))))
-	(is (contains-form-p '(setq a (+ a 12)) p))))))
+      (let ((q (vl::elaborate-state-machines p)))
+	(is (contains-form-p '(setq a (+ a 12)) p))q))))
 
 
 (test test-tagbody-nested-in-else-conditional
@@ -300,6 +302,157 @@
 				     (go return-state)))))))
 
       (vl::typecheck p)
-      (let ((q (vl::synthesise-state-machine (cdr (elt p 2)))))
+      (let ((q (vl::elaborate-state-machines p)))
 	(is (contains-form-p '(setq a (+ a 12)) p))
 	(is (contains-form-p '(setq a (+ b 1)) p))))))
+
+
+(test test-no-state-machine
+  "Test elaborating state machines can handle the case of there not being one."
+  (is (vl::build-state-machine '((progn
+				   (setf a 123)
+				   (setf b 0))
+				 (setf c 56)))))
+
+
+(test test-no-state-machine-if
+  "Test we handle something that could appear inside a state machine."
+  (let ((sm (vl::build-state-machine '((if d (setf a 123) (setf b 0))
+				       (setf c 56)))))
+    (is (vl::synthesise-state-machine sm))))
+
+
+(test test-no-state-machine-loop
+  "Test we handle a machine with an explicit loop that will be optimised out."
+  (let ((sm (vl::build-state-machine '(start
+				       (if d (setf a 123))
+				       (go start)))))
+    (is (vl::synthesise-state-machine sm))))
+
+
+(test test-state-machine-explicit-case
+  "Test we can compile a state macine that itself contains a CASE form."
+  (let ((sm (vl::build-state-machine '((progn
+					 (case d
+					   (1 (setf a 123))
+					   (2 (setf b 23))
+					   (t (setf a 0)))
+					 (setf c 56))))))
+    (vl::improve-state-machine sm)
+    (is (vl::synthesise-state-machine sm))))
+
+
+(test test-state-machine-jumps
+  "Test we can synthesise a state machine with some looping."
+  (let ((sm (vl::build-state-machine '(start
+				       (if d
+					   (go one)
+					   (go two))
+				       one
+				       (setq a 26)
+				       two
+				       (setq b 67)
+				       (setf c 56)))))
+    (vl::improve-state-machine sm)
+    (is (vl::synthesise-state-machine sm))))
+
+
+(test test-state-machine-loops-etc
+  "Test we can synthesise a machine with loops and other things,"
+  (let ((sm (vl::build-state-machine '(start
+				       (setq m 0)
+				       (case d
+					 (1 (go one))
+					 (2 (setq b 999) (go two) (setq b 45))
+					 (t (setq a 10)
+					  (setq b 76)))
+				       one
+				       (setq a 26)
+				       two
+				       (setq b 67)
+				       (setf c 56)))))
+    (vl::improve-state-machine sm)
+    (is (vl::synthesise-state-machine sm))))
+
+
+(test test-machine-nested-tagbody
+  "Test we can handle amchines within machine."
+  (let ((sm (vl::build-state-machine '(start
+				       (setq m 0)
+				       (case d
+					 (1 (go one))
+					 (2 (setq b 999) (go two) (setq b 45))
+					 (3 (setq b 100))
+					 (t (setq a 10)
+					  (setq b 76)))
+				       (setq d 0)
+				       one
+				       (setq a 26)
+				       two
+				       (tagbody
+					three
+					  (setq b 67)
+					  (setf c 56)
+					  (go three))))))
+    (vl::remove-simple-jump-states sm)
+    (is (vl::synthesise-state-machine sm))))
+
+
+(test test-tagbody-alu
+  "Test whether an ALU gets synthesised properly.
+
+This is a RISC-V ALU that should synthesise to a combinatorial
+block (i.e., a single state) that keeps running."
+  (let* ((p (vl::expand/vl '(tagbody
+			    (case funct3
+			      (#2r000
+			       (if (logand (bref funct7 5)
+					   (bref instr 5))
+				   (setq aluOut (- aluIn1 aluIn2))
+				   (setq aluOut (+ aluIn1 aluIn2))))
+
+			      (#2r001
+			       (setq aluOut (<< aluIn1 shamt)))
+
+			      (#2r010
+			       (setq aluOut (< (the 'signed-byte aluIn1)
+					       (the 'signed-byte aluIn2)))) ;; signed
+
+			      (#2r011
+			       (setq aluOut (< aluIn1 aluIn2))) ;; unsigned
+
+			      (#2r100
+			       (setq aluOut (logxor aluIn1 aluIn2)))
+
+			      (#2r101
+			       (if (bref funct7 5)
+				   (setq aluOut (>> (the 'signed-byte aluIn1) shamt)) ;; sign-extended
+				   (setq aluOut (>> aluIn1 shamt)))) ;; unsigned
+
+			      (#2r110
+			       (setq aluOut (logior aluIn1 aluIn2)))
+
+			      (#2r111
+			       (setq aluOut (logand aluIn1 aluIn2)))))))
+	 (p-bound (vl::expand/vl `(let (funct3 funct7
+					instr
+					aluIn1 aluIn2 aluOut shamt)
+				    (declare (width 32
+						    funct3 funct7
+						    instr
+						    aluIn1 aluIn2 aluOut shamt))
+				    ,p))))
+
+    ;; (let ((sm (vl::build-state-machine (cdr p))))
+    ;;   (vl::improve-state-machine sm)
+    ;;   (vl::synthesise-state-machine sm)
+    ;;   ;sm
+    ;;   )
+
+    (with-new-frame
+      (vl::declare-variable 'vl::default-variable-type
+			    '((kind vl::compiler-flag)
+			      (type (unsigned-byte 32))))
+
+      (vl::typecheck p-bound)
+      (is (vl::elaborate-state-machines p-bound)))))

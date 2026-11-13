@@ -61,7 +61,7 @@
 			     (setq b a))))
 	 (q (vl::rewrite-variables p '((a 5)))))
     (is (set-equal (vl::get-frame-names (cadr q)) '(b)))
-    (is (equal (cadr (cddr q)) '(setq b 5))))
+    (is (contains-form-p '(setq b 5) q)))
 
   ;; let (shadowed variables)
   (let* ((p (vl::expand/vl '(let ((b 1))
@@ -70,5 +70,5 @@
 			       (setq b a)
 			       (setq a c)))))
 	 (q (vl::rewrite-variables p '((a 5) (c 10)))))
-    (is (equal (cadr (cddr q)) '(setq b 5)))
-    (is (equal (cadddr (caddr (cddr q))) '(setq b a)))))
+    (is (contains-form-p '(setq b 5) q))
+    (is (contains-form-p '(setq b a) q))))

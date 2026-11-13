@@ -172,18 +172,18 @@
 
 (test test-synthesise-setf-conditional-not-simple
   "Test we can't synthesise SETF with a non-simple expression."
-  (vl::with-new-frame
-    (let ((p (vl::expand/vl '(let ((a 12)
-				   (b 2)
-				   (c 0))
-			      (declare (type (unsigned-byte 8) a b c))
-			      (setf a (if (= b 1)
-					  a
-					  (setf c 1)
-					  (+ a 1)))))))
-      (vl::typecheck p)
-      (signals not-synthesisable
-	(is (vl::synthesise/vl p))))))
+  (signals not-synthesisable
+    (vl::with-new-frame
+      (let ((p (vl::expand/vl '(let ((a 12)
+				     (b 2)
+				     (c 0))
+				(declare (type (unsigned-byte 8) a b c))
+				(setf a (if (= b 1)
+					    a
+					    (setf c 1)
+					    (+ a 1)))))))
+	(vl::typecheck p)
+	(vl::synthesise/vl p)))))
 
 
 ;; Tests of the actual generalised place forms appear in their
