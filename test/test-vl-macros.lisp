@@ -196,13 +196,10 @@
 (test test-do-no-variables
   "Test we can expand a DO that doesn't declare any loop variables."
   (declare (optimize debug))
-  (let ((p (vl::expand/vl '(module test-do (clk)
-			    (declare (type bit clk))
-			    (@ (posedge clk)
-			     (tagbody
-			      ttt
-				(setf clk 0)
-				(go ttt)))))))
+  (let ((p (vl::expand/vl '(let ((a 0))
+			    (do ()
+				((> a 10))
+			      (incf a))))))
     (vl::typecheck p)
     (let ((q (vl::transform/vl p)))
       (is (vl::synthesise/vl q)))))
