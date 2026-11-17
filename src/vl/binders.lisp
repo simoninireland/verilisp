@@ -138,14 +138,21 @@ Signal REPRESENTATION-MISMATCH as an error if not."
 
 ;;; We change a LET or LET* of the form (LET (decls) body ...) into one that
 ;;; has an environment as its only decl entry
+;;;
+;;; If the transformation has already been done, just recurse into the body
 
 (defun add-let-local-frame (fun args)
   (declare (optimize debug))
 
   (destructuring-bind (decls &rest body)
       args
+    (let ((local-frame (if (typep decls 'frame)
+			   ;; already a frame, leave alone
+			   decls
 
-    (let ((local-frame (build-frame-from-decls decls)))
+			   ;; transform decls to frame
+			   (build-frame-from-decls decls))))
+
       ;; add frames to the body in this new environment
       (with-local-frame local-frame
 
