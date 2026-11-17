@@ -282,7 +282,7 @@
 
 
 (test test-tagbody-nested-in-else-conditional
-  "Test we can compile a state machine within the else arm of a cnditional."
+  "Test we can compile a state machine within the else arm of a conditional."
   (with-new-frame
     (let ((p (vl::expand/vl '(let (a b)
 			      (declare (type (unsigned-byte 8) a b))
@@ -398,42 +398,57 @@
     (is (vl::synthesise-state-machine sm))))
 
 
+(test test-machine-forever
+  "Test we can build machines that run forever."
+  (let ((p (vl::expand/vl '(let ((a 0))
+			    (forever
+			     (while (< a 10)
+			      (incf a))
+			     )))))
+    (vl::typecheck p)
+    (let* ((b (cdr (caddr p)))
+	   (sm (vl::build-state-machine b)))
+      (vl::improve-state-machine sm)
+
+      (is (= (length (vl::state-machine-states sm)) 3)))))
+
+
 (test test-tagbody-alu
   "Test whether an ALU gets synthesised properly.
 
 This is a RISC-V ALU that should synthesise to a combinatorial
 block (i.e., a single state) that keeps running."
   (let* ((p (vl::expand/vl '(tagbody
-			    (case funct3
-			      (#2r000
-			       (if (logand (bref funct7 5)
-					   (bref instr 5))
-				   (setq aluOut (- aluIn1 aluIn2))
-				   (setq aluOut (+ aluIn1 aluIn2))))
+			     (case funct3
+			       (#2r000
+				(if (logand (bref funct7 5)
+					    (bref instr 5))
+				    (setq aluOut (- aluIn1 aluIn2))
+				    (setq aluOut (+ aluIn1 aluIn2))))
 
-			      (#2r001
-			       (setq aluOut (<< aluIn1 shamt)))
+			       (#2r001
+				(setq aluOut (<< aluIn1 shamt)))
 
-			      (#2r010
-			       (setq aluOut (< (the 'signed-byte aluIn1)
-					       (the 'signed-byte aluIn2)))) ;; signed
+			       (#2r010
+				(setq aluOut (< (the 'signed-byte aluIn1)
+						(the 'signed-byte aluIn2)))) ;; signed
 
-			      (#2r011
-			       (setq aluOut (< aluIn1 aluIn2))) ;; unsigned
+			       (#2r011
+				(setq aluOut (< aluIn1 aluIn2))) ;; unsigned
 
-			      (#2r100
-			       (setq aluOut (logxor aluIn1 aluIn2)))
+			       (#2r100
+				(setq aluOut (logxor aluIn1 aluIn2)))
 
-			      (#2r101
-			       (if (bref funct7 5)
-				   (setq aluOut (>> (the 'signed-byte aluIn1) shamt)) ;; sign-extended
-				   (setq aluOut (>> aluIn1 shamt)))) ;; unsigned
+			       (#2r101
+				(if (bref funct7 5)
+				    (setq aluOut (>> (the 'signed-byte aluIn1) shamt)) ;; sign-extended
+				    (setq aluOut (>> aluIn1 shamt)))) ;; unsigned
 
-			      (#2r110
-			       (setq aluOut (logior aluIn1 aluIn2)))
+			       (#2r110
+				(setq aluOut (logior aluIn1 aluIn2)))
 
-			      (#2r111
-			       (setq aluOut (logand aluIn1 aluIn2)))))))
+			       (#2r111
+				(setq aluOut (logand aluIn1 aluIn2)))))))
 	 (p-bound (vl::expand/vl `(let (funct3 funct7
 					instr
 					aluIn1 aluIn2 aluOut shamt)
@@ -443,16 +458,5 @@ block (i.e., a single state) that keeps running."
 						    aluIn1 aluIn2 aluOut shamt))
 				    ,p))))
 
-    ;; (let ((sm (vl::build-state-machine (cdr p))))
-    ;;   (vl::improve-state-machine sm)
-    ;;   (vl::synthesise-state-machine sm)
-    ;;   ;sm
-    ;;   )
-
-    (with-new-frame
-      (vl::declare-variable 'vl::default-variable-type
-			    '((kind vl::compiler-flag)
-			      (type (unsigned-byte 32))))
-
-      (vl::typecheck p-bound)
-      (is (vl::elaborate-state-machines p-bound)))))
+    (vl::typecheck p-bound)
+    (is (vl::elaborate-state-machines p-bound))))

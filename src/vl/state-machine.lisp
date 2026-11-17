@@ -107,7 +107,13 @@ any unknown states)."
     :initform nil
     :reader jump-targets)
    (bypass-states-alist
-    :documentation "An alist mapping removed states to their replacement states."
+    :documentation "An alist mapping removed states to their replacement states.
+
+A bypassed state is one that's been either deleted or collapsed into
+another one. STATE-MACHINE-STATES and related functions work over the
+un-bypassed states, so to all intents and purposes the bypassed states
+have been deleted. RESOLVE-LABEL recurses through the bypass table to
+return the label of the \"real\" state remaining after bypassing."
     :initform nil
     :reader bypass-states-alist))
   (:documentation "A state machine."))
@@ -130,10 +136,21 @@ MARK-AS-INITIAL-STATE or by setting INITIAL-STATE to non-NIL."
 
 If NEW-STATE is provided, all references to STATE will be replaced
 by NEW-STATE. (NEW-STATE itself may also be bypassed.)"
-  (appendf (slot-value sm 'bypass-states-alist)
-	   (list (list (label state)
-		       (if new-state
-			   (label new-state))))))
+  (let ((new-label (bypassed-to sm (label state))))
+    (when (and new-label
+	       new-state
+	       (not (eql new-label (label new-state))))
+      (error 'compiler-error :hint (format nil "Bypassing an already-bypassed state ~a" (label state))))
+
+    ;; if the state is a jump target, so is the new state
+    (when (and (jump-target-p state)
+	       new-state)
+      (mark-as-jump-target new-state))
+
+    ;; append the bypassed state to the bypass list
+    (appendf (slot-value sm 'bypass-states-alist)
+	     (list (list (label state)
+			 new-label)))))
 
 
 (defun bypassed-states (sm)
@@ -146,19 +163,28 @@ by NEW-STATE. (NEW-STATE itself may also be bypassed.)"
   (not (null (assoc (label state) (bypass-states-alist sm)))))
 
 
+(defun bypassed-to (sm label)
+  "Return the state that LABEL is bypassed to.
+
+This only checks the immediate bypass value: to resolve the label
+fully, use RESOLVE-LABEL.
+
+Return NIL if it is not bypassed."
+  (if-let ((a (assoc label (bypass-states-alist sm))))
+    ;; state is bypassed, return the label it's bypassed to
+    (cadr a)))
+
+
 (defun resolve-label (sm label)
   "Return the label associated with LABEL in machine SM.
 
 This traverses the bypass table to find the actual label of a
 the state being targeted."
-  (if-let ((a (assoc label (bypass-states-alist sm))))
-    (let ((new-label (cadr a)))
-      (if (null new-label)
-	  ;; we've deleted the state not simply bypassed it
-	  (error 'compiler-error :hint "Jumping to a deleted state")
+  (if-let ((new-label (bypassed-to sm label)))
+    ;; label is bypassed, recurse to check that label
+    (resolve-label sm new-label)
 
-	  (resolve-label sm new-label)))
-
+    ;; label isn't bypassed, return it
     label))
 
 
@@ -178,7 +204,7 @@ the state being targeted."
   "Mark the state with LABEL in machine SM as a jump target."
   (setf (slot-value sm 'jump-targets)
 	(union (slot-value sm 'jump-targets)
-	       (list (resolve-label sm label)))))
+	       (list label))))
 
 
 (defun state-machine-state-labelled (sm label)
@@ -324,16 +350,25 @@ Return the entry state created.")
 			   (parse-tagbody-forms else-branch
 						sm nil trailing-state))))
 
-      ;; compile the conditional, currently without optimisations
+      ;; compile the conditional
+      (when then-state
+	(mark-state-label-as-jump-target sm (label then-state)))
       (let ((cform (if else-state
 		       ;; two arms
-		       `(if ,condition
-			    (go ,(label then-state))
-			    (go ,(label else-state)))
+		       (progn
+			 (mark-state-label-as-jump-target sm (label else-state))
+
+			 `(if ,condition
+			      (go ,(label then-state))
+			      (go ,(label else-state))))
 
 		       ;; one arm, jump to the trailing state on false
-		       `(if ,condition
-			    (go ,(label then-state))))))
+		       (progn
+			 (mark-state-label-as-jump-target sm (label trailing-state))
+
+			 `(if ,condition
+			      (go ,(label then-state))
+			      (go ,(label trailing-state)))))))
 
 	(if (and current-state
 		 (empty-state-p current-state))
@@ -341,7 +376,6 @@ Return the entry state created.")
 	    (progn
 	      (unless else-state
 		(setf (successor-state current-state) trailing-state))
-
 	      (append-to-body current-state cform)
 	      current-state)
 
@@ -534,7 +568,7 @@ macros like FOREVER, to keep the machine running."
 ;;; ---------- State machine improvement ----------
 
 (defun remove-simple-jump-states (sm)
-  "Remove any states of machine SM that are just jump-throughs."
+  "Remove any states of machine SM that are empty or jump-throughs."
   (flet ((rewrite-jump-through-state (state)
 	   (declare (optimize debug))
 
@@ -545,12 +579,21 @@ macros like FOREVER, to keep the machine running."
 		    (when (not (eql target-state-label (label state)))
 		      ;; only bypass jumps to other states, not to the state itself
 		      (let ((target-state (state-machine-state-labelled sm target-state-label)))
+			(log:debug "Bypassed jump state ~a to jump directly to ~a"
+				   (label state)
+				   (label target-state))
 			(bypass-state sm state target-state)))))
 
 		 ((and (null (body state))
 		       (not (null (successor-state state))))
 		  ;; body is empty, and there's a successor
 		  (let ((target-state (successor-state state)))
+		    (log:debug "Bypassed empty state ~a to successor ~a"
+			       (label state)
+			       (label target-state))
+		    (when (jump-target-p state)
+			(mark-state-label-as-jump-target sm (label target-state))
+			(mark-as-jump-target target-state))
 		    (bypass-state sm state target-state))))))
 
     (let ((states (state-machine-states sm)))
@@ -569,12 +612,10 @@ FORM should be a GO form."
   "Collapse any states in machine SM that are simple enough to fold into the branches of an IF."
   (labels ((rewrite-simple-if-branch (state)
 	     (if (not (jump-target-p state))
-		 (if (= (length (body state)) 1)
-		     ;; target is only one form, insert it
-		     (car (body state))
-
-		     ;; target is more than one form, wrap it in a PROGN
-		     `(progn ,@(body state)))))
+		 ;; return the state's body as a single form, wrapped
+		 ;; in a PROGN if needed
+		 (with-implicit-progn
+		     (body state))))
 
 	   (rewrite-simple-if-state (state)
 	     (declare (optimize debug))
@@ -587,23 +628,42 @@ FORM should be a GO form."
 			    (false-branch (if (= (length if-form) 4)
 					      (state-from-go sm (elt if-form 3))))
 			    (same-target-p (and false-branch
+						(not (null (successor-state true-branch)))
 						(eql (successor-state true-branch)
 						     (successor-state false-branch)))))
 
 		       (when-let ((new-branch (rewrite-simple-if-branch true-branch)))
+			 (log:debug "Collapsed then branch ~a (~a) into conditional ~a"
+				    (body true-branch)
+				    (label true-branch)
+				    (label state))
 			 (setf (elt if-form 2) new-branch)
 			 (bypass-state sm true-branch))
 
 		       (when false-branch
 			 (when-let ((new-branch (rewrite-simple-if-branch false-branch)))
+			 (log:debug "Collapsed else branch ~a (~a) into conditional ~a"
+				    (body false-branch)
+				    (label false-branch)
+				    (label state))
 			   (setf (elt if-form 3) new-branch)
 			   (bypass-state sm false-branch)))
 
-		       (when same-target-p
-			 (setf (successor-state state)
-			       (successor-state true-branch))
-			 (mark-state-label-as-jump-target sm (label (successor-state state)))
-			 (mark-as-jump-target (successor-state state)))))))))
+		       (if same-target-p
+			   (progn
+			     (log:debug "Set successor state to ~a in conditional ~a"
+					(label true-branch)
+					(label state))
+			     (setf (successor-state state)
+				   (successor-state true-branch))
+			     (mark-state-label-as-jump-target sm (label (successor-state state)))
+			     (mark-as-jump-target (successor-state state)))
+
+			   (progn
+			     (log:debug "Cleared successor state of conditional ~a (~a)"
+					(body state)
+					(label state))
+			     (setf (successor-state state) nil)))))))))
 
     (let ((states (state-machine-states sm)))
       (mapc (lambda (state)
@@ -665,6 +725,10 @@ FORM should be a GO form."
 	    states))))
 
 
+;; TODO: Remove self-assignments for states
+
+;; TODO: Remove un-used passivating states
+
 ;; TODO: Make this step optional
 
 ;; TODO: Allow non-removal of explicitly-named states, even if they're redundant,
@@ -676,16 +740,17 @@ FORM should be a GO form."
 (defun improve-state-machine (sm)
   "Improve the machine SM.
 
-This attempts to minimise the numbr of states in the machine and reduce
-the number of jumps. The resulting machine is neither provably minimal nor
-the provably optimal, hence the function name. It should however behave
-exactly as the original apart from timing behaviour."
-  ;; remove empty states
-  (remove-simple-jump-states sm)
-
+This attempts to minimise the numbr of states in the machine and
+reduce the number of jumps. The resulting machine is neither provably
+minimal nor provably optimal, hence the function name. It should
+however behave exactly as the original apart from having improved
+timing behaviour."
   ;; simplify IF and CASE forms
   (collapse-simple-if-states sm)
   (collapse-simple-case-states sm)
+
+  ;; remove empty and jump-through states
+  (remove-simple-jump-states sm)
 
   ;; return the (hopefully) improved machine
   sm)
@@ -699,48 +764,54 @@ exactly as the original apart from timing behaviour."
 Return the name of the state variable and the body of the constructed machine."
   (declare (optimize debug))
 
-  ;; link all states to their successors where necessary
-  (dolist (state (state-machine-fall-through-states sm))
-    (append-to-body state `(go ,(label (successor-state state)))))
-
   (let ((states (state-machine-states sm)))
 
-    (if (= (length states) 1)
-	;; this is a combinatorial block, so turn it into a PROGN
-	`(progn
-	   ,@(body (car states)))
+    (if (= (length states) 2)
+	;; this is a combinatorial block (a real state and the
+	;; passivating state), so turn it into a PROGN with
+	;; no state variable
+	(list nil
+	      `(progn
+		 ,@(body (car states))))
 
 	;; otherwise it's a full machine
-	(let* ((state-labels (state-machine-state-labels sm))
+	(progn
+	  ;; link all states to their successors where necessary
+	  (dolist (state (state-machine-fall-through-states sm))
+	    (append-to-body state `(go ,(label (successor-state state)))))
 
-	       ;; TODO: This may need to be more global, for example using symbols
-	       ;; that get compiled to integers?
-	       (label-decls (mapcar (lambda (label index)
-				      `(,label ,index))
-				    state-labels
-				    (iota (length state-labels))))
-	       (declaration `(declare (as constant ,@state-labels)
-				      (ignorable ,@state-labels)))
-	       (clauses (mapcar (lambda (state)
-				  `(,(label state)
-				    ,@(body state)))
-				states)))
+	  (let* ((state-labels (state-machine-state-labels sm))
 
-	  ;; synthesise the machine
-	  (with-gensyms (state-variable)
-	    (let ((q (add-frames `(let ,label-decls
-				    ,declaration
+		 ;; TODO: This may need to be more global, for example using symbols
+		 ;; that get compiled to integers?
+		 (label-decls (mapcar (lambda (label index)
+					`(,label ,index))
+				      state-labels
+				      (iota (length state-labels))))
+		 (declaration `(declare (as constant ,@state-labels)
+					(ignorable ,@state-labels)))
+		 (clauses (mapcar (lambda (state)
+				    `(,(label state)
+				      ,@(body state)))
+				  states)))
 
-				    ;; state variable
-				    (let ((,state-variable ,(car state-labels)))
-				      (declare (type (unsigned-byte ,(bits-for-integer (length state-labels))) ,state-variable)
-					       (as register ,state-variable)
-					       (synthetic ,state-variable)
-					       (assigned-at-declaration ,state-variable))
+	    ;; synthesise the machine
+	    (with-gensyms (state-variable)
+	      (let ((q (add-frames `(let ,label-decls
+				      ,declaration
 
-				      (case ,state-variable
-					,@clauses))))))
-	      (list state-variable q)))))))
+				      ;; state variable
+				      (let ((,state-variable ,(label (initial-state sm))))
+					(declare (type (unsigned-byte ,(bits-for-integer (length state-labels))) ,state-variable)
+						 (as register ,state-variable)
+						 (synthetic ,state-variable)
+						 (assigned-at-declaration ,state-variable))
+
+					(case ,state-variable
+					  ,@clauses))))))
+
+		;; return the state variable and the machine over it
+		(list state-variable q))))))))
 
 
 ;;; ---------- TAGBODY ----------
@@ -821,7 +892,8 @@ corresponding state body."
   (declare (optimize debug))
 
   (destructuring-bind (newbody newenv)
-      (float-let-blocks (with-implicit-tagbody body))
+      (float-let-blocks (with-implicit-tagbody
+			  body))
 
     (destructuring-bind (newfun &rest newargs)
 	newbody
@@ -829,39 +901,51 @@ corresponding state body."
       (unless (eql newfun 'tagbody)
 	(error 'compiler-error "Incorrectly floated LET blocks in TAGBODY"))
 
-      ;; we hold on to the NEWENV frame because it contains all the information
-      ;; we've already extracted about the variables -- and these were the only
-      ;; ones in scope when the code was analysed, with others being created
-      ;; by SYNTHESISE-STATE-MACHINE, which adds the necessary types and
-      ;; representations directly
+      ;; we hold on to the NEWENV frame because it contains all the
+      ;; information we've already extracted about the variables --
+      ;; and these were the only ones in scope when the code was
+      ;; analysed, with others being created by
+      ;; SYNTHESISE-STATE-MACHINE, which adds the necessary frames,
+      ;; types, and representations directly
 
       (let ((sm (build-state-machine newargs)))
+	(log:debug "State machine has ~a states as built"
+		   (length (state-machine-states sm)))
 	(improve-state-machine sm)
+	(log:debug "Improving the state machine leaves ~a states "
+		   (length (state-machine-states sm)))
 
 	(destructuring-bind (state-variable synth)
 	    (synthesise-state-machine sm)
 
-	  ;; wrap a new environment around the machine to hold the
-	  ;; state and state machine variables
-	  (let* ((synth-wrapped (add-frames `(let ((tagbody-state-machine ,sm)
-						   (tagbody-state-variable ,state-variable))
-					       ,synth)))
-		 (p (if (and newenv
-			     (not (null (get-frame-names newenv))))
-			;; float the locally-declared variables around the state machine
-			`(let ,newenv
-			   ,synth-wrapped)
+	  (if (null state-variable)
+	      ;; state machine has collapsed to a single state, return it
+	      (progn
+		(log:debug "State machine has collapsed to a combinatorial block")
+		synth)
 
-			;; no locally-declared variables in body
-			synth-wrapped)))
+	      ;; wrap a new environment around the machine to hold the
+	      ;; state and state machine variables
+	      (let ((p (add-frames `(let ((tagbody-state-machine ,sm)
+					  (tagbody-state-variable ,state-variable))
+				      ,synth))))
 
-	    ;; elaborate the GO forms in the state machine
-	    (let ((q (elaborate-state-machines p)))
-	      ;; remove the outermost environment (containing the
-	      ;; state and state machine variables) that shouldn't
-	      ;; be propagated to later lasses
-	      (with-implicit-progn
-		  (cddr q)))))))))
+		;; elaborate the GO forms in the state machine
+		(let ((q (elaborate-state-machines p)))
+
+		  ;; remove the outermost environment (containing the
+		  ;; state and state machine variables) that shouldn't
+		  ;; be propagated to later passes and wrap the variable
+		  ;; environment around the now-elaborated body
+		  (if (and newenv
+			   (not (null (get-frame-names newenv))))
+		      ;; wrap the floated variables around the state machine
+		      `(let ,newenv
+			 ,@(cddr q))
+
+		      ;; no locally-declared variables in body
+		      (with-implicit-progn
+			  (cddr q)))))))))))
 
 
 ;;; ---------- GO ----------
