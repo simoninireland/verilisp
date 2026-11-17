@@ -257,7 +257,7 @@
 			       initial-state
 				 (if a
 				     ;; (while (> a b)
-				     ;; 	    (incf b))
+				     ;;		    (incf b))
 				     (tagbody
 				      s1
 					(if (> a b)
@@ -376,7 +376,7 @@
 
 
 (test test-machine-nested-tagbody
-  "Test we can handle amchines within machine."
+  "Test we can handle machines within machine."
   (let ((sm (vl::build-state-machine '(start
 				       (setq m 0)
 				       (case d

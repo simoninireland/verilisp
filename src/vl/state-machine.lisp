@@ -195,6 +195,8 @@ An UNKNOWN-STATE error is signalled if a state isn't defined."
   "Resolve jump targets in machine SM.
 
 An UNKNOWN-STATE error is signalled if a target state isn't defined."
+  (declare (optimize debug))
+
   (let ((states (state-machine-states sm)))
     (dolist (label (jump-targets sm))
       (let ((state (state-machine-state-labelled sm label)))
@@ -505,8 +507,9 @@ Return the entry state created"
 The resulting machine is necessarily 'top-level', not contained in
 another machine. It has a passivating state added to the end, which it
 will remain in if it ever gets to that point. This allows machines to
-be built that run once and then stop. Use explicit GO forms, or
-looping macros like FOREVER, to keep the machine running."
+be built that run once and then stop, and makes the semantics of
+machines-within-machiens cleaner. Use explicit GO forms, or looping
+macros like FOREVER, to keep the machine running."
   (declare (optimize debug))
 
   (let* ((sm (make-instance 'state-machine))
@@ -516,10 +519,10 @@ looping macros like FOREVER, to keep the machine running."
     ;; parse with a final passivating state
     (parse-tagbody-forms forms sm initial-state final-state)
 
-    ;; make the final state jump to the initial state
-    (let ((initial-label (label initial-state)))
-      (append-to-body final-state `(go ,initial-label))
-      (mark-state-label-as-jump-target sm initial-label))
+    ;; make the final state jump to itself
+    (let ((final-label (label final-state)))
+      (append-to-body final-state `(go ,final-label)) ; not necessary?
+      (mark-state-label-as-jump-target sm final-label))
 
     ;; resolve the jump targets
     (resolve-jump-targets sm)
@@ -538,9 +541,11 @@ looping macros like FOREVER, to keep the machine running."
 	   (cond ((and (= (length (body state)) 1)
 		       (eql (caar (body state)) 'go))
 		  ;; body is just a GO form
-		  (let* ((target-state-label (cadar (body state)))
-			 (target-state (state-machine-state-labelled sm target-state-label)))
-		    (bypass-state sm state target-state)))
+		  (let ((target-state-label (cadar (body state))))
+		    (when (not (eql target-state-label (label state)))
+		      ;; only bypass jumps to other states, not to the state itself
+		      (let ((target-state (state-machine-state-labelled sm target-state-label)))
+			(bypass-state sm state target-state)))))
 
 		 ((and (null (body state))
 		       (not (null (successor-state state))))
@@ -689,7 +694,9 @@ exactly as the original apart from timing behaviour."
 ;;; ---------- State machine synthesis ----------
 
 (defun synthesise-state-machine (sm)
-  "Return the code for machine SM."
+  "Generate the code for machine SM.
+
+Return the name of the state variable and the body of the constructed machine."
   (declare (optimize debug))
 
   ;; link all states to their successors where necessary
@@ -721,25 +728,19 @@ exactly as the original apart from timing behaviour."
 
 	  ;; synthesise the machine
 	  (with-gensyms (state-variable)
-	    ;; we put the state machine synthesis into its own frame so that
-	    ;; it can declare the state variable and state machine variables`
-	    ;; for use in its own further transformation.
-	    (add-frames `(let ((tagbody-state-machine ,sm)
-			       (tagbody-state-variable ,state-variable))
+	    (let ((q (add-frames `(let ,label-decls
+				    ,declaration
 
-			   ;; labels
-			   (let ,label-decls
-			     ,declaration
+				    ;; state variable
+				    (let ((,state-variable ,(car state-labels)))
+				      (declare (type (unsigned-byte ,(bits-for-integer (length state-labels))) ,state-variable)
+					       (as register ,state-variable)
+					       (synthetic ,state-variable)
+					       (assigned-at-declaration ,state-variable))
 
-			     ;; state variable
-			     (let ((,state-variable ,(car state-labels)))
-			       (declare (type (unsigned-byte ,(bits-for-integer (length state-labels))) ,state-variable)
-					(as register ,state-variable)
-					(synthetic ,state-variable)
-					(assigned-at-declaration ,state-variable))
-
-			       (case ,state-variable
-				 ,@clauses))))))))))
+				      (case ,state-variable
+					,@clauses))))))
+	      (list state-variable q)))))))
 
 
 ;;; ---------- TAGBODY ----------
@@ -837,16 +838,30 @@ corresponding state body."
       (let ((sm (build-state-machine newargs)))
 	(improve-state-machine sm)
 
-	(let* ((synth (synthesise-state-machine sm))
-	       (p (if newenv
-		      ;; float the locally-declared variables around the state machine
-		      `(let ,newenv
-			 ,synth)
+	(destructuring-bind (state-variable synth)
+	    (synthesise-state-machine sm)
 
-		      ;; no locally-declared variables in body
-		      synth)))
+	  ;; wrap a new environment around the machine to hold the
+	  ;; state and state machine variables
+	  (let* ((synth-wrapped (add-frames `(let ((tagbody-state-machine ,sm)
+						   (tagbody-state-variable ,state-variable))
+					       ,synth)))
+		 (p (if (and newenv
+			     (not (null (get-frame-names newenv))))
+			;; float the locally-declared variables around the state machine
+			`(let ,newenv
+			   ,synth-wrapped)
 
-	  (elaborate-state-machines p))))))
+			;; no locally-declared variables in body
+			synth-wrapped)))
+
+	    ;; elaborate the GO forms in the state machine
+	    (let ((q (elaborate-state-machines p)))
+	      ;; remove the outermost environment (containing the
+	      ;; state and state machine variables) that shouldn't
+	      ;; be propagated to later lasses
+	      (with-implicit-progn
+		  (cddr q)))))))))
 
 
 ;;; ---------- GO ----------
