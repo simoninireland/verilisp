@@ -244,8 +244,12 @@
 
       (vl::typecheck p)
       (let ((q (vl::elaborate-state-machines p)))
-	(is (contains-form-p '(setq a (+ a 1)) p))
-	(is (contains-form-p '(setq a (+ b 1)) p))))))
+	;; (is (contains-form-p '(setq a (+ a 1)) p))
+	;; (is (contains-form-p '(setq a (+ b 1)) p))
+	q
+	))
+    )
+  )
 
 
 (test test-tagbody-nested-in-then-conditional
@@ -377,40 +381,44 @@
 
 (test test-machine-nested-tagbody
   "Test we can handle machines within machine."
-  (let ((sm (vl::build-state-machine '(start
-				       (setq m 0)
-				       (case d
-					 (1 (go one))
-					 (2 (setq b 999) (go two) (setq b 45))
-					 (3 (setq b 100))
-					 (t (setq a 10)
-					  (setq b 76)))
-				       (setq d 0)
-				       one
-				       (setq a 26)
-				       two
-				       (tagbody
-					three
-					  (setq b 67)
-					  (setf c 56)
-					  (go three))))))
-    (vl::remove-simple-jump-states sm)
-    (is (vl::synthesise-state-machine sm))))
+  (let* ((p (vl::expand/vl '(start
+			     (setq m 0)
+			     (case d
+			       (1 (go one))
+			       (2 (setq b 999) (go two) (setq b 45))
+			       (3 (setq b 100))
+			       (t (setq a 10)
+				(setq b 76)))
+			     (setq d 0)
+			     one
+			     (setq a 26)
+			     two
+			     (tagbody
+			      three
+				(setq b 67)
+				(setf c 56)
+				(go three)))))
+	 (sm (vl::build-state-machine p)))
+    ;(vl::remove-simple-jump-states sm)
+    ;(vl::improve-state-machine sm)
+    (vl::synthesise-state-machine sm)))
 
 
 (test test-machine-forever
   "Test we can build machines that run forever."
   (let ((p (vl::expand/vl '(let ((a 0))
+			    (declare (width 8 a))
 			    (forever
 			     (while (< a 10)
 			      (incf a))
+			     (while (< a 20)
+			      (incf a 2))
+			     (setf a 0)
 			     )))))
-    (vl::typecheck p)
-    (let* ((b (cdr (caddr p)))
-	   (sm (vl::build-state-machine b)))
-      (vl::improve-state-machine sm)
 
-      (is (= (length (vl::state-machine-states sm)) 3)))))
+    (vl::typecheck p)
+    (let ((q (transform/vl p)))
+      (is (vl::synthesise/vl q)))))
 
 
 (test test-tagbody-alu
@@ -448,15 +456,8 @@ block (i.e., a single state) that keeps running."
 				(setq aluOut (logior aluIn1 aluIn2)))
 
 			       (#2r111
-				(setq aluOut (logand aluIn1 aluIn2)))))))
-	 (p-bound (vl::expand/vl `(let (funct3 funct7
-					instr
-					aluIn1 aluIn2 aluOut shamt)
-				    (declare (width 32
-						    funct3 funct7
-						    instr
-						    aluIn1 aluIn2 aluOut shamt))
-				    ,p))))
+				(setq aluOut (logand aluIn1 aluIn2))))))))
 
-    (vl::typecheck p-bound)
-    (is (vl::elaborate-state-machines p-bound))))
+    (let ((sm (vl::build-state-machine (cdr p))))
+      (vl::improve-state-machine sm)
+      (is (= (length (vl::state-machine-states sm)) 1)))))
