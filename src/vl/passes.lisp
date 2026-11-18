@@ -593,11 +593,11 @@ Return the simplified form.")
 
 (defpass synthesise (form)
   (:documentation "Synthesise the Verilog for FORM.
-q
+
 FORM should be fully elaborated Core Verilisp with fully populated
 environments.
 
-The Verilog synthesised by tis function should be send to
+The Verilog synthesised by this function should be send to
 *STANDARD-OUTPUT*: this may be redirected by higher-level functions.")
   (:schema fail-unknown-form)
   (:queue synthesising))
