@@ -65,6 +65,25 @@ The value returned is always a single form."
 	 ,@body)))
 
 
+(defun without-implicit-progn (form)
+  "Remove any outer PROGN from BODY.
+
+This is used to avoid introducing PROGN forms into forms
+that don't need them, like the arms of CASE forms."
+  (if (eql (safe-car form) 'progn)
+      ;; outermost PROGN, remove it
+      (let ((body (cdr form)))
+	;; if it's a singleton, repeat
+	(if (= (length body) 1)
+	    (without-implicit-progn (car body))
+
+	    ;; otherwise return the body forms
+	    body))
+
+      ;; otherwise return it s a list
+      (list form)))
+
+
 (defun with-implicit-tagbody (body)
   "Return the forms in BODY as an implicit TAGBODY form.
 
