@@ -134,10 +134,11 @@
 				    ;; we don't recurse into the values
 				    ;; of the arms because these have
 				    ;; to be statically known
-				    (list value
-					  (funcall pass-f
-						   (with-implicit-progn
-						     body)))))
+				    (cons value
+					  (without-implicit-progn
+					      (funcall pass-f
+						       (with-implicit-progn
+							 body))))))
 				clauses)))
 
       `(,fun ,(funcall pass-f condition)
