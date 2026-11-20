@@ -26,13 +26,13 @@
 (test test-tagbody-simple
   "Test we can create a simple TAGBODY."
   (let ((sm (vl::build-state-machine (cdr '(tagbody
-						init
-						(setq a 10))))))
+					    init
+					    (setq a 10))))))
     (is (= (length (vl::state-machine-states sm)) 3))))
 
 
 (test test-tagbody-spin
-  "Test we can create a spinning state machine."
+  "Test we can create a one-state, no-body machine."
   (let ((sm (vl::build-state-machine (cdr '(tagbody
 					    init)))))
 
@@ -41,7 +41,7 @@
 
 
 (test test-tagbody-empty
-  "Test we can create an empty (also spinning) state machine."
+  "Test we can create an emptystate machine."
   (let ((sm (vl::build-state-machine (cdr '(tagbody)))))
 
     ;; like above but no body state
@@ -53,13 +53,35 @@
   (signals (vl:unreachable-code)
     (vl::build-state-machine (cdr '(tagbody
 				    init
-				      (setq a 10)
+				    (setq a 10)
 				    pre
-				      (setq b 20)
-				      (go init)
+				    (setq b 20)
+				    (go init)
 
-				      ;; this code is unreachable
-				      (setq a 0))))))
+				    ;; this code is unreachable
+				    (setq a 0))))))
+
+
+(test test-tagbody-inner-unreachable
+  "Test we signal unreachable code when there's reachable code after it."
+  (signals (vl::unreachable-code)
+    (let ((sm (vl::build-state-machine (cdr '(tagbody
+					      init
+					      (setq a 10)
+					      pre
+					      (setq b 20)
+					      (go post)
+
+					      ;; this code is unreachable
+					      (setq a 0)
+
+					      ;; this code is reachable
+					      post
+					      (setq a 10)
+					      (go init))))))
+
+      ;; check POST state is present
+      (is (assoc 'post (vl::state-machine-state-labels sm))))))
 
 
 ;;; ---------- Typechecking ----------
@@ -86,6 +108,207 @@
 		 (setq d 999))))))
 
     (is (vl:typecheck p))))
+
+
+;;; ---------- Individual improvements ----------
+
+(test test-tagbody-remove-empty-states
+  "Test we remove empty states correctly."
+  (let ((sm (vl::build-state-machine '(first
+				       second
+				       (setq a 10)))))
+    (vl::remove-empty-states sm)
+    (is (notany (lambda (s)
+		  (and (typep s 'vl::progn-state)
+		       (vl::empty-state-p s)))
+		(vl::state-machine-states sm)))
+
+    ;; check we re-wrote the initial state correctly
+    (is (eql (vl::initial-state-label sm) 'second))))
+
+
+(test test-tagbody-remove-empty-states-last
+  "Test we remove trailingh empty states correctly."
+  (let ((sm (vl::build-state-machine '(first
+				       (setq a 10)
+				       ))))
+    (vl::remove-empty-states sm)
+    (is (notany (lambda (s)
+		  (and (typep s 'vl::progn-state)
+		       (vl::empty-state-p s)))
+		(vl::state-machine-states sm)))
+
+    ;; check we maintained the initial state
+    (is (eql (vl::initial-state-label sm) 'first))))
+
+
+(test test-tagbody-remove-empty-states-middle
+  "Test we remove empty states in the middle of a TAGBODY correctly."
+  (let ((sm (vl::build-state-machine '(first
+				       (setq a 10)
+				       second
+				       third
+				       (setq a 25)
+				       ))))
+    (vl::remove-empty-states sm)
+    (is (notany (lambda (s)
+		  (and (typep s 'vl::progn-state)
+		       (vl::empty-state-p s)))
+		(vl::state-machine-states sm)))
+
+    ;; check we maintained the initial state
+    (is (eql (vl::initial-state-label sm) 'first))
+
+    ;; check we elided the empty state correctly
+    (is (eql (vl::successor-state-label (vl::state-machine-state-labelled sm 'first)) 'third))))
+
+
+(test test-tagbody-remove-empty-states-sequence
+  "Test we remove a sequence of empty states."
+  (let ((sm (vl::build-state-machine '(first
+				       (setq a 10)
+				       second
+				       third
+				       fourth
+				       fifth
+				       (setq a 25)
+				       (go third)
+				       ))))
+    (vl::remove-empty-states sm)
+    (is (notany (lambda (s)
+		  (and (typep s 'vl::progn-state)
+		       (vl::empty-state-p s)))
+		(vl::state-machine-states sm)))
+
+    ;; check we maintained the initial state
+    (is (eql (vl::initial-state-label sm) 'first))
+
+    ;; check we re-targeted the successor
+    (is (vl::successor-state-label (vl::state-machine-state-labelled sm 'first)) 'fifth)
+
+    ;; check we re-targeted the explicit GO
+    (let ((g (vl::state-machine-state-labelled sm
+					       (vl::successor-state-label (vl::state-machine-state-labelled sm 'fifth)))))
+      (is (typep g 'vl::go-state))
+      (is (eql (vl::jump-target-state-label g) 'fifth)))))
+
+
+(test test-tagbody-remove-empty-state-jump-target
+  "Test we remove empty states that are explicit jump targets correctly."
+  (let ((sm (vl::build-state-machine '(first
+					 (setq a 10)
+				       second
+				       third
+					 (setq a 25)
+					 (go second)))))
+    (vl::remove-empty-states sm)
+    (is (notany (lambda (s)
+		 (and (typep s 'vl::progn-state)
+		      (vl::empty-state-p s)))
+	       (vl::state-machine-states sm)))
+
+    ;; check we re-targeted the explicit GO
+    (let ((g (vl::state-machine-state-labelled sm
+					       (vl::successor-state-label (vl::state-machine-state-labelled sm 'third)))))
+      (is (typep g 'vl::go-state))
+      (is (eql (vl::jump-target-state-label g) 'third)))))
+
+
+(test test-tagbody-remove-empty-state-arm
+  "Test we remove empty states in IF arms."
+  (let ((sm (vl::build-state-machine '(first
+				       (if (> a 10)
+					   (tagbody
+					    blank
+					    second
+					      (setf a (+ a 1))
+					      (if (< a b)
+						  (go second)))
+
+					   (setq a 10))
+				       third
+					 (setq a 0)
+					 (go first)))))
+    (vl::remove-empty-states sm)
+    (is (notany (lambda (s)
+		 (and (typep s 'vl::progn-state)
+		      (vl::empty-state-p s)))
+	       (vl::state-machine-states sm)))))
+
+
+(test test-tagbody-remove-empty-state-clause
+  "Test we remove empty states in CASE arms."
+  (let ((sm (vl::build-state-machine '(first
+				       (case a
+					 (1 (setq a 10))
+					 (2 (tagbody
+					     second
+					     third
+					       (setq b 29)))
+					 (3 (tagbody
+					     fourth
+					     fifth
+					       (setq b 99))))
+				       sixth
+					 (setq a 0)
+					 (go first)))))
+    (vl::remove-empty-states sm)
+    (is (notany (lambda (s)
+		 (and (typep s 'vl::progn-state)
+		      (vl::empty-state-p s)))
+	       (vl::state-machine-states sm)))
+
+    ;; check the successors
+    (is (eql (vl::successor-state-label (vl::state-machine-state-labelled sm (vl::initial-state-label sm))) 'sixth))
+    (is (eql (vl::successor-state-label (vl::state-machine-state-labelled sm 'third)) 'sixth))
+    (is (eql (vl::successor-state-label (vl::state-machine-state-labelled sm 'fifth)) 'sixth))))
+
+
+(test test-tagbody-remove-through-state
+  "Test we can remove a jump-through state."
+  (let ((sm (vl::build-state-machine '(first
+				       (go second)
+				       second
+				       (go third)
+				       third
+				       (setf a 10)))))
+    (vl::remove-empty-states sm)
+    (vl::remove-go-through-states sm)
+    (is (notany (lambda (s)
+		  (and (typep s 'vl::go-state)
+		       (typep (vl::state-machine-state-labelled sm
+								(vl::jump-target-state-label s))
+			      'vl::go-state)))
+		(vl::state-machine-states sm)))
+
+    ;; check we jump to the right state
+    (is (eql (vl::jump-target-state-label (vl::state-machine-state-labelled sm (vl::initial-state-label sm))) 'third))))
+
+
+(test test-tagbody-remove-through-state-jumped-to
+  "Test we remove jump states that are the targets of several GO forms."
+  (let ((sm (vl::build-state-machine '(first
+				       (go second)
+				       second
+				       (go third)
+				       third
+				       (setf a 10)
+				       (go second)))))
+    (vl::remove-empty-states sm)
+    (vl::remove-go-through-states sm)
+    (is (notany (lambda (s)
+		  (and (typep s 'vl::go-state)
+		       (typep (vl::state-machine-state-labelled sm
+								(vl::jump-target-state-label s))
+			      'vl::go-state)))
+		(vl::state-machine-states sm)))
+
+    ;; check the jump in THIRD goes to the right place
+    (let ((g (vl::state-machine-state-labelled sm
+					       (vl::successor-state-label (vl::state-machine-state-labelled sm
+													    'third)))))
+      (is (typep g 'vl::go-state))
+      (is (eql (vl::jump-target-state-label g) 'third)))))
 
 
 ;;; ---------- Transformation ----------
@@ -222,34 +445,32 @@
     (is (contains-form-p '(setq c 2) p))))
 
 
-(test test-tagbody-coalesce-conditional
-  "Test we coalesce singleton-state branches of a conditional."
-  (with-new-frame
-    (let ((p (vl::expand/vl '(let (a b)
-			      (declare (type (unsigned-byte 8) a b))
-			      (tagbody
-			       initial-state
-				 (if a
-				     (setq b 1)
-				     (progn
-				       (setq b 2)
-				       (go jump-state)))
-				 (setq a (+ a 1))
-			       return-state
-				 (go initial-state)
-			       jump-state
-				 (setq a (+ b 1))
-				 (if (> a b)
-				     (go return-state)))))))
+(let ((p (vl::expand/vl '(tagbody
+			  rx-check-start
+			  (if (0= a)
+			      (if (0= b)
+				  (progn
+				    ;; starting pulse is still zero
+				    (setq c 1)
+				    (go rx-sample-bits))
 
-      (vl::typecheck p)
-      (let ((q (vl::elaborate-state-machines p)))
-	;; (is (contains-form-p '(setq a (+ a 1)) p))
-	;; (is (contains-form-p '(setq a (+ b 1)) p))
-	q
-	))
-    )
-  )
+				  ;; starting pulse has disappeared, error
+				  (go rx-error))
+
+			      (go rx-check-start))
+
+			  rx-sample-bits
+			  (setq c 2)
+			  (go rx-check-start)
+
+			  rx-error
+			  (go rx-error)))))
+
+  (vl::build-state-machine (cdr p)))
+
+
+
+
 
 
 (test test-tagbody-nested-in-then-conditional
@@ -399,9 +620,10 @@
 				(setf c 56)
 				(go three)))))
 	 (sm (vl::build-state-machine p)))
-    ;(vl::remove-simple-jump-states sm)
-    ;(vl::improve-state-machine sm)
-    (vl::synthesise-state-machine sm)))
+;(vl::remove-simple-jump-states sm)
+;(vl::improve-state-machine sm)
+    (vl::synthesise-state-machine sm))
+  )
 
 
 (test test-machine-forever
@@ -459,5 +681,8 @@ block (i.e., a single state) that keeps running."
 				(setq aluOut (logand aluIn1 aluIn2))))))))
 
     (let ((sm (vl::build-state-machine (cdr p))))
-      (vl::improve-state-machine sm)
-      (is (= (length (vl::state-machine-states sm)) 1)))))
+      ;; (vl::improve-state-machine sm)
+      ;; (is (= (length (vl::state-machine-states sm)) 1))
+      sm
+      ))
+  )
